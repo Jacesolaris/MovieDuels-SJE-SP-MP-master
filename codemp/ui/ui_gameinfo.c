@@ -1,0 +1,607 @@
+/*
+===========================================================================
+Copyright (C) 1999 - 2005, Id Software, Inc.
+Copyright (C) 2000 - 2013, Raven Software, Inc.
+Copyright (C) 2001 - 2013, Activision, Inc.
+Copyright (C) 2013 - 2015,MovieDuels contributors
+
+This file is part of the MovieDuels source code.
+
+MovieDuels is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License version 2 as
+published by the Free Software Foundation.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, see <http://www.gnu.org/licenses/>.
+===========================================================================
+*/
+
+//
+// gameinfo.c
+//
+
+#include "ui_local.h"
+#include <qcommon/qfiles.h>
+#include <qcommon/q_color.h>
+#include "ui_shared.h"
+#include <qcommon/q_string.h>
+#include <string.h>
+#include <qcommon/q_shared.h>
+#include <game/bg_public.h>
+#include <qcommon/q_platform.h>
+
+//
+// arena and bot info
+//
+
+int				ui_numBots;
+static char* ui_botInfos[MAX_BOTS];
+
+static int		ui_numArenas;
+static char* ui_arenaInfos[MAX_ARENAS];
+
+/*
+===============
+UI_ParseInfos
+===============
+*/
+// bot / arena info files: 64 KB each (bg_public.h's MAX_BOTS_TEXT / MAX_ARENAS_TEXT were too small for larger bot files)
+#define BOTINFO_FILE_MAX	(64 * 1024)
+
+static int UI_ParseInfos(const char* buf, int max, char* infos[])
+{
+	char	info[MAX_INFO_STRING] = { 0 };
+
+	int count = 0;
+
+	COM_BeginParseSession("UI_ParseInfos");
+	while (1) {
+		char* token = COM_Parse(&buf);
+		if (!token[0]) {
+			break;
+		}
+		if (strcmp(token, "{") != 0) {
+			Com_Printf("Missing { in info file\n");
+			break;
+		}
+
+		if (count == max) {
+			Com_Printf("Max infos exceeded\n");
+			break;
+		}
+
+		info[0] = '\0';
+		while (1) {
+			char key[MAX_TOKEN_CHARS];
+			token = COM_ParseExt(&buf, qtrue);
+			if (!token[0]) {
+				Com_Printf("Unexpected end of info file\n");
+				break;
+			}
+			if (strcmp(token, "}") == 0) {
+				break;
+			}
+			Q_strncpyz(key, token, sizeof key);
+
+			token = COM_ParseExt(&buf, qfalse);
+			if (!token[0]) {
+				strcpy(token, "<NULL>");
+			}
+			Info_SetValueForKey(info, key, token);
+		}
+		//NOTE: extra space for arena number
+		infos[count] = (char*)UI_Alloc(strlen(info) + strlen("\\num\\") + strlen(va("%d", MAX_ARENAS)) + 1);
+		if (infos[count]) {
+			strcpy(infos[count], info);
+#ifndef FINAL_BUILD
+			if (trap->Cvar_VariableValue("com_buildScript"))
+			{
+				char* botFile = Info_ValueForKey(info, "personality");
+				if (botFile && botFile[0])
+				{
+					int fh = 0;
+					trap->FS_Open(botFile, &fh, FS_READ);
+					if (fh)
+					{
+						trap->FS_Close(fh);
+					}
+				}
+			}
+#endif
+			count++;
+		}
+	}
+	return count;
+}
+
+/*
+===============
+UI_LoadArenasFromFile
+===============
+*/
+static void UI_LoadArenasFromFile(char* filename)
+{
+	fileHandle_t	f = 0;
+	static char			buf[BOTINFO_FILE_MAX];
+
+	const int len = trap->FS_Open(filename, &f, FS_READ);
+	if (!f) {
+		trap->Print(S_COLOR_RED "file not found: %s\n", filename);
+		return;
+	}
+	if (len >= BOTINFO_FILE_MAX) {
+		trap->Print(S_COLOR_RED "file too large: %s is %i, max allowed is %i", filename, len, BOTINFO_FILE_MAX);
+		trap->FS_Close(f);
+		return;
+	}
+
+	trap->FS_Read(buf, len, f);
+	buf[len] = 0;
+	trap->FS_Close(f);
+
+	ui_numArenas += UI_ParseInfos(buf, MAX_ARENAS - ui_numArenas, &ui_arenaInfos[ui_numArenas]);
+}
+
+/*
+===============
+UI_LoadArenas
+===============
+*/
+
+#define MAPSBUFSIZE (MAX_MAPS * 64)
+void UI_LoadArenas(void)
+{
+	static char		dirlist[MAPSBUFSIZE];
+	int			dirlen = 0;
+
+	ui_numArenas = 0;
+	uiInfo.mapCount = 0;
+
+	// get all arenas from .arena files
+	const int numdirs = trap->FS_GetFileList("scriptsmp", ".arena", dirlist, ARRAY_LEN(dirlist));
+	char* dirptr = dirlist;
+	for (int i = 0; i < numdirs; i++, dirptr += dirlen + 1)
+	{
+		char filename[MAX_QPATH];
+		dirlen = strlen(dirptr);
+		strcpy(filename, "scriptsmp/");
+		strcat(filename, dirptr);
+		UI_LoadArenasFromFile(filename);
+	}
+	if (UI_OutOfMemory())
+	{
+		trap->Print(S_COLOR_YELLOW"WARNING: not anough memory in pool to load all arenas\n");
+	}
+
+	for (int n = 0; n < ui_numArenas; n++) {
+		// determine type
+
+		uiInfo.mapList[uiInfo.mapCount].cinematic = -1;
+		uiInfo.mapList[uiInfo.mapCount].mapLoadName = String_Alloc(Info_ValueForKey(ui_arenaInfos[n], "map"));
+		uiInfo.mapList[uiInfo.mapCount].mapName = String_Alloc(Info_ValueForKey(ui_arenaInfos[n], "longname"));
+		uiInfo.mapList[uiInfo.mapCount].levelShot = -1;
+		uiInfo.mapList[uiInfo.mapCount].imageName = String_Alloc(va("levelshots/%s", uiInfo.mapList[uiInfo.mapCount].mapLoadName));
+		uiInfo.mapList[uiInfo.mapCount].typeBits = 0;
+
+		const char* type = Info_ValueForKey(ui_arenaInfos[n], "type");
+		// if no type specified, it will be treated as "ffa"
+		if (*type) {
+			if (strstr(type, "ffa"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_FFA;
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_JEDIMASTER;
+			}
+			if (strstr(type, "team"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_TEAM;
+			}
+			if (strstr(type, "missions"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_SINGLE_PLAYER;
+			}
+			if (strstr(type, "holocron"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_HOLOCRON;
+			}
+			if (strstr(type, "jedimaster"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_JEDIMASTER;
+			}
+			if (strstr(type, "duel"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_DUEL;
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_POWERDUEL;
+			}
+			if (strstr(type, "powerduel"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_DUEL;
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_POWERDUEL;
+			}
+			if (strstr(type, "siege"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_SIEGE;
+			}
+			if (strstr(type, "ctf"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_CTF;
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_CTY;
+			}
+			if (strstr(type, "cty"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_CTY;
+			}
+			if (strstr(type, "MB"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_FFA;
+			}
+		}
+		else
+		{
+			uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_FFA;
+			uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_JEDIMASTER;
+		}
+
+		uiInfo.mapCount++;
+		if (uiInfo.mapCount >= MAX_MAPS) {
+			break;
+		}
+	}
+}
+
+void UI_LoadSPArenas(void)
+{
+	static char		dirlist[MAPSBUFSIZE];
+	int			dirlen = 0;
+
+	ui_numArenas = 0;
+	uiInfo.mapCount = 0;
+
+	// get all arenas from .arena files
+	const int numdirs = trap->FS_GetFileList("scriptsmp", ".arena", dirlist, ARRAY_LEN(dirlist));
+	char* dirptr = dirlist;
+	for (int i = 0; i < numdirs; i++, dirptr += dirlen + 1)
+	{
+		char filename[MAX_QPATH];
+		dirlen = strlen(dirptr);
+		strcpy(filename, "scriptsmp/");
+		strcat(filename, dirptr);
+		UI_LoadArenasFromFile(filename);
+	}
+	if (UI_OutOfMemory())
+	{
+		trap->Print(S_COLOR_YELLOW"WARNING: not anough memory in pool to load all arenas\n");
+	}
+
+	for (int n = 0; n < ui_numArenas; n++)
+	{
+		// determine type
+
+		uiInfo.mapList[uiInfo.mapCount].cinematic = -1;
+		uiInfo.mapList[uiInfo.mapCount].mapLoadName = String_Alloc(Info_ValueForKey(ui_arenaInfos[n], "map"));
+		uiInfo.mapList[uiInfo.mapCount].mapName = String_Alloc(Info_ValueForKey(ui_arenaInfos[n], "longname"));
+		uiInfo.mapList[uiInfo.mapCount].levelShot = -1;
+		uiInfo.mapList[uiInfo.mapCount].imageName = String_Alloc(va("levelshots/%s", uiInfo.mapList[uiInfo.mapCount].mapLoadName));
+		uiInfo.mapList[uiInfo.mapCount].typeBits = 0;
+
+		const char* type = Info_ValueForKey(ui_arenaInfos[n], "type");
+		// if no type specified, it will be treated as "ffa"
+		if (*type) {
+			if (strstr(type, "ffa"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_FFA;
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_JEDIMASTER;
+			}
+			if (strstr(type, "team"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_TEAM;
+			}
+			if (strstr(type, "missions"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_SINGLE_PLAYER;
+			}
+			if (strstr(type, "holocron"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_HOLOCRON;
+			}
+			if (strstr(type, "jedimaster"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_JEDIMASTER;
+			}
+			if (strstr(type, "duel"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_DUEL;
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_POWERDUEL;
+			}
+			if (strstr(type, "powerduel"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_DUEL;
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_POWERDUEL;
+			}
+			if (strstr(type, "siege"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_SIEGE;
+			}
+			if (strstr(type, "ctf"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_CTF;
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_CTY;
+			}
+			if (strstr(type, "cty"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_CTY;
+			}
+			if (strstr(type, "MB"))
+			{
+				uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_FFA;
+			}
+		}
+		else
+		{
+			uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_FFA;
+			uiInfo.mapList[uiInfo.mapCount].typeBits |= 1 << GT_JEDIMASTER;
+		}
+
+		uiInfo.mapCount++;
+		if (uiInfo.mapCount >= MAX_MAPS) {
+			break;
+		}
+	}
+}
+
+// a bot whose name is already loaded (from another bot file, or the other bot folder) is skipped: the first one
+// wins, as the name lookups always did, and the lists show it once (2026-10-13)
+static void UI_DropRepeatedBots(const int first, const char* filename)
+{
+	int keep = first;
+
+	for (int n = first; n < ui_numBots; n++)
+	{
+		char name[MAX_QPATH];
+		qboolean repeated = qfalse;
+
+		Q_strncpyz(name, Info_ValueForKey(ui_botInfos[n], "name"), sizeof name);
+		for (int o = 0; o < keep && !repeated; o++)
+		{
+			repeated = !Q_stricmp(Info_ValueForKey(ui_botInfos[o], "name"), name) ? qtrue : qfalse;
+		}
+		if (repeated)
+		{
+			if (trap->Cvar_VariableValue("developer"))
+			{
+				Com_Printf("bot \"%s\" in %s is already loaded, skipped\n", name, filename);
+			}
+			continue;
+		}
+		ui_botInfos[keep++] = ui_botInfos[n];
+	}
+	ui_numBots = keep;
+}
+
+/*
+===============
+UI_LoadBotsFromFile
+===============
+*/
+static void UI_LoadBotsFromFile(char* filename)
+{
+	fileHandle_t	f = 0;
+	static char			buf[BOTINFO_FILE_MAX];
+
+	const int len = trap->FS_Open(filename, &f, FS_READ);
+	if (!f) {
+		trap->Print(S_COLOR_RED "file not found: %s\n", filename);
+		return;
+	}
+	if (len >= BOTINFO_FILE_MAX) {
+		trap->Print(S_COLOR_RED "file too large: %s is %i, max allowed is %i", filename, len, BOTINFO_FILE_MAX);
+		trap->FS_Close(f);
+		return;
+	}
+
+	trap->FS_Read(buf, len, f);
+	buf[len] = 0;
+
+	const char* stopMark = strstr(buf, "@STOPHERE");
+
+	//This bot is in place as a mark for modview's bot viewer.
+	//If we hit it just stop and trace back to the beginning of the bot define and cut the string off.
+	//This is only done in the UI and not the game so that "test" bots can be added manually and still
+	//not show up in the menu.
+	if (stopMark)
+	{
+		int startPoint = stopMark - buf;
+
+		while (buf[startPoint] != '{')
+		{
+			startPoint--;
+		}
+
+		buf[startPoint] = 0;
+	}
+
+	trap->FS_Close(f);
+
+	COM_Compress(buf);
+
+	const int firstBot = ui_numBots;
+	ui_numBots += UI_ParseInfos(buf, MAX_BOTS - ui_numBots, &ui_botInfos[ui_numBots]);
+	UI_DropRepeatedBots(firstBot, filename);
+}
+
+/*
+===============
+UI_LoadBots
+===============
+*/
+void UI_LoadBots(void)
+{
+	vmCvar_t	ui_md_bots_rebels;
+	vmCvar_t	ui_md_bots_Empire;
+	vmCvar_t	ui_md_bots_sith_empire;
+	vmCvar_t	ui_md_bots_resistance;
+	vmCvar_t	ui_md_bots_first_order;
+	vmCvar_t	ui_md_bots_separatists;
+	vmCvar_t	ui_md_bots_republic;
+	vmCvar_t	ui_md_bots_old_republic;
+
+	char		dirlist[2048];
+	int			dirlen = 0;
+
+	ui_numBots = 0;
+
+	trap->Cvar_Register(&ui_md_bots_rebels, "g_botsFile1", "", CVAR_INIT | CVAR_ROM);
+
+	trap->Cvar_Register(&ui_md_bots_Empire, "g_botsFile2", "", CVAR_INIT | CVAR_ROM);
+
+	trap->Cvar_Register(&ui_md_bots_sith_empire, "g_botsFile3", "", CVAR_INIT | CVAR_ROM);
+
+	trap->Cvar_Register(&ui_md_bots_resistance, "g_botsFile4", "", CVAR_INIT | CVAR_ROM);
+
+	trap->Cvar_Register(&ui_md_bots_first_order, "g_botsFile5", "", CVAR_INIT | CVAR_ROM);
+
+	trap->Cvar_Register(&ui_md_bots_separatists, "g_botsFile6", "", CVAR_INIT | CVAR_ROM);
+
+	trap->Cvar_Register(&ui_md_bots_republic, "g_botsFile7", "", CVAR_INIT | CVAR_ROM);
+
+	trap->Cvar_Register(&ui_md_bots_old_republic, "g_botsFile8", "", CVAR_INIT | CVAR_ROM);
+
+	if (*ui_md_bots_rebels.string)
+	{
+		UI_LoadBotsFromFile(ui_md_bots_rebels.string);
+	}
+	else if (*ui_md_bots_Empire.string)
+	{
+		UI_LoadBotsFromFile(ui_md_bots_Empire.string);
+	}
+	else if (*ui_md_bots_sith_empire.string)
+	{
+		UI_LoadBotsFromFile(ui_md_bots_sith_empire.string);
+	}
+	else if (*ui_md_bots_resistance.string)
+	{
+		UI_LoadBotsFromFile(ui_md_bots_resistance.string);
+	}
+	else if (*ui_md_bots_first_order.string)
+	{
+		UI_LoadBotsFromFile(ui_md_bots_first_order.string);
+	}
+	else if (*ui_md_bots_separatists.string)
+	{
+		UI_LoadBotsFromFile(ui_md_bots_separatists.string);
+	}
+	else if (*ui_md_bots_republic.string)
+	{
+		UI_LoadBotsFromFile(ui_md_bots_republic.string);
+	}
+	else if (*ui_md_bots_old_republic.string)
+	{
+		UI_LoadBotsFromFile(ui_md_bots_old_republic.string);
+	}
+	else
+	{
+		UI_LoadBotsFromFile("botfiles/md_bots_JKA.txt");
+	}
+
+	// get all bots from .bot files: botfiles/ (this mod's), then scriptsmp/ (the other mod's layout, so a bot file from
+	// MovieDuels / SerenityJediEngine2026 loads in either; repeated names are skipped) (2026-10-13)
+	static const char* const botFolders[] = { "botfiles", "scriptsmp" };
+	for (int folder = 0; folder < 2; folder++)
+	{
+		const int numdirs = trap->FS_GetFileList(botFolders[folder], ".bot", dirlist, sizeof dirlist);
+		char* dirptr = dirlist;
+		for (int i = 0; i < numdirs; i++, dirptr += dirlen + 1)
+		{
+			char filename[MAX_QPATH];
+			dirlen = strlen(dirptr);
+			Com_sprintf(filename, sizeof filename, "%s/%s", botFolders[folder], dirptr);
+			UI_LoadBotsFromFile(filename);
+		}
+	}
+}
+
+/*
+===============
+UI_GetBotInfoByNumber
+===============
+*/
+static char* UI_GetBotInfoByNumber(int num) {
+	if (num < 0 || num >= ui_numBots) {
+		trap->Print(S_COLOR_RED "Invalid bot number: %i\n", num);
+		return NULL;
+	}
+	return ui_botInfos[num];
+}
+
+/*
+===============
+UI_GetBotInfoByName
+===============
+*/
+static char* UI_GetBotInfoByName(const char* name) {
+	for (int n = 0; n < ui_numBots; n++) {
+		const char* value = Info_ValueForKey(ui_botInfos[n], "name");
+		if (!Q_stricmp(value, name)) {
+			return ui_botInfos[n];
+		}
+	}
+
+	return NULL;
+}
+
+/*
+===============
+UI_GetBotInfoByModel
+
+The bot (botfiles/*.bot) that uses this player model ("model" or "model/skin"): the exact model first, then
+one with the same model folder. The MovieDuels character menu takes the character's sabers / weapon from it.
+===============
+*/
+const char* UI_GetBotInfoByModel(const char* model) {
+	char base[MAX_QPATH];
+	const char* slash = NULL;
+	const char* found = NULL;
+
+	if (!model || !model[0]) {
+		return NULL;
+	}
+	for (int n = 0; n < ui_numBots; n++) {
+		if (!Q_stricmp(Info_ValueForKey(ui_botInfos[n], "model"), model)) {
+			return ui_botInfos[n];
+		}
+	}
+
+	Q_strncpyz(base, model, sizeof base);
+	slash = strchr(base, '/');
+	if (slash) {
+		base[slash - base] = 0;
+	}
+	for (int n = 0; n < ui_numBots && !found; n++) {
+		char botBase[MAX_QPATH];
+		Q_strncpyz(botBase, Info_ValueForKey(ui_botInfos[n], "model"), sizeof botBase);
+		slash = strchr(botBase, '/');
+		if (slash) {
+			botBase[slash - botBase] = 0;
+		}
+		if (!Q_stricmp(botBase, base)) {
+			found = ui_botInfos[n];
+		}
+	}
+	return found;
+}
+
+int UI_GetNumBots() {
+	return ui_numBots;
+}
+
+char* UI_GetBotNameByNumber(int num) {
+	const char* info = UI_GetBotInfoByNumber(num);
+	if (info) {
+		return Info_ValueForKey(info, "name");
+	}
+	return "_humanoid";
+}

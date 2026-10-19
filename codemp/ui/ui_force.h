@@ -1,0 +1,65 @@
+/*
+===========================================================================
+Copyright (C) 2000 - 2013, Raven Software, Inc.
+Copyright (C) 2001 - 2013, Activision, Inc.
+Copyright (C) 2013 - 2015,MovieDuels contributors
+
+This file is part of the MovieDuels source code.
+
+MovieDuels is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License version 2 as
+published by the Free Software Foundation.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, see <http://www.gnu.org/licenses/>.
+===========================================================================
+*/
+
+#pragma once
+
+#include "qcommon/qfiles.h"
+#include "ui_shared.h"
+#include <qcommon/q_math.h>
+#include <qcommon/q_platform.h>
+#include <qcommon/q_shared.h>
+
+#define NUM_FORCE_STAR_IMAGES  9
+#define FORCE_NONJEDI	0
+#define FORCE_JEDI		1
+
+extern int uiForceSide;
+extern int uiJediNonJedi;
+extern int uiForceRank;
+extern int uiMaxRank;
+extern int uiForceUsed;
+extern int uiForceAvailable;
+extern qboolean gTouchedForce;
+void UI_ForceMenusShowItem(const char* itemName, qboolean show); // both force menus (ui_force.c)
+extern qboolean uiForcePowersDisabled[NUM_FORCE_POWERS];
+extern int uiForcePowersRank[NUM_FORCE_POWERS];
+extern int uiForcePowerDarkLight[NUM_FORCE_POWERS];
+
+// ownerdraw -> force power index: UI_FORCE_RANK_HEAL .. _SABERTHROW follow UI_FORCE_RANK, the ported SP powers have their own range
+#define UI_FORCE_RANK_INDEX(od) ((od) >= UI_FORCE_RANK_STASIS && (od) <= UI_FORCE_RANK_BLINDING \
+	? FP_STASIS + (od) - UI_FORCE_RANK_STASIS : (od) - UI_FORCE_RANK - 1)
+
+extern int uiSaberColorShaders[NUM_SABER_COLORS];
+// Dots above or equal to a given rank carry a certain color.
+
+void UI_InitForceShaders(void);
+void UI_ReadLegalForce(void);
+void UI_DrawForceStars(const rectDef_t* rect, float scale, vec4_t color, int textStyle, int forceindex, int val, int min, int max);
+void UI_UpdateClientForcePowers(const char* teamArg);
+void UI_SaveForceTemplate();
+void UI_UpdateForcePowers();
+qboolean UI_SkinColor_HandleKey(int flags, float* special, int key, int num, int min, int max, int type);
+qboolean UI_ForceSide_HandleKey(int flags, float* special, int key, int num, int min, int max, int type);
+qboolean UI_JediNonJedi_HandleKey(int flags, float* special, int key, int num, int min, int max, int type);
+qboolean UI_ForceMaxRank_HandleKey(int flags, float* special, int key, int num, int min, int max, int type);
+qboolean UI_ForcePowerRank_HandleKey(int flags, float* special, int key, int num, int min, int max, int type);
+extern void UI_ForceConfigHandle(int oldindex, int newindex);

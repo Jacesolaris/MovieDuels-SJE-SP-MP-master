@@ -1,0 +1,429 @@
+#============================================================================
+# Copyright (C) 2013 - 2018, MovieDuels contributors
+# 
+# This file is part of the MovieDuels source code.
+# 
+# MovieDuels is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 as
+# published by the Free Software Foundation.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, see <http://www.gnu.org/licenses/>.
+#============================================================================
+
+cmake_minimum_required(VERSION 3.5...4.5)
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9" CACHE STRING "Minimum OS X deployment version")
+
+# For checks in subdirectories
+set(InMovieDuels TRUE)
+
+
+
+# Project name
+set(ProjectName "MovieDuels-SJE-SP+MP-Rend2-master-Working" CACHE STRING "Project Name")
+project(${ProjectName})
+
+# C++ language standard: C++17 for every C++ project (shown in VS as "ISO C++17 Standard (/std:c++17)").
+# Set here, not in the VS project properties - CMake rewrites those every time it regenerates the solution.
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+
+
+# Customizable options
+option(BuildPortableVersion "Build portable version (does not read or write files from your user/home directory" OFF)
+
+option(BuildMPEngine "Whether to create projects for the MP client (MovieDuels-MP.exe)" ON)
+option(BuildMPRdVanilla "Whether to create projects for the MP default renderer (MovieDuels-rdmp_x86.dll)" ON)
+option(BuildMPDed "Whether to create projects for the MP dedicated server (MovieDuels-DED.exe)" ON)
+option(BuildMPGame "Whether to create projects for the MP server-side gamecode (MovieDuels-mpgamex86.dll)" ON)
+option(BuildMPCGame "Whether to create projects for the MP clientside gamecode (MovieDuels-cgamex86.dll)" ON)
+option(BuildMPUI "Whether to create projects for the MP UI code (MovieDuels-uix86.dll)" ON)
+
+option(BuildMPRend2 "Whether to create projects for the MP rend2 renderer (MovieDuels-rdmp-rend2_x86.dll)" ON)
+
+option(BuildSPRend2 "Whether to create projects for the SP rend2 renderer (MovieDuels-rdsp-rend2_x86.dll)" ON)
+
+option(BuildSPEngine "Whether to create projects for the SP engine (MovieDuels-SP.exe)" ON)
+option(BuildSPGame "Whether to create projects for the SP gamecode (MovieDuels-gamex86.dll)" ON)
+option(BuildSPRdVanilla "Whether to create projects for the SP default renderer (MovieDuels-rdsp_x86.dll)" ON)
+
+Include(CMakeDependentOption)
+CMAKE_DEPENDENT_OPTION(BuildSymbolServer "Build WIP Windows Symbol Server (experimental and unused)" OFF "NOT WIN32 OR NOT MSVC" OFF)
+
+# Configure the use of bundled libraries.  By default, we assume the user is on
+# a platform that does not require any bundling.
+#
+# Note that we always use the bundled copy of minizip, since it is modified to
+# use Z_Malloc.
+
+set(UseInternalOpenALDefault OFF)
+set(UseInternalZlibDefault   OFF)
+set(UseInternalPNGDefault    OFF)
+set(UseInternalJPEGDefault   OFF)
+set(UseInternalSDL2Default   OFF)
+
+if(WIN32)
+  set(UseInternalOpenALDefault ON)
+  set(UseInternalZlibDefault   ON)
+  set(UseInternalPNGDefault    ON)
+  set(UseInternalJPEGDefault   ON)
+  set(UseInternalSDL2Default   ON)
+endif()
+
+if(APPLE)
+  set(UseInternalJPEGDefault ON)
+endif()
+
+if(CMAKE_SYSTEM_NAME MATCHES "BSD")
+  add_definitions(-DIOAPI_NO_64)
+endif()
+
+option(UseInternalOpenAL "If set, use bundled OpenAL."  ${UseInternalOpenALDefault})
+option(UseInternalZlib   "If set, use bundled zlib."    ${UseInternalZlibDefault})
+option(UseInternalPNG    "If set, use bundled libpng."  ${UseInternalPNGDefault})
+option(UseInternalJPEG   "If set, use bundled libjpeg." ${UseInternalJPEGDefault})
+option(UseInternalSDL2   "If set, use bundled SDL2."    ${UseInternalSDL2Default})
+
+# This option won't appear on non-Apple platforms.
+if(APPLE)
+  option(MakeApplicationBundles "Whether to build .app application bundles for engines built" ON)
+endif()
+
+# Custom CMake Modules needed
+list(INSERT CMAKE_MODULE_PATH 0 "${CMAKE_SOURCE_DIR}/cmake/Modules")
+
+Include(CheckTypeSize)
+check_type_size("void*" CMAKE_SIZEOF_VOID_P)
+
+
+
+# ${Architecture} must match ARCH_STRING in q_platform.h,
+# and is used in DLL names (jagamex86.dll, jagamex86.dylib, jagamei386.so).
+if(WIN32)
+	set(X86 ON)
+	if(CMAKE_SIZEOF_VOID_P MATCHES "8")
+		set(Architecture "x86_64")
+		set(WIN64 TRUE)
+	else()
+		set(Architecture "x86")
+		set(WIN64 FALSE)
+	endif()
+else()
+	set(X86 OFF)
+	if(CMAKE_SYSTEM_PROCESSOR MATCHES "^arm")
+		set(Architecture "arm")
+	elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^i.86$")
+		set(X86 ON)
+		if(APPLE)
+			set(Architecture "x86")
+		else()
+			# e.g. Linux
+			set(Architecture "i386")
+		endif()
+	elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^x86.64$")
+		set(X86 ON)
+		set(Architecture "x86_64")
+	elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "powerpc")
+		set(Architecture "ppc")
+	elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "powerpc64")
+		set(Architecture "ppc64")
+	else()
+		set(Architecture "${CMAKE_SYSTEM_PROCESSOR}")
+	endif()
+endif()
+
+message(STATUS "Architecture is ${Architecture}")
+
+if(WIN32 AND CMAKE_VERSION VERSION_LESS "3.4")
+message(WARNING "Building on Windows platform with CMake version less than 3.4 is deprecated. Manifest file will fail to be included.")
+endif()
+
+# Current Git SHA1 hash
+include(GetGitRevisionDescription)
+get_git_head_revision(GIT_REFSPEC GIT_SHA1)
+message(STATUS "Git revision is ${GIT_SHA1}")
+
+
+
+# Binary names
+set(SPEngine "MovieDuels-SP.${Architecture}")
+set(SPGame "MovieDuels-game${Architecture}")
+set(SPRDVanillaRenderer "MovieDuels-rdsp_${Architecture}")
+
+set(MPEngine "MovieDuels-MP.${Architecture}")
+set(MPVanillaRenderer "MovieDuels-rdmp_${Architecture}")
+set(MPDed "MovieDuels-DED.${Architecture}")
+set(MPGame "MovieDuels-mpgame${Architecture}")
+set(MPCGame "MovieDuels-cgame${Architecture}")
+set(MPUI "MovieDuels-ui${Architecture}")
+
+set(MPRend2 "MovieDuels-rdmp-rend2_${Architecture}")
+set(SPRend2 "MovieDuels-rdsp-rend2_${Architecture}")
+
+set(JK2SPEngine "MovieDuels_JO2026-SP.${Architecture}")
+set(JK2SPGame "MovieDuels_JO2026-game${Architecture}")
+set(JK2SPVanillaRenderer "MovieDuels_JO2026-josp_${Architecture}")
+
+set(AssetsPk3 "MovieDuels-Assets-0-${Architecture}.pk3")
+# Library names
+set(MPBotLib "botlib")
+set(SharedLib "shared")
+
+
+
+# Paths
+set(SPDir "${CMAKE_SOURCE_DIR}/code")
+set(MPDir "${CMAKE_SOURCE_DIR}/codemp")
+set(JK2SPDir "${CMAKE_SOURCE_DIR}/codeJK2")
+set(SharedDir ${CMAKE_SOURCE_DIR}/shared)
+set(MovieDuelsLibDir "${CMAKE_SOURCE_DIR}/lib")
+set(GSLIncludeDirectory "${MovieDuelsLibDir}/gsl-lite/include")
+
+# INSTALL and PACKAGE projects (install rules + CPack installer/zip): not needed, the built exes and dlls are copied
+# to the mod by hand. Left out of the solution unless MakeInstallProjects is turned on in CMake.
+option(MakeInstallProjects "Whether to create the INSTALL and PACKAGE projects" OFF)
+if(NOT MakeInstallProjects)
+	# every install() rule does nothing, so CMake makes no INSTALL project (InstallConfig skips CPack -> no PACKAGE)
+	function(install)
+	endfunction()
+endif()
+include(InstallConfig)
+
+
+
+# Operating settings
+if(WIN64)
+	set(SharedDefines ${SharedDefines} "WIN64")
+endif()
+
+if (APPLE)
+	set(SharedDefines "MACOS_X")
+endif()
+
+if (NOT WIN32 AND NOT APPLE)
+	set(SharedDefines "ARCH_STRING=\"${Architecture}\"")
+endif()
+
+
+
+# Compiler settings
+if(MSVC)
+
+	set(SharedDefines ${SharedDefines} "NOMINMAX")
+	set(SharedDefines ${SharedDefines} "_CRT_SECURE_NO_WARNINGS")
+	set(SharedDefines ${SharedDefines} "_SCL_SECURE_NO_WARNINGS")
+	set(SharedDefines ${SharedDefines} "_CRT_NONSTDC_NO_DEPRECATE")
+
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /arch:SSE2")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /MP")
+
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:SSE2")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
+
+	# Code analysis (/analyze): the bundled third-party code in lib/ is not ours to change. Its headers are
+	# external (no analysis warnings from them); the bundled library targets have analysis off (see lib/ below).
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /external:I\"${CMAKE_SOURCE_DIR}/lib\" /analyze:external-")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /external:I\"${CMAKE_SOURCE_DIR}/lib\" /analyze:external-")
+
+	# Release builds: link-time code generation (/GL + /LTCG). The small vector helpers (DotProduct, VectorCopy, VectorMA...)
+	# are out-of-line functions in q_math.c, so without it they are never inlined across files. Measured in MD MP
+	# (timedemo, 2026-10-10): +9-10% fps with the vanilla renderer, +2% with rend2. Debug builds are unchanged.
+	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+	set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON)
+
+	# C++17 removed some old library pieces the engine code may use (std::random_shuffle, auto_ptr, unary_function...):
+	# keep them available. std::byte off, so it can't clash with the engine's own 'byte' type.
+	set(SharedDefines ${SharedDefines} "_HAS_AUTO_PTR_ETC=1")
+	set(SharedDefines ${SharedDefines} "_HAS_STD_BYTE=0")
+
+	# We don't try to control symbol visibility under MSVC.
+	set(MovieDuels_VISIBILITY_FLAGS "")
+
+elseif (("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU") OR ("${CMAKE_C_COMPILER_ID}" MATCHES "Clang"))
+	# I hope this doesn't come back to bite me in the butt later on.
+	# Realistically though, can the C and CXX compilers be different?
+
+	# Visibility can't be set project-wide -- it needs to be specified on a
+	# per-target basis.  This is primarily due to the bundled copy of ZLib.
+	# ZLib explicitly declares symbols hidden, rather than defaulting to hidden.
+	#
+	# Note that -fvisibility=hidden is stronger than -fvisibility-inlines-hidden.
+	set(MovieDuels_VISIBILITY_FLAGS "-fvisibility=hidden")
+
+	# removes the -rdynamic flag at linking (which causes crashes for some reason)
+	set(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
+	set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
+
+	# additional flags for debug configuration
+	set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -ggdb")
+	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb")
+
+	if (X86)
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse2")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2")
+	endif()
+
+	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
+	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+
+	# (the C++ standard comes from CMAKE_CXX_STANDARD at the top)
+	
+	if("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-comment")
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsigned-char")
+		if (X86)
+			# "x86 vm will crash without -mstackrealign since MMX
+			# instructions will be used no matter what and they
+			# corrupt the frame pointer in VM calls"
+			# -ioquake3 Makefile
+			set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mstackrealign")
+			set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mfpmath=sse")
+		endif()
+
+		if(WIN32)
+			# Link libgcc and libstdc++ statically
+			set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static-libgcc")
+			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libgcc")
+			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++")
+		endif()
+	elseif("${CMAKE_C_COMPILER_ID}" MATCHES "Clang")
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-comment")
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsigned-char")
+	endif()
+
+	if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-invalid-offsetof")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-write-strings")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-comment")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsigned-char")
+		if (X86)
+			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mstackrealign")
+			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpmath=sse")
+		endif()
+	elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-write-strings")
+		#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-writable-strings")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-comment")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-invalid-offsetof")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsigned-char")
+	endif()
+else()
+	message(ERROR "Unsupported compiler")
+endif()
+
+if (NOT CMAKE_BUILD_TYPE)
+	message(STATUS "No build type selected, default to RELEASE")
+	set(CMAKE_BUILD_TYPE "RELEASE")
+endif()
+
+if(CMAKE_BUILD_TYPE MATCHES "DEBUG" OR CMAKE_BUILD_TYPE MATCHES "Debug")
+	# CMake already defines _DEBUG for MSVC.
+	if (NOT MSVC)
+		set(SharedDefines ${SharedDefines} "_DEBUG")
+	endif()
+else()
+	set(SharedDefines ${SharedDefines} "FINAL_BUILD")
+endif()
+
+
+
+# Settings
+if(BuildPortableVersion)
+	set(SharedDefines ${SharedDefines} "_PORTABLE_VERSION")
+endif()
+
+# https://reproducible-builds.org/specs/source-date-epoch/
+if (NOT ("$ENV{SOURCE_DATE_EPOCH}" STREQUAL ""))
+	execute_process(COMMAND "date"
+		"--date=@$ENV{SOURCE_DATE_EPOCH}" "+%b %_d %Y"
+		OUTPUT_VARIABLE source_date
+		ERROR_QUIET
+		OUTPUT_STRIP_TRAILING_WHITESPACE)
+	set(SharedDefines ${SharedDefines} "SOURCE_DATE=\"${source_date}\"")
+endif()
+
+
+
+# Files shared across all projects
+set(SharedCommonFiles
+	"${SharedDir}/qcommon/q_color.h"
+	"${SharedDir}/qcommon/q_color.c"
+	"${SharedDir}/qcommon/q_math.h"
+	"${SharedDir}/qcommon/q_math.c"
+	"${SharedDir}/qcommon/q_string.h"
+	"${SharedDir}/qcommon/q_string.c"
+	"${SharedDir}/qcommon/q_platform.h"
+	)
+set(SharedCommonSafeFiles
+	"${SharedDir}/qcommon/safe/gsl.h"
+	"${SharedDir}/qcommon/safe/string.cpp"
+	"${SharedDir}/qcommon/safe/string.h"
+	"${SharedDir}/qcommon/safe/sscanf.h"
+	"${SharedDir}/qcommon/safe/limited_vector.h"
+	)
+
+
+if(UseInternalJPEG)
+  add_subdirectory(lib/jpeg-9a)
+else()
+  find_package(JPEG REQUIRED)
+endif()
+
+if(UseInternalZlib)
+  add_subdirectory(lib/zlib)
+else()
+  find_package(ZLIB REQUIRED)
+endif()
+
+if(UseInternalPNG)
+  add_subdirectory(lib/libpng)
+else()
+  find_package(PNG REQUIRED)
+endif()
+
+# Always use bundled minizip (sets MINIZIP_{LIBRARIES,INCLUDE_DIR})
+add_subdirectory(lib/minizip)
+
+# No code analysis for the bundled third-party libraries (jpeg-9a, zlib, libpng, minizip).
+if(MSVC)
+	foreach(BundledLib bundled_libjpeg bundled_zlib bundled_libpng bundled_minizip)
+		if(TARGET ${BundledLib})
+			# 'Run Code Analysis' turns /analyze on for every project; this MSBuild switch keeps it off here.
+			# (MSB8061 'No tool enabled for Code Analysis' is then expected here: shown as a message, not a warning.)
+			set_target_properties(${BundledLib} PROPERTIES VS_GLOBAL_EnableMicrosoftCodeAnalysis false VS_GLOBAL_MSBuildWarningsAsMessages MSB8061)
+		endif()
+	endforeach()
+endif()
+
+# Add projects
+# SP and MP both build from the one shared\ folder. The few shared files that must differ between SP and MP
+# (keypad keys, window icon, MP-only maths helpers, MP net functions) check MD_SP_BUILD / MD_MP_BUILD.
+set(SharedDefinesBase ${SharedDefines})
+set(SharedDefines ${SharedDefinesBase} "MD_SP_BUILD")
+add_subdirectory(${SPDir})
+if(BuildJK2SPGame)
+	add_subdirectory("${JK2SPDir}/game")
+endif()
+set(SharedDefines ${SharedDefinesBase} "MD_MP_BUILD")
+add_subdirectory(${MPDir})
+set(SharedDefines ${SharedDefinesBase})
+# Windows Symbol Server tools
+if(BuildSymbolServer)
+	add_subdirectory("tools/WinSymbol")
+endif()
+if(BuildTests)
+	enable_testing()
+	add_subdirectory("tests")
+endif()

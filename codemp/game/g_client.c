@@ -1,0 +1,8144 @@
+﻿/*
+===========================================================================
+Copyright (C) 1999 - 2005, Id Software, Inc.
+Copyright (C) 2000 - 2013, Raven Software, Inc.
+Copyright (C) 2001 - 2013, Activision, Inc.
+Copyright (C) 2005 - 2015, ioquake3 contributors
+Copyright (C) 2013 - 2015,MovieDuels contributors
+
+This file is part of the MovieDuels source code.
+
+MovieDuels is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License version 2 as
+published by the Free Software Foundation.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, see <http://www.gnu.org/licenses/>.
+===========================================================================
+*/
+
+/// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// ///
+///																																///
+///																																///
+///													SERENITY JEDI ENGINE														///
+///										          LIGHTSABER COMBAT SYSTEM													    ///
+///																																///
+///						      System designed by Serenity and modded by JaceSolaris. (c) 2026 SJE   		                    ///
+///								    https://www.moddb.com/mods/movie-duels											            ///
+///																																///
+/// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// ///
+
+#include "g_local.h"
+#include "g_classmodels.h" // model -> bot class + scale table
+#include "bg_classmodel.h" // SJE->MD parity (2026-10-13): BG_ClassModelIndex, BG_ModelBlocked (shared with the ui)
+#include "g_animstyles.h" // model -> SP animation style table
+#include "g_pazaak.h"
+#include "ghoul2/G2.h"
+#include "bg_saga.h"
+#include <qcommon/q_string.h>
+#include <qcommon/q_math.h>
+#include "bg_public.h"
+#include <qcommon/q_shared.h>
+#include "g_team.h"
+#include "anims.h"
+#include "bg_vehicles.h"
+#include "teams.h"
+#include <string.h>
+#include <qcommon/q_color.h>
+#include <assert.h>
+#include <math.h>
+#include <stdlib.h>
+#include "surfaceflags.h"
+#include <qcommon/q_platform.h>
+#include "bg_weapons.h"
+#include "g_public.h"
+
+// g_client.c -- client functions that don't happen every frame
+
+static vec3_t player_mins = { -15, -15, DEFAULT_MINS_2 };
+static vec3_t player_maxs = { 15, 15, DEFAULT_MAXS_2 };
+
+extern int g_siegeRespawnCheck;
+
+void WP_SaberAddG2Model(gentity_t* saberent, const char* saber_model, qhandle_t saber_skin);
+void WP_SaberRemoveG2Model(gentity_t* saberent);
+extern qboolean WP_SaberCanTurnOffSomeBlades(const saberInfo_t* saber);
+extern qboolean G_ValidSaberStyle(const gentity_t* ent, int saber_style);
+extern void Player_CheckBurn(const gentity_t* self);
+extern void Player_CheckFreeze(const gentity_t* self);
+extern qboolean WP_SaberStyleValidForSaber(const saberInfo_t* saber1, const saberInfo_t* saber2, int saberHolstered, int saberAnimLevel);
+extern qboolean WP_UseFirstValidSaberStyle(const saberInfo_t* saber1, const saberInfo_t* saber2, int saberHolstered, int* saberAnimLevel);
+
+forcedata_t Client_Force[MAX_CLIENTS];
+
+static void g_Spectator(gentity_t* ent)
+{
+	if (ent->client->sess.sessionTeam != TEAM_SPECTATOR)
+	{
+		ent->client->tempSpectate = Q3_INFINITE;
+		ent->health = ent->client->ps.stats[STAT_HEALTH] = 1;
+		ent->client->ps.weapon = WP_NONE;
+		ent->client->ps.stats[STAT_WEAPONS] = 0;
+		ent->client->ps.stats[STAT_HOLDABLE_ITEMS] = 0;
+		ent->client->ps.stats[STAT_HOLDABLE_ITEM] = 0;
+		ent->takedamage = qfalse;
+		trap->UnlinkEntity((sharedEntity_t*)ent);
+	}
+}
+
+void SP_info_player_duel(gentity_t* ent)
+{
+	int i = 0;
+
+	G_SpawnInt("nobots", "0", &i);
+	if (i)
+	{
+		ent->flags |= FL_NO_BOTS;
+	}
+	G_SpawnInt("nohumans", "0", &i);
+	if (i)
+	{
+		ent->flags |= FL_NO_HUMANS;
+	}
+}
+
+/*QUAKED info_player_duel1 (1 0 1) (-16 -16 -24) (16 16 32) initial
+potential spawning position for lone duelists in powerduel.
+Targets will be fired when someone spawns in on them.
+"nobots" will prevent bots from using this spot.
+"nohumans" will prevent non-bots from using this spot.
+*/
+void SP_info_player_duel1(gentity_t* ent)
+{
+	int i = 0;
+
+	G_SpawnInt("nobots", "0", &i);
+	if (i)
+	{
+		ent->flags |= FL_NO_BOTS;
+	}
+	G_SpawnInt("nohumans", "0", &i);
+	if (i)
+	{
+		ent->flags |= FL_NO_HUMANS;
+	}
+}
+
+/*QUAKED info_player_duel2 (1 0 1) (-16 -16 -24) (16 16 32) initial
+potential spawning position for paired duelists in powerduel.
+Targets will be fired when someone spawns in on them.
+"nobots" will prevent bots from using this spot.
+"nohumans" will prevent non-bots from using this spot.
+*/
+void SP_info_player_duel2(gentity_t* ent)
+{
+	int i = 0;
+
+	G_SpawnInt("nobots", "0", &i);
+	if (i)
+	{
+		ent->flags |= FL_NO_BOTS;
+	}
+	G_SpawnInt("nohumans", "0", &i);
+	if (i)
+	{
+		ent->flags |= FL_NO_HUMANS;
+	}
+}
+
+/*QUAKED info_player_deathmatch (1 0 1) (-16 -16 -24) (16 16 32) initial
+potential spawning position for deathmatch games.
+The first time a player enters the game, they will be at an 'initial' spot.
+Targets will be fired when someone spawns in on them.
+"nobots" will prevent bots from using this spot.
+"nohumans" will prevent non-bots from using this spot.
+*/
+void SP_misc_teleporter_dest(gentity_t* ent);
+
+void SP_info_player_deathmatch(gentity_t* ent)
+{
+	int i = 0;
+
+	SP_misc_teleporter_dest(ent);
+
+	G_SpawnInt("nobots", "0", &i);
+	if (i)
+	{
+		ent->flags |= FL_NO_BOTS;
+	}
+	G_SpawnInt("nohumans", "0", &i);
+	if (i)
+	{
+		ent->flags |= FL_NO_HUMANS;
+	}
+	//make sure the spawnpoint's genericValue1 is cleared so that our magical waypoint
+	//system will work.
+	ent->genericValue1 = 0;
+}
+
+/*QUAKED info_player_start (1 0 0) (-16 -16 -24) (16 16 32)
+Targets will be fired when someone spawns in on them.
+equivelant to info_player_deathmatch
+*/
+void SP_info_player_start(gentity_t* ent)
+{
+	ent->classname = "info_player_deathmatch";
+	SP_info_player_deathmatch(ent);
+}
+
+/*QUAKED info_player_start_red (1 0 0) (-16 -16 -24) (16 16 32) INITIAL
+For Red Team DM starts
+
+Targets will be fired when someone spawns in on them.
+equivalent to info_player_deathmatch
+
+INITIAL - The first time a player enters the game, they will be at an 'initial' spot.
+
+"nobots" will prevent bots from using this spot.
+"nohumans" will prevent non-bots from using this spot.
+*/
+void SP_info_player_start_red(gentity_t* ent)
+{
+	SP_info_player_deathmatch(ent);
+}
+
+/*QUAKED info_player_start_blue (1 0 0) (-16 -16 -24) (16 16 32) INITIAL
+For Blue Team DM starts
+
+Targets will be fired when someone spawns in on them.
+equivalent to info_player_deathmatch
+
+INITIAL - The first time a player enters the game, they will be at an 'initial' spot.
+
+"nobots" will prevent bots from using this spot.
+"nohumans" will prevent non-bots from using this spot.
+*/
+void SP_info_player_start_blue(gentity_t* ent)
+{
+	SP_info_player_deathmatch(ent);
+}
+
+static void SiegePointUse(gentity_t* self, gentity_t* other, gentity_t* activator)
+{
+	//Toggle the point on/off
+	if (self->genericValue1)
+	{
+		self->genericValue1 = 0;
+	}
+	else
+	{
+		self->genericValue1 = 1;
+	}
+}
+
+/*QUAKED info_player_siegeteam1 (1 0 0) (-16 -16 -24) (16 16 32)
+siege start point - team1
+name and behavior of team1 depends on what is defined in the
+.siege file for this level
+
+startoff - if non-0 spawn point will be disabled until used
+idealclass - if specified, this spawn point will be considered
+"ideal" for players of this class name. Corresponds to the name
+entry in the .scl (siege class) file.
+Targets will be fired when someone spawns in on them.
+*/
+void SP_info_player_siegeteam1(gentity_t* ent)
+{
+	int soff = 0;
+
+	if (!G_SiegeMissionRules()) // SJE (2026-10-16): siege spawn points also in siege missions in Team FFA
+	{
+		//turn into a DM spawn if not in siege game mode
+		ent->classname = "info_player_deathmatch";
+		SP_info_player_deathmatch(ent);
+
+		return;
+	}
+
+	G_SpawnInt("startoff", "0", &soff);
+
+	if (soff)
+	{
+		//start disabled
+		ent->genericValue1 = 0;
+	}
+	else
+	{
+		ent->genericValue1 = 1;
+	}
+
+	ent->use = SiegePointUse;
+}
+
+/*QUAKED info_player_siegeteam2 (0 0 1) (-16 -16 -24) (16 16 32)
+siege start point - team2
+name and behavior of team2 depends on what is defined in the
+.siege file for this level
+
+startoff - if non-0 spawn point will be disabled until used
+idealclass - if specified, this spawn point will be considered
+"ideal" for players of this class name. Corresponds to the name
+entry in the .scl (siege class) file.
+Targets will be fired when someone spawns in on them.
+*/
+void SP_info_player_siegeteam2(gentity_t* ent)
+{
+	int soff = 0;
+
+	if (!G_SiegeMissionRules()) // SJE (2026-10-16): siege spawn points also in siege missions in Team FFA
+	{
+		//turn into a DM spawn if not in siege game mode
+		ent->classname = "info_player_deathmatch";
+		SP_info_player_deathmatch(ent);
+
+		return;
+	}
+
+	G_SpawnInt("startoff", "0", &soff);
+
+	if (soff)
+	{
+		//start disabled
+		ent->genericValue1 = 0;
+	}
+	else
+	{
+		ent->genericValue1 = 1;
+	}
+
+	ent->use = SiegePointUse;
+}
+
+/*QUAKED info_player_intermission (1 0 1) (-16 -16 -24) (16 16 32) RED BLUE
+The intermission will be viewed from this point.  Target an info_notnull for the view direction.
+RED - In a Siege game, the intermission will happen here if the Red (attacking) team wins
+BLUE - In a Siege game, the intermission will happen here if the Blue (defending) team wins
+*/
+void SP_info_player_intermission(gentity_t* ent)
+{}
+
+/*QUAKED info_player_intermission_red (1 0 1) (-16 -16 -24) (16 16 32)
+The intermission will be viewed from this point.  Target an info_notnull for the view direction.
+
+In a Siege game, the intermission will happen here if the Red (attacking) team wins
+target - ent to look at
+target2 - ents to use when this intermission point is chosen
+*/
+void SP_info_player_intermission_red(gentity_t* ent)
+{}
+
+/*QUAKED info_player_intermission_blue (1 0 1) (-16 -16 -24) (16 16 32)
+The intermission will be viewed from this point.  Target an info_notnull for the view direction.
+
+In a Siege game, the intermission will happen here if the Blue (defending) team wins
+target - ent to look at
+target2 - ents to use when this intermission point is chosen
+*/
+void SP_info_player_intermission_blue(gentity_t* ent)
+{}
+
+#define JMSABER_RESPAWN_TIME 20000 //in case it gets stuck somewhere no one can reach
+
+void ThrowSaberToAttacker(gentity_t* self, const gentity_t* attacker)
+{
+	gentity_t* ent = &g_entities[self->client->ps.saberIndex];
+	int altVelocity = 0;
+
+	if (!ent || ent->enemy != self)
+	{
+		//something has gone very wrong (this should never happen)
+		//but in case it does.. find the saber manually
+#ifdef _DEBUG
+		Com_Printf("Lost the saber! Attempting to use global pointer..\n");
+#endif
+		ent = gJMSaberEnt;
+
+		if (!ent)
+		{
+#ifdef _DEBUG
+			Com_Printf("The global pointer was NULL. This is a bad thing.\n");
+#endif
+			return;
+		}
+
+#ifdef _DEBUG
+		Com_Printf("Got it (%i). Setting enemy to client %i.\n", ent->s.number, self->s.number);
+#endif
+
+		ent->enemy = self;
+		self->client->ps.saberIndex = ent->s.number;
+	}
+
+	trap->SetConfigstring(CS_CLIENT_JEDIMASTER, "-1");
+
+	if (attacker && attacker->client && self->client->ps.saberInFlight)
+	{
+		//someone killed us and we had the saber thrown, so actually move this saber to the saber location
+		//if we killed ourselves with saber thrown, however, same suicide rules of respawning at spawn spot still
+		//apply.
+		const gentity_t* flyingsaber = &g_entities[self->client->ps.saberEntityNum];
+
+		if (flyingsaber && flyingsaber->inuse)
+		{
+			VectorCopy(flyingsaber->s.pos.trBase, ent->s.pos.trBase);
+			VectorCopy(flyingsaber->s.pos.trDelta, ent->s.pos.trDelta);
+			VectorCopy(flyingsaber->s.apos.trBase, ent->s.apos.trBase);
+			VectorCopy(flyingsaber->s.apos.trDelta, ent->s.apos.trDelta);
+
+			VectorCopy(flyingsaber->r.currentOrigin, ent->r.currentOrigin);
+			VectorCopy(flyingsaber->r.currentAngles, ent->r.currentAngles);
+			altVelocity = 1;
+		}
+	}
+
+	self->client->ps.saberInFlight = qtrue; //say he threw it anyway in order to properly remove from dead body
+
+	WP_SaberAddG2Model(ent, self->client->saber[0].model, self->client->saber[0].skin);
+
+	ent->s.eFlags &= ~(EF_NODRAW);
+	ent->s.modelGhoul2 = 1;
+	ent->s.eType = ET_MISSILE;
+	ent->enemy = NULL;
+
+	if (!attacker || !attacker->client)
+	{
+		VectorCopy(ent->s.origin2, ent->s.pos.trBase);
+		VectorCopy(ent->s.origin2, ent->s.origin);
+		VectorCopy(ent->s.origin2, ent->r.currentOrigin);
+		ent->pos2[0] = 0;
+		trap->LinkEntity((sharedEntity_t*)ent);
+		return;
+	}
+
+	if (!altVelocity)
+	{
+		vec3_t a;
+		VectorCopy(self->s.pos.trBase, ent->s.pos.trBase);
+		VectorCopy(self->s.pos.trBase, ent->s.origin);
+		VectorCopy(self->s.pos.trBase, ent->r.currentOrigin);
+
+		VectorSubtract(attacker->client->ps.origin, ent->s.pos.trBase, a);
+
+		VectorNormalize(a);
+
+		ent->s.pos.trDelta[0] = a[0] * 256;
+		ent->s.pos.trDelta[1] = a[1] * 256;
+		ent->s.pos.trDelta[2] = 256;
+	}
+
+	trap->LinkEntity((sharedEntity_t*)ent);
+}
+
+static void JMSaberThink(gentity_t* ent)
+{
+	gJMSaberEnt = ent;
+
+	if (ent->enemy)
+	{
+		if (!ent->enemy->client || !ent->enemy->inuse)
+		{
+			//disconnected?
+			VectorCopy(ent->enemy->s.pos.trBase, ent->s.pos.trBase);
+			VectorCopy(ent->enemy->s.pos.trBase, ent->s.origin);
+			VectorCopy(ent->enemy->s.pos.trBase, ent->r.currentOrigin);
+			ent->s.modelIndex = G_model_index(DEFAULT_SABER_MODEL);
+			ent->s.eFlags &= ~(EF_NODRAW);
+			ent->s.modelGhoul2 = 1;
+			ent->s.eType = ET_MISSILE;
+			ent->enemy = NULL;
+
+			ent->pos2[0] = 1;
+			ent->pos2[1] = 0; //respawn next think
+			trap->LinkEntity((sharedEntity_t*)ent);
+		}
+		else
+		{
+			ent->pos2[1] = level.time + JMSABER_RESPAWN_TIME;
+		}
+	}
+	else if (ent->pos2[0] && ent->pos2[1] < level.time)
+	{
+		VectorCopy(ent->s.origin2, ent->s.pos.trBase);
+		VectorCopy(ent->s.origin2, ent->s.origin);
+		VectorCopy(ent->s.origin2, ent->r.currentOrigin);
+		ent->pos2[0] = 0;
+		trap->LinkEntity((sharedEntity_t*)ent);
+	}
+
+	ent->nextthink = level.time + 50;
+	G_RunObject(ent);
+}
+
+void DetermineDodgeMax(const gentity_t* ent);
+
+static void JMSaberTouch(gentity_t* self, gentity_t* other, trace_t* trace)
+{
+	int i = 0;
+
+	if (!other || !other->client || other->health < 1)
+	{
+		return;
+	}
+
+	if (self->enemy)
+	{
+		return;
+	}
+
+	if (!self->s.modelIndex)
+	{
+		return;
+	}
+
+	if (other->client->ps.stats[STAT_WEAPONS] & 1 << WP_SABER)
+	{
+		return;
+	}
+
+	if (other->client->ps.isJediMaster)
+	{
+		return;
+	}
+
+	self->enemy = other;
+	other->client->ps.stats[STAT_WEAPONS] = 1 << WP_SABER;
+	other->client->ps.weapon = WP_SABER;
+	other->s.weapon = WP_SABER;
+	other->client->ps.zoomMode = 0;
+	G_AddEvent(other, EV_BECOME_JEDIMASTER, 0);
+
+	// Track the jedi master
+	trap->SetConfigstring(CS_CLIENT_JEDIMASTER, va("%i", other->s.number));
+
+	if (g_spawnInvulnerability.integer)
+	{
+		if (!(other->r.svFlags & SVF_BOT))
+		{
+			other->client->ps.powerups[PW_INVINCIBLE] = level.time + g_spawnInvulnerability.integer;
+		}
+		other->client->ps.eFlags |= EF_INVULNERABLE;
+		other->client->invulnerableTimer = level.time + g_spawnInvulnerability.integer;
+	}
+
+	trap->SendServerCommand(-1, va("cp \"%s %s\n\"", other->client->pers.netname,
+		G_GetStringEdString("MD_MP_SVGAME", "BECOMEJM")));
+
+	other->client->ps.isJediMaster = qtrue;
+	other->client->ps.saberIndex = self->s.number;
+
+	if (other->health < 200 && other->health > 0)
+	{
+		//full health when you become the Jedi Master
+		other->client->ps.stats[STAT_HEALTH] = other->health = 200;
+	}
+
+	if (other->client->ps.fd.forcePower < 100)
+	{
+		other->client->ps.fd.forcePower = 100;
+	}
+
+	while (i < NUM_FORCE_POWERS)
+	{
+		other->client->ps.fd.forcePowersKnown |= 1 << i;
+		other->client->ps.fd.forcePowerLevel[i] = FORCE_LEVEL_3;
+
+		i++;
+	}
+
+	DetermineDodgeMax(other);
+	//set dp to max.
+	other->client->ps.stats[STAT_DODGE] = other->client->ps.stats[STAT_MAX_DODGE];
+
+	self->pos2[0] = 1;
+	self->pos2[1] = level.time + JMSABER_RESPAWN_TIME;
+
+	self->s.modelIndex = 0;
+	self->s.eFlags |= EF_NODRAW;
+	self->s.modelGhoul2 = 0;
+	self->s.eType = ET_GENERAL;
+	G_KillG2Queue(self->s.number);
+}
+
+gentity_t* gJMSaberEnt = NULL;
+
+/*QUAKED info_jedimaster_start (1 0 0) (-16 -16 -24) (16 16 32)
+"jedi master" saber spawn point
+*/
+void SP_info_jedimaster_start(gentity_t* ent)
+{
+	if (level.gametype != GT_JEDIMASTER)
+	{
+		gJMSaberEnt = NULL;
+		G_FreeEntity(ent);
+		return;
+	}
+
+	ent->enemy = NULL;
+
+	ent->flags = FL_BOUNCE_HALF;
+
+	ent->s.modelIndex = G_model_index(DEFAULT_SABER_MODEL);
+	ent->s.modelGhoul2 = 1;
+	ent->s.g2radius = 20;
+	//ent->s.eType = ET_GENERAL;
+	ent->s.eType = ET_MISSILE;
+	ent->s.weapon = WP_SABER;
+	ent->s.pos.trType = TR_GRAVITY;
+	ent->s.pos.trTime = level.time;
+	VectorSet(ent->r.maxs, 3, 3, 3);
+	VectorSet(ent->r.mins, -3, -3, -3);
+	ent->r.contents = CONTENTS_TRIGGER;
+	ent->clipmask = MASK_SOLID;
+
+	ent->isSaberEntity = qtrue;
+
+	ent->bounceCount = -5;
+
+	ent->physicsObject = qtrue;
+
+	VectorCopy(ent->s.pos.trBase, ent->s.origin2); //remember the spawn spot
+
+	ent->touch = JMSaberTouch;
+
+	trap->LinkEntity((sharedEntity_t*)ent);
+
+	ent->think = JMSaberThink;
+	ent->nextthink = level.time + 50;
+}
+
+/*
+=======================================================================
+
+  SelectSpawnPoint
+
+=======================================================================
+*/
+
+/*
+================
+SpotWouldTelefrag
+
+================
+*/
+qboolean SpotWouldTelefrag(const gentity_t* spot)
+{
+	static int touch[MAX_GENTITIES];  // safe and recommended
+	vec3_t mins, maxs;
+
+	VectorAdd(spot->s.origin, player_mins, mins);
+	VectorAdd(spot->s.origin, player_maxs, maxs);
+
+	const int num = trap->EntitiesInBox(mins, maxs, touch, MAX_GENTITIES);
+
+	for (int i = 0; i < num; i++)
+	{
+		const gentity_t* hit = &g_entities[touch[i]];
+
+		if (!hit->r.linked)
+			continue;
+
+		if (!hit->client)
+			continue;
+
+		if (hit->client->ps.stats[STAT_HEALTH] <= 0)
+			continue;
+
+		return qtrue;
+	}
+
+	return qfalse;
+}
+
+qboolean spot_would_telefrag2(const gentity_t* mover, vec3_t dest)
+{
+	static int touch[MAX_GENTITIES];  // safe and recommended
+	vec3_t mins, maxs;
+
+	VectorAdd(dest, mover->r.mins, mins);
+	VectorAdd(dest, mover->r.maxs, maxs);
+
+	const int num = trap->EntitiesInBox(mins, maxs, touch, MAX_GENTITIES);
+
+	for (int i = 0; i < num; i++)
+	{
+		const gentity_t* hit = &g_entities[touch[i]];
+
+		if (hit == mover)
+			continue;
+
+		if (!hit->r.linked)
+			continue;
+
+		if (hit->r.contents == 0)
+			continue;
+
+		if (hit->client)
+		{
+			if (hit->client->ps.stats[STAT_HEALTH] <= 0)
+				continue;
+
+			return qtrue;
+		}
+
+		if (hit->r.contents & CONTENTS_SOLID)
+			return qtrue;
+
+		if (hit->r.contents & CONTENTS_PLAYERCLIP)
+			return qtrue;
+	}
+
+	return qfalse;
+}
+
+/*
+================
+SelectNearestDeathmatchSpawnPoint
+
+Find the spot that we DON'T want to use
+================
+*/
+static qboolean SafeSpawn_FindOffset(const vec3_t baseOrigin, vec3_t outOrigin);
+static qboolean SafeSpawn_IsOccupied(const vec3_t origin);
+
+static gentity_t* SelectNearestDeathmatchSpawnPoint(vec3_t from)
+{
+	float nearestDist = 999999.0f;
+	gentity_t* nearestSpot = NULL;
+	gentity_t* spot = NULL;
+
+	while ((spot = G_Find(spot, FOFS(classname), "info_player_deathmatch")) != NULL)
+	{
+		vec3_t delta;
+		VectorSubtract(spot->s.origin, from, delta);
+		const float dist = VectorLength(delta);
+
+		if (dist < nearestDist)
+		{
+			nearestDist = dist;
+			nearestSpot = spot;
+		}
+	}
+
+	if (!nearestSpot)
+		return NULL;
+
+	// Base origin
+	vec3_t baseOrigin;
+	VectorCopy(nearestSpot->s.origin, baseOrigin);
+	baseOrigin[2] += 9;
+
+	// ---------------------------------------------------------
+	// ALWAYS run SafeSpawn for bots or single-spawn maps
+	// ---------------------------------------------------------
+	if (SafeSpawn_IsOccupied(baseOrigin) ||
+		level.numDeathmatchSpawns <= 1 ||   // tiny maps
+		(nearestSpot->flags & FL_NO_BOTS))  // safety
+	{
+		vec3_t offsetOrigin;
+
+		if (SafeSpawn_FindOffset(baseOrigin, offsetOrigin))
+		{
+			return nearestSpot;
+		}
+
+		// Fallback nudge to avoid same-frame overlap
+		baseOrigin[0] += Q_irand(-24, 24);
+		baseOrigin[1] += Q_irand(-24, 24);
+
+		if (!SafeSpawn_IsOccupied(baseOrigin))
+			return nearestSpot;
+
+		return NULL;
+	}
+
+	// Spawn is safe
+	return nearestSpot;
+}
+
+/*
+================
+SelectRandomDeathmatchSpawnPoint
+
+go to a random point that doesn't telefrag
+================
+*/
+#define	MAX_SPAWN_POINTS	128
+
+gentity_t* SelectRandomDeathmatchSpawnPoint(qboolean isbot)
+{
+	gentity_t* spots[MAX_SPAWN_POINTS] = { 0 };
+	int count = 0;
+	gentity_t* spot = NULL;
+
+	while ((spot = G_Find(spot, FOFS(classname), "info_player_deathmatch")) != NULL &&
+		count < MAX_SPAWN_POINTS)
+	{
+		if (SpotWouldTelefrag(spot))
+		{
+			continue;
+		}
+
+		if ((spot->flags & FL_NO_BOTS && isbot) ||
+			(spot->flags & FL_NO_HUMANS && !isbot))
+		{
+			continue;
+		}
+
+		spots[count] = spot;
+		count++;
+	}
+
+	if (!count)
+	{
+		// No safe spots found — fallback to ANY DM spawn
+		return G_Find(NULL, FOFS(classname), "info_player_deathmatch");
+	}
+
+	// Pick a random spot
+	const int selection = rand() % count;
+	gentity_t* chosen = spots[selection];
+
+	// Base origin for safe-spawn check
+	vec3_t baseOrigin;
+	VectorCopy(chosen->s.origin, baseOrigin);
+	baseOrigin[2] += 9;
+
+	// 1. Check if chosen spawn is occupied
+	if (SafeSpawn_IsOccupied(baseOrigin))
+	{
+		vec3_t offsetOrigin;
+
+		// 2. Try to find a safe offset around the chosen spawn
+		if (SafeSpawn_FindOffset(baseOrigin, offsetOrigin))
+		{
+			// We only return the spot entity here.
+			// ClientSpawn() will compute final origin/angles.
+			return chosen;
+		}
+
+		// 3. No safe offset → return NULL so ClientSpawn() delays spawn
+		return NULL;
+	}
+
+	// Spawn is safe
+	return chosen;
+}
+
+/*
+===========
+SelectRandomFurthestSpawnPoint
+
+Chooses a player start, deathmatch start, etc
+============
+*/
+/* ============================================================
+   SAFE SPAWN SYSTEM HELPERS
+   ============================================================ */
+
+static qboolean SafeSpawn_IsOccupied(const vec3_t origin)
+{
+	trace_t tr;
+	vec3_t mins = { -15, -15, -24 };
+	vec3_t maxs = { 15,  15,  32 };
+
+	trap->Trace(&tr, origin, mins, maxs, origin, ENTITYNUM_NONE,
+		MASK_PLAYERSOLID, qfalse, 0, 0);
+
+	return (tr.startsolid || tr.allsolid);
+}
+
+static qboolean SafeSpawn_FindOffset(const vec3_t baseOrigin, vec3_t outOrigin)
+{
+	static const float radii[] = { 32, 48, 64, 80 };
+	static const float angles[] = { 0, 45, 90, 135, 180, 225, 270, 315 };
+
+	vec3_t test = { 0 };
+	int r = 0, a = 0;
+
+	for (r = 0; r < 4; r++)
+	{
+		for (a = 0; a < 8; a++)
+		{
+			float rad = angles[a] * (M_PI / 180.0f);
+
+			test[0] = baseOrigin[0] + cosf(rad) * radii[r];
+			test[1] = baseOrigin[1] + sinf(rad) * radii[r];
+			test[2] = baseOrigin[2];
+
+			if (!SafeSpawn_IsOccupied(test))
+			{
+				VectorCopy(test, outOrigin);
+				return qtrue;
+			}
+		}
+	}
+
+	return qfalse;
+}/*
+===========================
+SelectRandomFurthestSpawnPoint
+
+Selects a spawn point that is as far as possible from the given avoidPoint.
+
+Behaviour:
+- For team games (non-FFA, non-spectator), prefers team-specific spawnpoints:
+	- "info_player_start_red" for TEAM_RED
+	- "info_player_start_blue" for TEAM_BLUE
+- If no valid team spawnpoints are found, falls back to:
+	- "info_player_deathmatch"
+- Among all valid spots, builds a list sorted by distance from avoidPoint.
+- Picks a random spot from the "top half" of the furthest spots.
+- Applies safe spawn logic:
+	- If the spot is occupied (or for bots / single-spot cases), tries SafeSpawn_FindOffset.
+	- For bots, if no safe offset is found, applies a small random XY jitter.
+- Writes chosen origin and angles and returns the chosen spawn entity.
+
+Notes:
+- Obvious bugs fixed:
+	- Removed meaningless checks on spot->s.origin (vec3_t cannot be NULL).
+	- Added safety checks for list_spot[rnd] before dereference.
+	- Added debug prints instead of asserts.
+- Behaviour is otherwise preserved.
+===========================
+*/
+static gentity_t* SelectRandomFurthestSpawnPoint(
+	vec3_t avoidPoint,
+	vec3_t origin,
+	vec3_t angles,
+	const team_t team,
+	const qboolean isbot)
+{
+	vec3_t delta;
+	float dist = 0.0f;
+	float list_dist[MAX_SPAWN_POINTS] = { 0.0f };
+	gentity_t* list_spot[MAX_SPAWN_POINTS] = { NULL };
+	int i = 0;
+	int j = 0;
+	int numSpots = 0;
+	gentity_t* spot = NULL;
+	const char* classname = NULL;
+
+	/* -------------------------
+	   TEAM SPAWNPOINTS
+	   ------------------------- */
+	if (level.gametype == GT_TEAM &&
+		team != TEAM_FREE &&
+		team != TEAM_SPECTATOR)
+	{
+		classname = (team == TEAM_RED) ? "info_player_start_red" : "info_player_start_blue";
+
+		spot = NULL;
+		while ((spot = G_Find(spot, FOFS(classname), classname)) != NULL)
+		{
+			/* SAFETY: ensure entity is valid and in use */
+			if (spot->classname == NULL || spot->inuse == qfalse)
+			{
+				continue;
+			}
+
+			if (SpotWouldTelefrag(spot) == qtrue)
+			{
+				continue;
+			}
+
+			if (((spot->flags & FL_NO_BOTS) != 0 && isbot == qtrue) ||
+				((spot->flags & FL_NO_HUMANS) != 0 && isbot == qfalse))
+			{
+				continue;
+			}
+
+			VectorSubtract(spot->s.origin, avoidPoint, delta);
+			dist = VectorLength(delta);
+
+			for (i = 0; i < numSpots; i++)
+			{
+				if (dist > list_dist[i])
+				{
+					if (numSpots >= MAX_SPAWN_POINTS)
+					{
+						numSpots = MAX_SPAWN_POINTS - 1;
+					}
+
+					for (j = numSpots; j > i; j--)
+					{
+						list_dist[j] = list_dist[j - 1];
+						list_spot[j] = list_spot[j - 1];
+					}
+
+					list_dist[i] = dist;
+					list_spot[i] = spot;
+					numSpots++;
+					break;
+				}
+			}
+
+			if (i >= numSpots && numSpots < MAX_SPAWN_POINTS)
+			{
+				list_dist[numSpots] = dist;
+				list_spot[numSpots] = spot;
+				numSpots++;
+			}
+		}
+	}
+
+	/* -------------------------
+	   FALLBACK TO DEATHMATCH SPAWNPOINTS
+	   ------------------------- */
+	if (numSpots == 0)
+	{
+		classname = "info_player_deathmatch";
+		spot = NULL;
+
+		while ((spot = G_Find(spot, FOFS(classname), classname)) != NULL)
+		{
+			if (spot->classname == NULL || spot->inuse == qfalse)
+			{
+				continue;
+			}
+
+			if (SpotWouldTelefrag(spot) == qtrue)
+			{
+				continue;
+			}
+
+			if (((spot->flags & FL_NO_BOTS) != 0 && isbot == qtrue) ||
+				((spot->flags & FL_NO_HUMANS) != 0 && isbot == qfalse))
+			{
+				continue;
+			}
+
+			VectorSubtract(spot->s.origin, avoidPoint, delta);
+			dist = VectorLength(delta);
+
+			for (i = 0; i < numSpots; i++)
+			{
+				if (dist > list_dist[i])
+				{
+					if (numSpots >= MAX_SPAWN_POINTS)
+					{
+						numSpots = MAX_SPAWN_POINTS - 1;
+					}
+
+					for (j = numSpots; j > i; j--)
+					{
+						list_dist[j] = list_dist[j - 1];
+						list_spot[j] = list_spot[j - 1];
+					}
+
+					list_dist[i] = dist;
+					list_spot[i] = spot;
+					numSpots++;
+					break;
+				}
+			}
+
+			if (i >= numSpots && numSpots < MAX_SPAWN_POINTS)
+			{
+				list_dist[numSpots] = dist;
+				list_spot[numSpots] = spot;
+				numSpots++;
+			}
+		}
+
+		if (numSpots == 0)
+		{
+			gentity_t* fallback = G_Find(NULL, FOFS(classname), "info_player_deathmatch");
+			if (fallback == NULL)
+			{
+				trap->Error(ERR_DROP, "SelectRandomFurthestSpawnPoint: Couldn't find a spawn point");
+				return NULL;
+			}
+
+			VectorCopy(fallback->s.origin, origin);
+			origin[2] += 9.0f;
+			VectorCopy(fallback->s.angles, angles);
+			return fallback;
+		}
+	}
+
+	/* -------------------------
+	   PICK RANDOM FROM TOP HALF
+	   ------------------------- */
+	{
+		int halfCount = (numSpots / 2);
+		int rnd = 0;
+
+		if (halfCount <= 0)
+		{
+			halfCount = numSpots;
+		}
+
+		rnd = (int)(Q_flrand(0.0f, 1.0f) * (float)halfCount);
+		if (rnd < 0)
+		{
+			rnd = 0;
+		}
+		if (rnd >= numSpots)
+		{
+			rnd = numSpots - 1;
+		}
+
+		if (list_spot[rnd] == NULL)
+		{
+			Com_Printf("SelectRandomFurthestSpawnPoint: NULL spawn in list_spot[%i]\n", rnd);
+			return NULL;
+		}
+
+		{
+			vec3_t baseOrigin;
+			VectorCopy(list_spot[rnd]->s.origin, baseOrigin);
+			baseOrigin[2] += 9.0f;
+
+			/* -------------------------
+			   SAFE SPAWN LOGIC
+			   ------------------------- */
+			if (isbot == qtrue ||
+				numSpots == 1 ||
+				SafeSpawn_IsOccupied(baseOrigin) == qtrue)
+			{
+				vec3_t offsetOrigin;
+
+				if (SafeSpawn_FindOffset(baseOrigin, offsetOrigin) == qtrue)
+				{
+					VectorCopy(offsetOrigin, origin);
+					VectorCopy(list_spot[rnd]->s.angles, angles);
+					return list_spot[rnd];
+				}
+
+				if (isbot == qtrue)
+				{
+					origin[0] = baseOrigin[0] + (float)Q_irand(-24, 24);
+					origin[1] = baseOrigin[1] + (float)Q_irand(-24, 24);
+					origin[2] = baseOrigin[2];
+					VectorCopy(list_spot[rnd]->s.angles, angles);
+					return list_spot[rnd];
+				}
+			}
+
+			VectorCopy(baseOrigin, origin);
+			VectorCopy(list_spot[rnd]->s.angles, angles);
+			return list_spot[rnd];
+		}
+	}
+}/*
+=============
+SelectDuelSpawnPoint
+
+Selects a duel spawn point for the given duel team.
+
+Behaviour:
+- For duel teams:
+	- DUELTEAM_LONE   → "info_player_duel1"
+	- DUELTEAM_DOUBLE → "info_player_duel2"
+	- DUELTEAM_SINGLE → "info_player_duel"
+- Fallback:
+	- If no duel spawns found, falls back to "info_player_deathmatch".
+- Among all valid spots, builds a list sorted by distance from avoidPoint.
+- Picks a random spot from the "top half" of the furthest spots.
+- Safe spawn logic:
+	- If the spot is occupied, or if only one spot exists, or if this is a bot:
+		- Tries SafeSpawn_FindOffset.
+		- For bots, if that fails, applies a small random XY jitter.
+- Writes chosen origin and angles and returns the chosen spawn entity.
+
+Fixes:
+- Added validity checks for spot and list_spot[rnd].
+- Removed potential NULL dereference.
+- Added comments and kept behaviour otherwise identical.
+=============
+*/
+static gentity_t* SelectDuelSpawnPoint(
+	const int team,
+	vec3_t avoidPoint,
+	vec3_t origin,
+	vec3_t angles,
+	const qboolean isbot)
+{
+	float list_dist[MAX_SPAWN_POINTS] = { 0.0f };
+	gentity_t* list_spot[MAX_SPAWN_POINTS] = { NULL };
+	int i = 0;
+	char* spotName = NULL;
+	int numSpots = 0;
+	gentity_t* spot = NULL;
+
+	/* -------------------------
+	   Determine base classname
+	   ------------------------- */
+	if (team == DUELTEAM_LONE)
+	{
+		spotName = "info_player_duel1";
+	}
+	else if (team == DUELTEAM_DOUBLE)
+	{
+		spotName = "info_player_duel2";
+	}
+	else if (team == DUELTEAM_SINGLE)
+	{
+		spotName = "info_player_duel";
+	}
+	else
+	{
+		spotName = "info_player_deathmatch";
+	}
+
+tryAgain:
+
+	/* -------------------------
+	   Collect and sort candidate spots
+	   ------------------------- */
+	spot = NULL;
+	while ((spot = G_Find(spot, FOFS(classname), spotName)) != NULL)
+	{
+		vec3_t delta;
+		float dist = 0.0f;
+
+		/* SAFETY: ensure entity is valid and in use */
+		if (spot->classname == NULL || spot->inuse == qfalse)
+		{
+			continue;
+		}
+
+		if (SpotWouldTelefrag(spot) == qtrue)
+		{
+			continue;
+		}
+
+		if (((spot->flags & FL_NO_BOTS) != 0 && isbot == qtrue) ||
+			((spot->flags & FL_NO_HUMANS) != 0 && isbot == qfalse))
+		{
+			continue;
+		}
+
+		VectorSubtract(spot->s.origin, avoidPoint, delta);
+		dist = VectorLength(delta);
+
+		for (i = 0; i < numSpots; i++)
+		{
+			if (dist > list_dist[i])
+			{
+				int j = 0;
+
+				if (numSpots >= MAX_SPAWN_POINTS)
+				{
+					numSpots = MAX_SPAWN_POINTS - 1;
+				}
+
+				for (j = numSpots; j > i; j--)
+				{
+					list_dist[j] = list_dist[j - 1];
+					list_spot[j] = list_spot[j - 1];
+				}
+
+				list_dist[i] = dist;
+				list_spot[i] = spot;
+				numSpots++;
+				break;
+			}
+		}
+
+		if (i >= numSpots && numSpots < MAX_SPAWN_POINTS)
+		{
+			list_dist[numSpots] = dist;
+			list_spot[numSpots] = spot;
+			numSpots++;
+		}
+	}
+
+	/* -------------------------
+	   Fallback if no spots found
+	   ------------------------- */
+	if (numSpots == 0)
+	{
+		if (Q_stricmp(spotName, "info_player_deathmatch") != 0)
+		{
+			spotName = "info_player_deathmatch";
+			goto tryAgain;
+		}
+
+		spot = G_Find(NULL, FOFS(classname), "info_player_deathmatch");
+		if (spot == NULL)
+		{
+			trap->Error(ERR_DROP, "SelectDuelSpawnPoint: Couldn't find a spawn point");
+			return NULL;
+		}
+
+		VectorCopy(spot->s.origin, origin);
+		origin[2] += 9.0f;
+		VectorCopy(spot->s.angles, angles);
+		return spot;
+	}
+
+	/* -------------------------
+	   Pick random from top half
+	   ------------------------- */
+	{
+		int halfCount = (numSpots / 2);
+		int rnd = 0;
+		vec3_t baseOrigin;
+
+		if (halfCount <= 0)
+		{
+			halfCount = numSpots;
+		}
+
+		rnd = (int)(Q_flrand(0.0f, 1.0f) * (float)halfCount);
+		if (rnd < 0)
+		{
+			rnd = 0;
+		}
+		if (rnd >= numSpots)
+		{
+			rnd = numSpots - 1;
+		}
+
+		if (list_spot[rnd] == NULL)
+		{
+			Com_Printf("SelectDuelSpawnPoint: NULL spawn in list_spot[%i]\n", rnd);
+			return NULL;
+		}
+
+		VectorCopy(list_spot[rnd]->s.origin, baseOrigin);
+		baseOrigin[2] += 9.0f;
+
+		/* -------------------------
+		   Safe spawn logic
+		   ------------------------- */
+		if (isbot == qtrue ||
+			numSpots == 1 ||
+			SafeSpawn_IsOccupied(baseOrigin) == qtrue)
+		{
+			vec3_t offsetOrigin;
+
+			if (SafeSpawn_FindOffset(baseOrigin, offsetOrigin) == qtrue)
+			{
+				VectorCopy(offsetOrigin, origin);
+				VectorCopy(list_spot[rnd]->s.angles, angles);
+				return list_spot[rnd];
+			}
+
+			if (isbot == qtrue)
+			{
+				origin[0] = baseOrigin[0] + (float)Q_irand(-24, 24);
+				origin[1] = baseOrigin[1] + (float)Q_irand(-24, 24);
+				origin[2] = baseOrigin[2];
+				VectorCopy(list_spot[rnd]->s.angles, angles);
+				return list_spot[rnd];
+			}
+		}
+
+		VectorCopy(baseOrigin, origin);
+		VectorCopy(list_spot[rnd]->s.angles, angles);
+		return list_spot[rnd];
+	}
+}
+
+/*
+===========
+SelectSpawnPoint
+
+Chooses a player start, deathmatch start, etc
+============
+*/
+gentity_t* SelectSpawnPoint(vec3_t avoidPoint, vec3_t origin, vec3_t angles, const team_t team, const qboolean isbot)
+{
+	return SelectRandomFurthestSpawnPoint(avoidPoint, origin, angles, team, isbot);
+}
+
+/*
+===========
+SelectInitialSpawnPoint
+
+Try to find a spawn point marked 'initial', otherwise
+use normal spawn selection.
+============
+*/
+static gentity_t* SelectInitialSpawnPoint(vec3_t origin, vec3_t angles,
+	const team_t team, const qboolean isbot)
+{
+	gentity_t* spot = NULL;
+	const char* classname = "info_player_deathmatch";
+
+	// Find a spawn point with spawnflag 1 (preferred initial spawn)
+	while ((spot = G_Find(spot, FOFS(classname), classname)) != NULL)
+	{
+		if ((spot->flags & FL_NO_BOTS && isbot) ||
+			(spot->flags & FL_NO_HUMANS && !isbot))
+		{
+			continue;
+		}
+
+		if (spot->spawnflags & 1)
+		{
+			break;
+		}
+	}
+
+	// If no preferred spot OR it would telefrag, fallback to normal spawn logic
+	if (!spot || SpotWouldTelefrag(spot))
+	{
+		return SelectSpawnPoint(vec3_origin, origin, angles, team, isbot);
+	}
+
+	// Base spawn origin
+	vec3_t baseOrigin;
+	VectorCopy(spot->s.origin, baseOrigin);
+	baseOrigin[2] += 9;
+
+	// 1. Check if initial spawn is occupied
+	if (SafeSpawn_IsOccupied(baseOrigin))
+	{
+		vec3_t offsetOrigin;
+
+		// 2. Try to find a safe offset around the initial spawn
+		if (SafeSpawn_FindOffset(baseOrigin, offsetOrigin))
+		{
+			VectorCopy(offsetOrigin, origin);
+			VectorCopy(spot->s.angles, angles);
+			return spot;
+		}
+
+		// 3. No safe offset → return NULL so ClientSpawn() delays spawn
+		return NULL;
+	}
+
+	// Spawn is safe
+	VectorCopy(baseOrigin, origin);
+	VectorCopy(spot->s.angles, angles);
+	return spot;
+}
+
+/*
+===========
+SelectSpectatorSpawnPoint
+
+============
+*/
+static gentity_t* SelectSpectatorSpawnPoint(vec3_t origin, vec3_t angles)
+{
+	FindIntermissionPoint();
+
+	VectorCopy(level.intermission_origin, origin);
+	VectorCopy(level.intermission_angle, angles);
+
+	return NULL;
+}
+
+/*
+=======================================================================
+
+BODYQUE
+
+=======================================================================
+*/
+
+#define BODY_SINK_TIME		30000//45000
+
+/*
+===============
+InitBodyQue
+===============
+*/
+void InitBodyQue(void)
+{
+	level.bodyQueIndex = 0;
+	for (int i = 0; i < BODY_QUEUE_SIZE; i++)
+	{
+		gentity_t* ent = G_Spawn();
+		ent->classname = "bodyque";
+		ent->neverFree = qtrue;
+		level.bodyQue[i] = ent;
+	}
+}
+
+/*
+=============
+BodySink
+
+After sitting around for five seconds, fall into the ground and disappear
+=============
+*/
+static void BodySink(gentity_t* ent)
+{
+	//while we're at it, I'm making the corpse removal time be set by a cvar like in SP.
+	if (g_corpseRemovalTime.integer && level.time - ent->timestamp > g_corpseRemovalTime.integer * 1000 + 2500)
+	{
+		G_KillG2Queue(ent->s.number);
+		G_FreeEntity(ent);
+		return;
+	}
+
+	G_AddEvent(ent, EV_BODYFADE, 0);
+	ent->nextthink = level.time + 18000;
+	ent->takedamage = qfalse;
+}
+
+/*
+=============
+CopyToBodyQue
+
+A player is respawning, so make an entity that looks
+just like the existing corpse to leave behind.
+
+Behaviour:
+- Only valid player entities (ET_PLAYER with a non-NULL client) produce corpses.
+- No corpse is spawned during intermission, in nodrop areas, or after disintegration.
+- A new body entity is spawned and configured to match the player.
+=============
+*/
+static qboolean CopyToBodyQue(gentity_t* ent)
+{
+	qboolean result = qfalse;
+	qboolean isLight = qfalse;
+	int contents = 0;
+	gentity_t* body = NULL;
+
+	/* -------------------------
+	   Validate input entity
+	   ------------------------- */
+	if (ent == NULL)
+	{
+		/* Nothing to do */
+		return (result == qtrue ? qtrue : qfalse);
+	}
+
+	/* Only players have corpses */
+	if (ent->client == NULL || ent->s.eType != ET_PLAYER)
+	{
+		return (result == qtrue ? qtrue : qfalse);
+	}
+
+	if (level.intermissiontime)
+	{
+		return (result == qtrue ? qtrue : qfalse);
+	}
+
+	trap->UnlinkEntity((sharedEntity_t*)ent);
+
+	/* If client is in a nodrop area, don't leave the body */
+	contents = trap->PointContents(ent->s.origin, -1);
+	if ((contents & CONTENTS_NODROP) != 0)
+	{
+		return (result == qtrue ? qtrue : qfalse);
+	}
+
+	/* If disintegrated, don't spawn a body */
+	if ((ent->client->ps.eFlags & EF_DISINTEGRATION) != 0)
+	{
+		return (result == qtrue ? qtrue : qfalse);
+	}
+
+	/* -------------------------
+	   Spawn the body entity
+	   ------------------------- */
+	body = G_Spawn();
+	if (body == NULL)
+	{
+		/* Entity pool exhausted — not an error, just no corpse */
+		return (result == qtrue ? qtrue : qfalse);
+	}
+
+	body->classname = "body";
+
+	trap->UnlinkEntity((sharedEntity_t*)body);
+
+	/* Copy player state into corpse */
+	body->s = ent->s;
+
+	/* Avoid oddly angled corpses floating around */
+	body->s.angles[PITCH] = 0;
+	body->s.angles[ROLL] = 0;
+	body->s.apos.trBase[PITCH] = 0;
+	body->s.apos.trBase[ROLL] = 0;
+
+	body->s.g2radius = 100;
+
+	body->s.eType = ET_BODY;
+	body->s.eFlags = EF_DEAD;
+	body->corpsePushUntil = ent->corpsePushUntil; // ragdoll: the push window goes on with the body
+	ent->corpsePushUntil = 0;
+
+	if ((ent->client->ps.eFlags & EF_DISINTEGRATION) != 0)
+	{
+		body->s.eFlags |= EF_DISINTEGRATION;
+	}
+
+	VectorCopy(ent->client->ps.lastHitLoc, body->s.origin2);
+
+	body->s.powerups = 0;
+	body->s.loopSound = 0;
+	body->s.loopIsSoundset = qfalse;
+	body->s.number = (int)(body - g_entities);
+	body->timestamp = level.time;
+	body->physicsObject = qtrue;
+	body->physicsBounce = 0.0f;
+
+	if (body->s.groundEntityNum == ENTITYNUM_NONE)
+	{
+		body->s.pos.trType = TR_GRAVITY;
+		body->s.pos.trTime = level.time;
+		VectorCopy(ent->client->ps.velocity, body->s.pos.trDelta);
+	}
+	else
+	{
+		body->s.pos.trType = TR_STATIONARY;
+	}
+
+	body->s.event = 0;
+
+	/* Weapon handling */
+	body->s.weapon = ent->s.bolt2;
+
+	if (body->s.weapon == WP_SABER &&
+		(ent->client->ps.saberInFlight != qfalse))
+	{
+		/* Saber was thrown at death — corpse should not show it */
+		body->s.weapon = WP_MELEE;
+	}
+
+	/* Force alignment for corpse effects */
+	isLight = (ent->client->ps.fd.forceSide == FORCE_LIGHTSIDE ? qtrue : qfalse);
+
+	trap->SendServerCommand(
+		-1,
+		va("ircg %i %i %i %i",
+			ent->s.number,
+			body->s.number,
+			body->s.weapon,
+			(isLight == qtrue ? 1 : 0)));
+
+	/* Collision and bounding boxes */
+	body->r.svFlags = ent->r.svFlags | SVF_BROADCAST;
+	VectorCopy(ent->r.mins, body->r.mins);
+	VectorCopy(ent->r.maxs, body->r.maxs);
+	VectorCopy(ent->r.absmin, body->r.absmin);
+	VectorCopy(ent->r.absmax, body->r.absmax);
+
+	/* Animations */
+	body->s.torsoAnim = ent->client->ps.legsAnim;
+	body->s.legsAnim = ent->client->ps.legsAnim;
+
+	/* Custom colors */
+	body->s.customRGBA[0] = ent->client->ps.customRGBA[0];
+	body->s.customRGBA[1] = ent->client->ps.customRGBA[1];
+	body->s.customRGBA[2] = ent->client->ps.customRGBA[2];
+	body->s.customRGBA[3] = ent->client->ps.customRGBA[3];
+
+	/* Collision properties */
+	body->clipmask = CONTENTS_SOLID | CONTENTS_PLAYERCLIP;
+	body->r.contents = CONTENTS_CORPSE;
+	body->r.ownerNum = ent->s.number;
+
+	/* Auto-removal timer */
+	if (g_corpseRemovalTime.integer != 0)
+	{
+		body->nextthink = level.time + g_corpseRemovalTime.integer * 1000;
+		body->think = BodySink;
+	}
+
+	body->die = body_die;
+
+	/* Don't take more damage if already gibbed */
+	if (ent->health <= GIB_HEALTH)
+	{
+		body->takedamage = qfalse;
+	}
+	else
+	{
+		body->takedamage = qtrue;
+	}
+
+	VectorCopy(body->s.pos.trBase, body->r.currentOrigin);
+	trap->LinkEntity((sharedEntity_t*)body);
+
+	result = qtrue;
+	return (result == qtrue ? qtrue : qfalse);
+}
+
+//======================================================================
+
+/*
+==================
+SetClientViewAngle
+
+==================
+*/
+void SetClientViewAngle(gentity_t* ent, vec3_t angle)
+{
+	// set the delta angle
+	for (int i = 0; i < 3; i++)
+	{
+		const int cmdAngle = ANGLE2SHORT(angle[i]);
+		ent->client->ps.delta_angles[i] = cmdAngle - ent->client->pers.cmd.angles[i];
+	}
+	VectorCopy(angle, ent->s.angles);
+	VectorCopy(ent->s.angles, ent->client->ps.viewangles);
+}
+
+void MaintainBodyQueue(gentity_t* ent)
+{
+	//do whatever should be done taking ragdoll and dismemberment states into account.
+	qboolean doRCG = qfalse;
+
+	// Defensive runtime check to avoid null derefs (static analyzers and release builds may not honor assert)
+	if (!ent || !ent->client)
+	{
+		return;
+	}
+
+	if (ent->client->tempSpectate >= level.time ||
+		ent->client->ps.eFlags2 & EF2_SHIP_DEATH)
+	{
+		ent->client->noCorpse = qtrue;
+	}
+
+	if (!ent->client->noCorpse && !ent->client->ps.fallingToDeath)
+	{
+		if (!CopyToBodyQue(ent))
+		{
+			doRCG = qtrue;
+		}
+	}
+	else
+	{
+		ent->client->noCorpse = qfalse; //clear it for next time
+		ent->client->ps.fallingToDeath = qfalse;
+		doRCG = qtrue;
+	}
+
+	if (doRCG)
+	{
+		//bodyque func didn't manage to call ircg so call this to assure our limbs and ragdoll states are proper on the client.
+		trap->SendServerCommand(-1, va("rcg %i", ent->s.clientNum));
+	}
+}
+
+/*
+================
+ClientRespawn
+================
+*/
+extern int g_ffaRespawnTimerCheck;
+void SiegeRespawn(gentity_t* ent);
+
+void ClientRespawn(gentity_t* ent)
+{
+	MaintainBodyQueue(ent);
+
+	if (gEscaping || level.gametype == GT_POWERDUEL)
+	{
+		ent->client->sess.sessionTeam = TEAM_SPECTATOR;
+		ent->client->sess.spectatorState = SPECTATOR_FREE;
+		ent->client->sess.spectatorClient = 0;
+
+		ent->client->pers.teamState.state = TEAM_BEGIN;
+		AddTournamentQueue(ent->client);
+		ClientSpawn(ent);
+		ent->client->iAmALoser = qtrue;
+		return;
+	}
+
+	trap->UnlinkEntity((sharedEntity_t*)ent);
+
+	if (g_lms.integer > 0 && ent->lives < 1 && BG_IsLMSGametype(g_gametype.integer) && LMS_EnoughPlayers())
+	{
+		//playing LMS and we're DEAD!  Just start chillin in tempSpec.
+		g_Spectator(ent);
+	}
+	else if (g_gametype.integer == GT_FFA || g_gametype.integer == GT_TEAM || g_gametype.integer == GT_CTF)
+	{
+		if (g_ffaRespawnTimer.integer)
+		{
+			if (ent->client->tempSpectate <= level.time)
+			{
+				int minDel = g_ffaRespawn.integer * 2000;
+
+				if (minDel < 2000)
+				{
+					minDel = 2000;
+				}
+				g_Spectator(ent);
+
+				ent->client->tempSpectate = level.time + minDel;
+
+				// Respawn time.
+				if (ent->s.number < MAX_CLIENTS)
+				{
+					gentity_t* te = G_TempEntity(ent->client->ps.origin, EV_FFASPAWN);
+					te->s.time = g_ffaRespawnTimerCheck;
+					te->s.owner = ent->s.number;
+
+					ent->client->ps.powerups[PW_INVINCIBLE] = level.time + minDel;
+				}
+				return;
+			}
+		}
+		ClientSpawn(ent);
+
+		if (g_lms.integer > 0 && BG_IsLMSGametype(g_gametype.integer) && LMS_EnoughPlayers())
+		{
+			//reduce our number of lives since we respawned and we're not the only player.
+			ent->lives--;
+		}
+	}
+	else if (level.gametype == GT_SIEGE)
+	{
+		if (g_siegeRespawn.integer)
+		{
+			if (ent->client->tempSpectate < level.time)
+			{
+				int minDel = g_siegeRespawn.integer * 2000;
+				if (minDel < 20000)
+				{
+					minDel = 20000;
+				}
+				ent->client->tempSpectate = level.time + minDel;
+				ent->health = ent->client->ps.stats[STAT_HEALTH] = 1;
+				ent->waterlevel = ent->watertype = 0;
+				ent->client->ps.weapon = WP_NONE;
+				ent->client->ps.stats[STAT_WEAPONS] = 0;
+				ent->client->ps.stats[STAT_HOLDABLE_ITEMS] = 0;
+				ent->client->ps.stats[STAT_HOLDABLE_ITEM] = 0;
+				ent->takedamage = qfalse;
+				trap->LinkEntity((sharedEntity_t*)ent);
+
+				// Respawn time.
+				if (ent->s.number < MAX_CLIENTS)
+				{
+					gentity_t* te = G_TempEntity(ent->client->ps.origin, EV_SIEGESPEC);
+					te->s.time = g_siegeRespawnCheck;
+					te->s.owner = ent->s.number;
+				}
+
+				return;
+			}
+		}
+		SiegeRespawn(ent);
+	}
+	else
+	{
+		ClientSpawn(ent);
+	}
+}
+
+/*
+================
+TeamCount
+
+Returns number of players on a team
+================
+*/
+int TeamCount(const int ignoreclientNum, const team_t team)
+{
+	int count = 0;
+
+	for (int i = 0; i < level.maxclients; i++)
+	{
+		if (i == ignoreclientNum)
+		{
+			continue;
+		}
+		if (level.clients[i].pers.connected == CON_DISCONNECTED)
+		{
+			continue;
+		}
+		if (level.clients[i].sess.sessionTeam == team)
+		{
+			count++;
+		}
+		else if (level.gametype == GT_SIEGE &&
+			level.clients[i].sess.siegeDesiredTeam == team)
+		{
+			count++;
+		}
+	}
+
+	return count;
+}
+
+/*
+================
+TeamLeader
+
+Returns the client number of the team leader
+================
+*/
+int TeamLeader(const int team)
+{
+	for (int i = 0; i < level.maxclients; i++)
+	{
+		if (level.clients[i].pers.connected == CON_DISCONNECTED)
+		{
+			continue;
+		}
+		if (level.clients[i].sess.sessionTeam == team)
+		{
+			if (level.clients[i].sess.teamLeader)
+				return i;
+		}
+	}
+
+	return -1;
+}
+
+/*
+================
+PickTeam
+
+================
+*/
+team_t PickTeam(const int ignoreclientNum)
+{
+	int counts[TEAM_NUM_TEAMS] = { 0 };
+
+	counts[TEAM_BLUE] = TeamCount(ignoreclientNum, TEAM_BLUE);
+	counts[TEAM_RED] = TeamCount(ignoreclientNum, TEAM_RED);
+
+	if (counts[TEAM_BLUE] > counts[TEAM_RED])
+	{
+		return TEAM_RED;
+	}
+	if (counts[TEAM_RED] > counts[TEAM_BLUE])
+	{
+		return TEAM_BLUE;
+	}
+	// equal team count, so join the team with the lowest score
+	if (level.teamScores[TEAM_BLUE] > level.teamScores[TEAM_RED])
+	{
+		return TEAM_RED;
+	}
+	return TEAM_BLUE;
+}
+
+static const char* firstNames[] = {
+	"Evil",
+	"Dark",
+	"Redneck",
+	"Braindead",
+	"Killer",
+	"Last",
+	"First",
+	"John",
+	"Light",
+	"Fast",
+	"Slow",
+	"Nooby",
+	"Professor",
+	"Master",
+	"Looser",
+	"Owned",
+	"Red",
+	"Shadow",
+	"Sneaky",
+	"Broken",
+	"Lost",
+	"Hidden",
+	"Silent",
+	"The",
+	"Da",
+	"Your",
+	"Laggy",
+	"JKA",
+	"Angry",
+	"Confused",
+	"Lucky",
+	"Bad",
+	"Charlie",
+	"Hungry",
+	"Living",
+	"Dead",
+	"Johnny",
+	"Defiant",
+	"Green",
+	"Lazy",
+	"Mr",
+	"Miss",
+	"Mrs",
+	"Young",
+	"Old",
+	"New",
+	"Ancient",
+	"Falling",
+	"Fallen",
+	"Darkened",
+	"Idiot",
+	"Moron",
+	"Stupid",
+	"Running",
+	"Hiding",
+	"Rising",
+	"Jumping",
+	"Retreating",
+	"Commander",
+	"Funny",
+	"Faster",
+	"Slower",
+	"Grand",
+	"Shallow",
+	"Hollow",
+	"Under",
+	"Lesser",
+	"Micro",
+	"Macro",
+	"Jack",
+	"Dickie",
+	"Dancing",
+	"Lasting",
+	"Fastest",
+	"Slowest",
+	"Needy",
+	"Sniping",
+	"Medic",
+	"Hero",
+	"Our",
+	"My",
+	"Holy",
+	"The",
+	"The",
+	"The",
+	"The",
+	"Da",
+	"Da",
+	"Da",
+	"Da",
+	"Big",
+	"Small",
+	"Mad",
+	"Crazy",
+	"Jedi",
+	"Jedi",
+	"Jedi",
+	"Jedi",
+	"Sith",
+	"Sith",
+	"Sith",
+	"Sith",
+	"Sith",
+	"Smiling",
+	"Black"
+}; // 105
+
+static const char* lastNames[] = {
+	"One",
+	"Avenger",
+	"Destroyer",
+	"Apprentice",
+	"Sniper",
+	"Killer",
+	"Protector",
+	"Assassin",
+	"Defender",
+	"Attacker",
+	"Master",
+	"Knight",
+	"1",
+	"Lagalot",
+	"Spacefiller",
+	"Player",
+	"69",
+	"101",
+	"Hunter",
+	"Jack",
+	"Lamer",
+	"Death",
+	"Hidden",
+	"Runner",
+	"Skywalker",
+	"Soul",
+	"Hacker",
+	"Hack",
+	"Noob",
+	"Missfire",
+	"Gunfire",
+	"Gunslinger",
+	"Stabber",
+	"Backstab",
+	"Swiftkick",
+	"Swift",
+	"Slasher",
+	"007",
+	"Leadridden",
+	"Leadrush",
+	"Killer",
+	"Jr",
+	"Virus",
+	"Trojan",
+	"Guardmaster",
+	"Attacker",
+	"Battlemaster",
+	"Kitty",
+	"Wolf",
+	"Fox",
+	"Idiot",
+	"Jack",
+	"John",
+	"Joe",
+	"Mac",
+	"Frontrunner",
+	"Man",
+	"Woman",
+	"Dog",
+	"Hog",
+	"Fist",
+	"Core",
+	"Jackson",
+	"Voss",
+	"Vlad",
+	"Voodoo",
+	"Lost",
+	"Doom",
+	"Death",
+	"Demise",
+	"Maul",
+	"Vader",
+	"Skywalker",
+	"Solo",
+	"Lando",
+	"Falcon",
+	"Raven",
+	"Hawk",
+	"Skull",
+	"Sith",
+	"Jedi",
+	"Carnage",
+	"Rumble",
+	"Botman"
+}; // 84
+
+char* PickName(void)
+{// Choose a random name by combining!
+	int choice1 = rand() % 105;
+	int choice2 = rand() % 84;
+	int color1 = rand() % 7;
+	int color2 = rand() % 7;
+
+	return va("^%i%s^%i%s", color1, firstNames[choice1], color2, lastNames[choice2]);
+}
+
+/*
+===========
+ClientCheckName
+============
+*/
+static void client_clean_name(const char* in, char* out, const int outSize)
+{
+	int outpos = 0, colorlessLen = 0, spaces = 0, ats = 0;
+
+	// discard leading spaces
+	for (; *in == ' '; in++);
+
+	for (; *in && outpos < outSize - 1; in++)
+	{
+		out[outpos] = *in;
+
+		if (*in == ' ')
+		{
+			// don't allow too many consecutive spaces
+			if (spaces > 2)
+				continue;
+
+			spaces++;
+		}
+		else if (*in == '@')
+		{
+			// don't allow too many consecutive at signs
+			if (++ats > 2)
+			{
+				outpos -= 2;
+				ats = 0;
+				continue;
+			}
+		}
+		else if ((byte)*in < 0x20
+			|| (byte)*in == 0x81 || (byte)*in == 0x8D || (byte)*in == 0x8F || (byte)*in == 0x90 || (byte)*in
+			== 0x9D
+			|| (byte)*in == 0xA0 || (byte)*in == 0xAD)
+		{
+			continue;
+		}
+		else if (outpos > 0 && out[outpos - 1] == Q_COLOR_ESCAPE)
+		{
+			if (Q_IsColorStringExt(&out[outpos - 1]))
+			{
+				colorlessLen--;
+			}
+			else
+			{
+				spaces = ats = 0;
+				colorlessLen++;
+			}
+		}
+		else
+		{
+			spaces = ats = 0;
+			colorlessLen++;
+		}
+
+		outpos++;
+	}
+
+	out[outpos] = '\0';
+
+	// don't allow empty names
+	if (*out == '\0' || colorlessLen == 0)
+	{
+		if (g_noPadawanNames.integer != 0)
+		{
+			Q_strncpyz(out, PickName(), outSize);
+		}
+		else
+		{
+			Q_strncpyz(out, "Padawan", outSize);
+		}
+	}
+}
+
+#ifdef _DEBUG
+static void G_DebugWrite(const char* path, const char* text)
+{
+	fileHandle_t f;
+
+	trap->FS_Open(path, &f, FS_APPEND);
+	trap->FS_Write(text, strlen(text), f);
+	trap->FS_Close(f);
+}
+#endif
+
+static qboolean G_SaberModelSetup(const gentity_t* ent)
+{
+	int i = 0;
+	qboolean fallbackForSaber = qtrue; // assume fallback until a valid blade tag is found
+
+	while (i < MAX_SABERS)
+	{
+		// Stop if this saber slot has no model
+		if (ent->client->saber[i].model[0] == '\0')
+		{
+			break;
+		}
+
+		// Clean existing ghoul2 instance if present
+		if (ent->client->weaponGhoul2[i])
+		{
+			trap->G2API_CleanGhoul2Models(&ent->client->weaponGhoul2[i]);
+		}
+
+		// Initialize saber model
+		trap->G2API_InitGhoul2Model(
+			&ent->client->weaponGhoul2[i],
+			ent->client->saber[i].model,
+			0,
+			0,
+			-20,
+			0,
+			0
+		);
+
+		if (ent->client->weaponGhoul2[i])
+		{
+			// Apply skin if present
+			if (ent->client->saber[i].skin)
+			{
+				trap->G2API_SetSkin(
+					ent->client->weaponGhoul2[i],
+					0,
+					ent->client->saber[i].skin,
+					ent->client->saber[i].skin
+				);
+			}
+
+			// Bolt saber to wrist or hand
+			if (ent->client->saber[i].saberFlags & SFL_BOLT_TO_WRIST)
+			{
+				trap->G2API_SetBoltInfo(ent->client->weaponGhoul2[i], 0, 3 + i);
+			}
+			else
+			{
+				trap->G2API_SetBoltInfo(ent->client->weaponGhoul2[i], 0, i);
+			}
+
+			// ------------------------------------------------------------
+			// Add blade bolts
+			// ------------------------------------------------------------
+			for (int j = 0; j < ent->client->saber[i].numBlades; j++)
+			{
+				const char* tagName = va("*blade%i", j + 1);
+				int tagBolt = trap->G2API_AddBolt(ent->client->weaponGhoul2[i], 0, tagName);
+
+				if (tagBolt == -1)
+				{
+					if (j == 0)
+					{
+						// Fallback for old sabers using "*flash"
+						tagBolt = trap->G2API_AddBolt(ent->client->weaponGhoul2[i], 0, "*flash");
+						fallbackForSaber = qfalse;
+
+						if (tagBolt == -1)
+						{
+#ifdef _DEBUG
+							Com_Printf(
+								"G_SaberModelSetup: ERROR — missing blade tag '%s' and fallback '*flash' for saber %d\n",
+								tagName, i
+							);
+#endif
+						}
+					}
+					else
+					{
+#ifdef _DEBUG
+						Com_Printf(
+							"G_SaberModelSetup: ERROR — missing blade tag '%s' for saber %d\n",
+							tagName, i
+						);
+#endif
+					}
+
+					break; // stop processing further blades
+				}
+
+				// Found at least one valid blade tag → no fallback needed
+				fallbackForSaber = qfalse;
+			}
+
+			// Copy saber model into main ghoul2 instance
+			trap->G2API_CopySpecificGhoul2Model(
+				ent->client->weaponGhoul2[i],
+				0,
+				ent->ghoul2,
+				i + 1
+			);
+		}
+
+		i++;
+	}
+
+	return fallbackForSaber;
+}
+
+// breakable saber staffs (w_saberblocking.c): rebuild the saber models after the staff swaps for its pieces
+void G_SaberModelSetupAll(const gentity_t* ent)
+{
+	G_SaberModelSetup(ent);
+}
+
+/*
+===========
+SetupGameGhoul2Model
+
+There are two ghoul2 model instances per player (actually three).  One is on the clientinfo (the base for the client side
+player, and copied for player spawns and for corpses).  One is attached to the centity itself, which is the model acutally
+animated and rendered by the system.  The final is the game ghoul2 model.  This is animated by pmove on the server, and
+is used for determining where the lightsaber should be, and for per-poly collision tests.
+===========
+*/
+void* g2SaberInstance = NULL;
+
+qboolean BG_IsValidCharacterModel(const char* model_name, const char* skin_name);
+qboolean BG_ValidateSkinForTeam(const char* model_name, char* skin_name, int team, float* colors);
+void BG_GetVehicleModelName(char* modelName, const char* vehicleName, size_t len);
+// Prefixes that count as humanoid
+static const char* humanoid_prefixes[] =
+{
+	"models/players/_humanoid",
+	"models/players/JK2anims",
+	"models/players/_humanoid_ani",
+	"models/players/_humanoid_bdroid",
+	"models/players/_humanoid_ben",
+	"models/players/_humanoid_cal",
+	"models/players/_humanoid_clo",
+	"models/players/_humanoid_deka",
+	"models/players/_humanoid_df2",
+	"models/players/_humanoid_dooku",
+	"models/players/_humanoid_galen",
+	"models/players/_humanoid_gon",
+	"models/players/_humanoid_grievous",
+	"models/players/_humanoid_jabba",   // Added
+	"models/players/_humanoid_jango",
+	"models/players/_humanoid_kotor",
+	"models/players/_humanoid_luke",
+	"models/players/_humanoid_mace",
+	"models/players/_humanoid_maul",
+	"models/players/_humanoid_md",
+	"models/players/_humanoid_melee",  // Added
+	"models/players/_humanoid_obi",
+	"models/players/_humanoid_obi3",
+	"models/players/_humanoid_pal",
+	"models/players/_humanoid_reb",    // Added
+	"models/players/_humanoid_ren",
+	"models/players/_humanoid_rey",
+	"models/players/_humanoid_sbd",
+	"models/players/_humanoid_vader",
+	"models/players/_humanoid_yoda",
+	"models/players/darktrooper_tv",
+	"models/players/hazardtrooper/hazardtrooper",
+	"models/players/rockettrooper/rockettrooper",
+	"models/players/protocol/protocol",
+	"models/players/assassin_droid/model",
+	"models/players/saber_droid/model",
+	"models/players/wampa/wampa"
+};
+
+static qboolean R_IsHumanoidPath(const char* path)
+{
+	if (!path || !path[0])
+	{
+		return qfalse;
+	}
+
+	// super battle droid / droideka: their own skeleton and animation.cfg (the "_humanoid" prefix would match them)
+	if (BG_IsOwnSkeletonPath(path))
+	{
+		return qfalse;
+	}
+
+	for (int i = 0; i < ARRAY_LEN(humanoid_prefixes); i++)
+	{
+		if (!Q_strncmp(path, humanoid_prefixes[i], strlen(humanoid_prefixes[i])))
+		{
+			return qtrue;
+		}
+	}
+
+	return qfalse;
+}
+
+void SetupGameGhoul2Model(gentity_t* ent, char* modelname, char* skinName)
+{
+	int handle = 0;
+	char gla_name[MAX_QPATH] = { 0 };
+	const vec3_t tempVec = { 0, 0, 0 };
+
+	// The model name comes from the client's userinfo: a name that is too long must not stop the
+	// server (it was ERR_FATAL), use the default model instead.
+	char safeModel[MAX_QPATH];
+	if (strlen(modelname) >= MAX_QPATH)
+	{
+		Com_Printf(S_COLOR_YELLOW "SetupGameGhoul2Model: modelname exceeds MAX_QPATH, using %s\n", DEFAULT_MODEL);
+		Q_strncpyz(safeModel, DEFAULT_MODEL, sizeof safeModel);
+		modelname = safeModel;
+	}
+	if (skinName && strlen(skinName) >= MAX_QPATH)
+	{
+		Com_Printf(S_COLOR_YELLOW "SetupGameGhoul2Model: skinName exceeds MAX_QPATH, using the default skin\n");
+		skinName = NULL;
+	}
+
+	// First things first.  If this is a ghoul2 model, then let's make sure we demolish this first.
+	if (ent->ghoul2 && trap->G2API_HaveWeGhoul2Models(ent->ghoul2))
+	{
+		trap->G2API_CleanGhoul2Models(&ent->ghoul2);
+	}
+
+	//rww - just load the "standard" model for the server"
+	if (!precachedKyle)
+	{
+		char afilename[MAX_QPATH];
+		Com_sprintf(afilename, sizeof afilename, "models/players/" DEFAULT_MODEL "/model.glm");
+		handle = trap->G2API_InitGhoul2Model(&precachedKyle, afilename, 0, 0, -20, 0, 0);
+
+		if (handle < 0)
+		{
+			return;
+		}
+
+		const int defSkin = trap->R_RegisterSkin("models/players/" DEFAULT_MODEL "/model_default.skin");
+		trap->G2API_SetSkin(precachedKyle, 0, defSkin, defSkin);
+	}
+
+	if (precachedKyle && trap->G2API_HaveWeGhoul2Models(precachedKyle))
+	{
+		if (d_perPlayerGhoul2.integer || ent->s.number >= MAX_CLIENTS ||
+			G_PlayerHasCustomSkeleton(ent))
+		{
+			//rww - allow option for perplayer models on server for collision and bolt stuff.
+			char modelFullPath[MAX_QPATH];
+			char truncModelName[MAX_QPATH];
+			char skin[MAX_QPATH] = { 0 };
+			char vehicleName[MAX_QPATH];
+			int skinHandle = 0;
+
+			// If this is a vehicle, get it's model name.
+			if (ent->client->NPC_class == CLASS_VEHICLE)
+			{
+				char realModelName[MAX_QPATH];
+
+				Q_strncpyz(vehicleName, modelname, sizeof vehicleName);
+				BG_GetVehicleModelName(realModelName, modelname, sizeof realModelName);
+				strcpy(truncModelName, realModelName);
+				skin[0] = 0;
+				if (ent->m_pVehicle
+					&& ent->m_pVehicle->m_pVehicleInfo
+					&& ent->m_pVehicle->m_pVehicleInfo->skin
+					&& ent->m_pVehicle->m_pVehicleInfo->skin[0])
+				{
+					skinHandle = trap->R_RegisterSkin(va("models/players/%s/model_%s.skin", realModelName,
+						ent->m_pVehicle->m_pVehicleInfo->skin));
+				}
+				else
+				{
+					skinHandle = trap->R_RegisterSkin(va("models/players/%s/model_default.skin", realModelName));
+				}
+			}
+			else
+			{
+				if (skinName && skinName[0])
+				{
+					strcpy(skin, skinName);
+					strcpy(truncModelName, modelname);
+				}
+				else
+				{
+					strcpy(skin, "default");
+
+					strcpy(truncModelName, modelname);
+					char* p = Q_strrchr(truncModelName, '/');
+
+					if (p)
+					{
+						int i = 0;
+						*p = 0;
+						p++;
+
+						while (p && *p)
+						{
+							skin[i] = *p;
+							i++;
+							p++;
+						}
+						skin[i] = 0;
+						i = 0;
+					}
+
+					if (!BG_IsValidCharacterModel(truncModelName, skin))
+					{
+						strcpy(truncModelName, DEFAULT_MODEL);
+						strcpy(skin, "default");
+					}
+
+					// no team colour tint in team games any more: everyone keeps their own colours (DH 2026-10-13)
+					if (level.gametype == GT_SIEGE)
+					{
+						//force skin for class if appropriate
+						if (ent->client->siegeClass != -1)
+						{
+							const siegeClass_t* scl = &bgSiegeClasses[ent->client->siegeClass];
+							if (scl->forcedSkin[0])
+							{
+								Q_strncpyz(skin, scl->forcedSkin, sizeof skin);
+							}
+						}
+					}
+				}
+			}
+
+			if (skin[0])
+			{
+				char* useSkinName = NULL;
+
+				if (strchr(skin, '|'))
+				{
+					//three part skin
+					useSkinName = va("models/players/%s/|%s", truncModelName, skin);
+				}
+				else
+				{
+					useSkinName = va("models/players/%s/model_%s.skin", truncModelName, skin);
+				}
+
+				skinHandle = trap->R_RegisterSkin(useSkinName);
+			}
+
+			strcpy(modelFullPath, va("models/players/%s/model.glm", truncModelName));
+			handle = trap->G2API_InitGhoul2Model(&ent->ghoul2, modelFullPath, 0, skinHandle, -20, 0, 0);
+
+			if (handle < 0)
+			{
+				//Huh. Guess we don't have this model. Use the default.
+				if (ent->ghoul2 && trap->G2API_HaveWeGhoul2Models(ent->ghoul2))
+				{
+					trap->G2API_CleanGhoul2Models(&ent->ghoul2);
+				}
+				ent->ghoul2 = NULL;
+				trap->G2API_DuplicateGhoul2Instance(precachedKyle, &ent->ghoul2);
+			}
+			else
+			{
+				trap->G2API_SetSkin(ent->ghoul2, 0, skinHandle, skinHandle);
+
+				gla_name[0] = 0;
+				trap->G2API_GetGLAName(ent->ghoul2, 0, gla_name);
+
+				// ------------------------------------------------
+				// PLAYER SAFETY: enforce humanoid for normal players
+				// ------------------------------------------------
+				if (ent->s.number < MAX_CLIENTS &&
+					!G_PlayerHasCustomSkeleton(ent))
+				{
+					qboolean isHumanoid = R_IsHumanoidPath(gla_name);
+
+					// If a player model is not using any humanoid prefix, fall back to Kyle.
+					if (!isHumanoid)
+					{
+						trap->G2API_CleanGhoul2Models(&ent->ghoul2);
+						ent->ghoul2 = NULL;
+						trap->G2API_DuplicateGhoul2Instance(precachedKyle, &ent->ghoul2);
+					}
+				}
+
+				if (ent->s.number >= MAX_CLIENTS)
+				{
+					ent->s.modelGhoul2 = 1; //so we know to free it on the client when we're removed.
+
+					if (skin[0])
+					{
+						//append it after a *
+						strcat(modelFullPath, va("*%s", skin));
+					}
+
+					if (ent->client->NPC_class == CLASS_VEHICLE)
+					{
+						//vehicles are tricky and send over their vehicle names as the model (the model is then retrieved based on the vehicle name)
+						ent->s.modelIndex = G_model_index(vehicleName);
+					}
+					else
+					{
+						ent->s.modelIndex = G_model_index(modelFullPath);
+					}
+				}
+			}
+		}
+		else
+		{
+			trap->G2API_DuplicateGhoul2Instance(precachedKyle, &ent->ghoul2);
+		}
+	}
+	else
+	{
+		return;
+	}
+
+	//Attach the instance to this entity num so we can make use of client-server
+	trap->G2API_AttachInstanceToEntNum(ent->ghoul2, ent->s.number, qtrue);
+
+	gla_name[0] = 0;
+	trap->G2API_GetGLAName(ent->ghoul2, 0, gla_name);
+
+	// ------------------------------------------------------------
+	// NORMALIZE GLA PATH (critical for bots / rend2)
+	// ------------------------------------------------------------
+	char resolvedGLA[MAX_QPATH];
+
+	Q_strncpyz(resolvedGLA, gla_name, sizeof(resolvedGLA));
+
+	// The renderer puts every humanoid model on the master _humanoid skeleton, except the ones built for another
+	// skeleton (super battle droid, droideka, protocol...): those keep their own GLA and animation.cfg, as in SP.
+	const qboolean masterSkeleton = (qboolean)!Q_stricmp(resolvedGLA, "models/players/_humanoid/_humanoid");
+
+	// ------------------------------------------------------------
+	// LOAD HUMANOID ANIMS ONCE
+	// ------------------------------------------------------------
+	if (!bgpa_ftext_loaded)
+	{
+		if (bg_parse_animation_file("models/players/_humanoid/animation.cfg",
+			bgHumanoidAnimations, qtrue) == -1)
+		{
+			Com_Printf("Failed to load humanoid animation file\n");
+			return;
+		}
+	}
+
+	// ------------------------------------------------------------
+	// NPC / BOT ANIMATION SETUP
+	// ------------------------------------------------------------
+	if (ent->s.number >= MAX_CLIENTS || G_PlayerHasCustomSkeleton(ent))
+	{
+		ent->localAnimIndex = -1;
+
+		// ON THE MASTER HUMANOID SKELETON?
+		if (masterSkeleton)
+		{
+			// All models on the master _humanoid share index 0
+			ent->localAnimIndex = 0;
+		}
+		else
+		{
+			// OWN SKELETON (super battle droid, droideka, gonk, r2d2, vehicles, etc.): its own animation.cfg
+			char animPath[MAX_QPATH];
+			Q_strncpyz(animPath, resolvedGLA, sizeof(animPath));
+
+			char* slash = Q_strrchr(animPath, '/');
+			if (slash)
+			{
+				strcpy(slash, "/animation.cfg");
+				ent->localAnimIndex = bg_parse_animation_file(animPath, NULL, qfalse);
+			}
+		}
+
+		if (ent->localAnimIndex < 0 || ent->localAnimIndex >= MAX_ANIM_FILES || !bgAllAnims[ent->localAnimIndex].anims)
+		{
+			// MovieDuels: was a map-dropping Com_Error ("NPC had an invalid GLA"); the clients fall back the same way
+			// (CG_SafeAnimIndex), so server and client agree on the humanoid set
+			Com_Printf(S_COLOR_YELLOW "WARNING: %s has no usable animation set (%s), using the humanoid set\n",
+				ent->NPC_type ? ent->NPC_type : ent->classname ? ent->classname : "entity", resolvedGLA);
+			ent->localAnimIndex = 0;
+
+			if (ent->s.number < MAX_CLIENTS && precachedKyle)
+			{
+				// SJE->MD parity (2026-10-13), as SJE: a player whose own skeleton could not be set up falls back to the
+				// default model too (its own skeleton on the humanoid set would read the wrong bones)
+				trap->G2API_CleanGhoul2Models(&ent->ghoul2);
+				ent->ghoul2 = NULL;
+				trap->G2API_DuplicateGhoul2Instance(precachedKyle, &ent->ghoul2);
+				trap->G2API_AttachInstanceToEntNum(ent->ghoul2, ent->s.number, qtrue);
+			}
+		}
+	}
+	else
+	{
+		// PLAYER (server-side) on the master _humanoid (G_PlayerHasCustomSkeleton handles the others above)
+		ent->localAnimIndex = 0;
+	}
+
+	if (ent->s.NPC_class == CLASS_VEHICLE &&
+		ent->m_pVehicle)
+	{
+		//do special vehicle stuff
+		char strTemp[128];
+
+		// Setup the default first bolt
+		int i = 0;
+
+		// Setup the droid unit.
+		ent->m_pVehicle->m_iDroidUnitTag = trap->G2API_AddBolt(ent->ghoul2, 0, "*droidunit");
+
+		// Setup the Exhausts.
+		for (i = 0; i < MAX_VEHICLE_EXHAUSTS; i++)
+		{
+			Com_sprintf(strTemp, 128, "*exhaust%i", i + 1);
+			ent->m_pVehicle->m_iExhaustTag[i] = trap->G2API_AddBolt(ent->ghoul2, 0, strTemp);
+		}
+
+		// Setup the Muzzles.
+		for (i = 0; i < MAX_VEHICLE_MUZZLES; i++)
+		{
+			Com_sprintf(strTemp, 128, "*muzzle%i", i + 1);
+			ent->m_pVehicle->m_iMuzzleTag[i] = trap->G2API_AddBolt(ent->ghoul2, 0, strTemp);
+			if (ent->m_pVehicle->m_iMuzzleTag[i] == -1)
+			{
+				//ergh, try *flash?
+				Com_sprintf(strTemp, 128, "*flash%i", i + 1);
+				ent->m_pVehicle->m_iMuzzleTag[i] = trap->G2API_AddBolt(ent->ghoul2, 0, strTemp);
+			}
+		}
+
+		// Setup the Turrets.
+		for (i = 0; i < MAX_VEHICLE_TURRETS; i++) // was MAX_VEHICLE_TURRET_MUZZLES (both 2 today)
+		{
+			if (ent->m_pVehicle->m_pVehicleInfo->turret[i].gunnerViewTag)
+			{
+				ent->m_pVehicle->m_iGunnerViewTag[i] = trap->G2API_AddBolt(
+					ent->ghoul2, 0, ent->m_pVehicle->m_pVehicleInfo->turret[i].gunnerViewTag);
+			}
+			else
+			{
+				ent->m_pVehicle->m_iGunnerViewTag[i] = -1;
+			}
+		}
+	}
+
+	if (ent->client->ps.weapon == WP_SABER || ent->s.number < MAX_CLIENTS)
+	{
+		//a player or NPC saber user
+		trap->G2API_AddBolt(ent->ghoul2, 0, "*r_hand");
+		trap->G2API_AddBolt(ent->ghoul2, 0, "*l_hand");
+
+		//rhand must always be first bolt. lhand always second. Whichever you want the
+		//jetpack bolted to must always be third.
+		trap->G2API_AddBolt(ent->ghoul2, 0, "*chestg");
+
+		//claw bolts
+		trap->G2API_AddBolt(ent->ghoul2, 0, "*r_hand_cap_r_arm");
+		trap->G2API_AddBolt(ent->ghoul2, 0, "*l_hand_cap_l_arm");
+
+		trap->G2API_SetBoneAnim(ent->ghoul2, 0, "model_root", 0, 12, BONE_ANIM_OVERRIDE_LOOP, 1.0f, level.time, -1, -1);
+		trap->G2API_SetBoneAngles(ent->ghoul2, 0, "upper_lumbar", tempVec, BONE_ANGLES_POSTMULT, POSITIVE_X, NEGATIVE_Y,
+			NEGATIVE_Z, NULL, 0, level.time);
+		trap->G2API_SetBoneAngles(ent->ghoul2, 0, "cranium", tempVec, BONE_ANGLES_POSTMULT, POSITIVE_Z, NEGATIVE_Y,
+			POSITIVE_X, NULL, 0, level.time);
+
+		if (!g2SaberInstance)
+		{
+			trap->G2API_InitGhoul2Model(&g2SaberInstance, DEFAULT_SABER_MODEL, 0, 0, -20, 0, 0);
+
+			if (g2SaberInstance)
+			{
+				// indicate we will be bolted to model 0 (ie the player) on bolt 0 (always the right hand) when we get copied
+				trap->G2API_SetBoltInfo(g2SaberInstance, 0, 0);
+				// now set up the gun bolt on it
+				trap->G2API_AddBolt(g2SaberInstance, 0, "*blade1");
+			}
+		}
+
+		if (G_SaberModelSetup(ent))
+		{
+			if (g2SaberInstance)
+			{
+				trap->G2API_CopySpecificGhoul2Model(g2SaberInstance, 0, ent->ghoul2, 1);
+			}
+		}
+	}
+
+	if (ent->s.number >= MAX_CLIENTS)
+	{
+		//some extra NPC stuff
+		if (trap->G2API_AddBolt(ent->ghoul2, 0, "lower_lumbar") == -1)
+		{
+			//check now to see if we have this bone for setting anims and such
+			ent->noLumbar = qtrue;
+		}
+		//add some extra bolts for some of the NPC classes
+		if (ent->client->NPC_class == CLASS_HOWLER)
+		{
+			ent->NPC->genericBolt1 = trap->G2API_AddBolt(&ent->ghoul2, 0, "Tongue01"); // tongue base
+			ent->NPC->genericBolt2 = trap->G2API_AddBolt(&ent->ghoul2, 0, "Tongue08"); // tongue tip
+		}
+	}
+}
+
+/*
+===========
+client_userinfo_changed
+
+Called from ClientConnect when the player first connects and
+directly by the server system when the player updates a userinfo variable.
+
+The game can override any of the settings and call trap->SetUserinfo
+if desired.
+============
+*/
+
+qboolean G_SetSaber(const gentity_t* ent, const int saberNum, const char* saber_name, const qboolean siege_override);
+void G_ValidateSiegeClassForTeam(const gentity_t* ent, int team);
+
+typedef struct userinfoValidate_s
+{
+	const char* field, * fieldClean;
+	unsigned int minCount, maxCount;
+} userinfoValidate_t;
+
+#define UIF( x, _min, _max ) { STRING(\\) #x STRING(\\), STRING( x ), _min, _max }
+static userinfoValidate_t userinfoFields[] = {
+	UIF(cl_guid, 0, 0), // not allowed, q3fill protection
+	UIF(cl_punkbuster, 0, 0), // not allowed, q3fill protection
+	UIF(ip, 0, 1), // engine adds this at the end
+	UIF(name, 1, 1),
+	UIF(rate, 1, 1),
+	UIF(snaps, 1, 1),
+	UIF(model, 1, 1),
+	UIF(forcepowers, 1, 1),
+	UIF(color1, 1, 1),
+	UIF(color2, 1, 1),
+	UIF(handicap, 1, 1),
+	UIF(sex, 0, 1),
+	UIF(cg_predictItems, 1, 1),
+	UIF(saber1, 1, 1),
+	UIF(saber2, 1, 1),
+	UIF(char_color_red, 1, 1),
+	UIF(char_color_green, 1, 1),
+	UIF(char_color_blue, 1, 1),
+	UIF(teamtask, 0, 1), // optional
+	UIF(password, 0, 1), // optional
+	UIF(teamoverlay, 0, 1), // only registered in cgame, not sent when connecting
+};
+static const size_t numUserinfoFields = ARRAY_LEN(userinfoFields);
+
+static const char* userinfoValidateExtra[USERINFO_VALIDATION_MAX] = {
+	"Size", // USERINFO_VALIDATION_SIZE
+	"# of slashes", // USERINFO_VALIDATION_SLASH
+	"Extended ascii", // USERINFO_VALIDATION_EXTASCII
+	"Control characters", // USERINFO_VALIDATION_CONTROLCHARS
+};/*
+===============================
+Svcmd_ToggleUserinfoValidation_f
+
+Toggles validation flags for userinfo fields.
+
+Behaviour:
+- With no arguments, prints the current validation table.
+- With an index argument, toggles that validation bit.
+- Validation bits cover:
+	- Known userinfo fields
+	- Extra validation rules (size, slash count, ASCII, etc.)
+
+Fixes:
+- Added parentheses around bit shifts to avoid precedence bugs.
+- Added explicit qtrue/qfalse ternaries.
+- Removed implicit bool→qboolean conversions.
+- Added comments and debug prints.
+- Ensured clean compile with no warnings.
+===============================
+*/
+void Svcmd_ToggleUserinfoValidation_f(void)
+{
+	/* -------------------------
+	   No arguments: print table
+	   ------------------------- */
+	if (trap->Argc() == 1)
+	{
+		int i = 0;
+
+		/* Print known userinfo fields */
+		for (i = 0; i < numUserinfoFields; i++)
+		{
+			const qboolean enabled =
+				((g_userinfoValidate.integer & (1 << i)) != 0 ? qtrue : qfalse);
+
+			trap->Print("%2d [%c] %s\n",
+				i,
+				(enabled == qtrue ? 'X' : ' '),
+				userinfoFields[i].fieldClean);
+		}
+
+		/* Print extra validation rules */
+		for (; i < numUserinfoFields + USERINFO_VALIDATION_MAX; i++)
+		{
+			const int extraIndex = i - numUserinfoFields;
+			const qboolean enabled =
+				((g_userinfoValidate.integer & (1 << i)) != 0 ? qtrue : qfalse);
+
+			trap->Print("%2d [%c] %s\n",
+				i,
+				(enabled == qtrue ? 'X' : ' '),
+				userinfoValidateExtra[extraIndex]);
+		}
+
+		return;
+	}
+
+	/* -------------------------
+	   Parse index argument
+	   ------------------------- */
+	{
+		char arg[8] = { 0 };
+		trap->Argv(1, arg, sizeof(arg));
+
+		const int index = atoi(arg);
+		const int maxIndex = numUserinfoFields + USERINFO_VALIDATION_MAX - 1;
+
+		if (index < 0 || index > maxIndex)
+		{
+			Com_Printf(
+				"ToggleUserinfoValidation: Invalid range: %i [0, %i]\n",
+				index, maxIndex);
+			return;
+		}
+
+		/* -------------------------
+		   Toggle the bit safely
+		   ------------------------- */
+
+		   /* Mask of all valid bits */
+		const int validMask = (1 << (numUserinfoFields + USERINFO_VALIDATION_MAX)) - 1;
+
+		/* Current flags */
+		const int current = g_userinfoValidate.integer & validMask;
+
+		/* Toggle selected bit */
+		const int toggled = current ^ (1 << index);
+
+		trap->Cvar_Set("g_userinfoValidate", va("%i", toggled));
+		trap->Cvar_Update(&g_userinfoValidate);
+
+		/* -------------------------
+		   Print result
+		   ------------------------- */
+		{
+			const qboolean nowEnabled =
+				((g_userinfoValidate.integer & (1 << index)) != 0 ? qtrue : qfalse);
+
+			if (index < numUserinfoFields)
+			{
+				Com_Printf("%s %s\n",
+					userinfoFields[index].fieldClean,
+					(nowEnabled == qtrue ? "Validated" : "Ignored"));
+			}
+			else
+			{
+				const int extraIndex = index - numUserinfoFields;
+
+				Com_Printf("%s %s\n",
+					userinfoValidateExtra[extraIndex],
+					(nowEnabled == qtrue ? "Validated" : "Ignored"));
+			}
+		}
+	}
+}
+
+/*
+==================
+G_ValidateUserinfo (safe modern version)
+
+Validates a userinfo string against size, format, character,
+and per-field count rules. Returns a static error message
+string on failure, or NULL on success.
+==================
+*/
+static char* G_ValidateUserinfo(const char* userinfo)
+{
+	unsigned int i = 0;
+	unsigned int count = 0;
+	size_t length = 0;
+	userinfoValidate_t* info = NULL;
+	const char* s = NULL;
+	unsigned int fieldCount[ARRAY_LEN(userinfoFields)] = { 0 };
+
+	// Reusable static buffers (avoid 16 KB stack frame)
+	static char key[BIG_INFO_KEY];
+	static char value[BIG_INFO_VALUE];
+
+	if (!userinfo)
+	{
+		return "Userinfo is NULL";
+	}
+
+	length = strlen(userinfo);
+
+	/* -------------------------
+	   Size checks
+	   ------------------------- */
+	if (g_userinfoValidate.integer & (1 << (numUserinfoFields + USERINFO_VALIDATION_SIZE)))
+	{
+		if (length < 1)
+		{
+			return "Userinfo too short";
+		}
+		if (length >= MAX_INFO_STRING)
+		{
+			return "Userinfo too long";
+		}
+	}
+
+	/* -------------------------
+	   Slash checks
+	   ------------------------- */
+	if (g_userinfoValidate.integer & (1 << (numUserinfoFields + USERINFO_VALIDATION_SLASH)))
+	{
+		if (userinfo[0] != '\\')
+		{
+			return "Missing leading slash";
+		}
+
+		if (userinfo[length - 1] == '\\')
+		{
+			return "Trailing slash";
+		}
+
+		for (i = 0, count = 0; i < length; i++)
+		{
+			if (userinfo[i] == '\\')
+			{
+				count++;
+			}
+		}
+		if (count & 1u)
+		{
+			return "Bad number of slashes";
+		}
+	}
+
+	/* -------------------------
+	   Extended ASCII check
+	   ------------------------- */
+	if (g_userinfoValidate.integer & (1 << (numUserinfoFields + USERINFO_VALIDATION_EXTASCII)))
+	{
+		for (i = 0, count = 0; i < length; i++)
+		{
+			if ((unsigned char)userinfo[i] >= 128u)
+			{
+				count++;
+			}
+		}
+		if (count > 0u)
+		{
+			return "Extended ASCII characters found";
+		}
+	}
+
+	/* -------------------------
+	   Control character check
+	   ------------------------- */
+	if (g_userinfoValidate.integer & (1 << (numUserinfoFields + USERINFO_VALIDATION_CONTROLCHARS)))
+	{
+		if (Q_strchrs(userinfo, "\n\r;\""))
+		{
+			return "Invalid characters found";
+		}
+	}
+
+	/* -------------------------
+	   Count occurrences of each known field
+	   ------------------------- */
+	s = userinfo;
+	while (s && *s)
+	{
+		Info_NextPair(&s, key, value);
+
+		if (!key[0])
+		{
+			break;
+		}
+
+		for (i = 0; i < numUserinfoFields; i++)
+		{
+			if (!Q_stricmp(key, userinfoFields[i].fieldClean))
+			{
+				fieldCount[i]++;
+			}
+		}
+	}
+
+	/* -------------------------
+	   Per-field count validation
+	   ------------------------- */
+	for (i = 0, info = userinfoFields; i < numUserinfoFields; i++, info++)
+	{
+		if (g_userinfoValidate.integer & (1u << i))
+		{
+			if (info->minCount && fieldCount[i] == 0u)
+			{
+				return va("%s field not found", info->fieldClean);
+			}
+			if (fieldCount[i] > info->maxCount)
+			{
+				return va("Too many %s fields (%i/%i)",
+					info->fieldClean, fieldCount[i], info->maxCount);
+			}
+		}
+	}
+
+	return NULL;
+}
+
+// SJE->MD parity (2026-10-13): Class_Model (the class table's case-insensitive substring test that skips colour codes) is
+// BG_ClassModelHas in bg_classmodel.c now, with the whole lookup (BG_ClassModelIndex) and the blocked list (BG_ModelBlocked).
+
+/*
+==================
+ScalePlayer
+
+Sets the player's model scale. Accepts an integer percentage
+(e.g., 100 = normal size, 50 = half size, 200 = double size).
+
+Behaviour preserved exactly, but structure cleaned and bugs fixed.
+==================
+*/
+void ScalePlayer(gentity_t* self, const int scale)
+{
+	float fc = 0.0f;
+
+	/* Safety: entity must exist */
+	if (self == NULL)
+	{
+		return;
+	}
+
+	/* Safety: must be a player */
+	if (self->client == NULL)
+	{
+		return;
+	}
+
+	/*
+	 * Convert integer percentage to float scale.
+	 * If scale == 0, default to 1.0f (normal size).
+	 */
+	if (scale == 0)
+	{
+		fc = 1.0f;
+	}
+	else
+	{
+		fc = (float)scale / 100.0f;
+	}
+
+	/* Store integer scale in playerState */
+	self->client->ps.iModelScale = scale;
+
+	/* Apply uniform scale to the entity */
+	self->modelScale[0] = fc;
+	self->modelScale[1] = fc;
+	self->modelScale[2] = fc;
+}
+
+/*
+==================
+client_userinfo_Message
+
+Send message to player that their model/class is changing.
+Kills the player (except in duel/siege) so changes apply.
+==================
+*/
+// Class, scale and model before the current G_AssignClassAndScaleFromModel call.
+// client_userinfo_Message is called from every class branch, also when only the
+// name or another userinfo value changed; it must only act on a real change.
+static int s_classMsgOldClass;
+static int s_classMsgOldScale;
+static qboolean s_classMsgModelChanged;
+static char s_classMsgLastModel[MAX_CLIENTS][MAX_QPATH];
+
+static qboolean client_userinfo_Message(const int clientNum)
+{
+	gentity_t* ent = &g_entities[clientNum];
+	gclient_t* client = ent->client;
+
+	if (client->pers.nextbotclass == s_classMsgOldClass &&
+		client->pers.botmodelscale == s_classMsgOldScale &&
+		!s_classMsgModelChanged)
+	{
+		// nothing changed (e.g. /name): no message, no kill
+		return qtrue;
+	}
+
+	if (!(ent->r.svFlags & SVF_BOT))
+	{
+		if (g_gametype.integer != GT_DUEL &&
+			g_gametype.integer != GT_POWERDUEL &&
+			g_gametype.integer != GT_SIEGE &&
+			client->pers.connected == CON_CONNECTED &&
+			client->sess.sessionTeam != TEAM_SPECTATOR &&
+			ent->health > 0)
+		{
+			client->ps.stats[STAT_HEALTH] = 0;
+			ent->health = 0;
+
+			player_die(ent, ent, ent, 100000, MOD_TEAM_CHANGE);
+			trap->UnlinkEntity((sharedEntity_t*)ent);
+		}
+
+		Com_Printf("Changes to your Class settings will take effect the next time you respawn.\n");
+	}
+
+	return qtrue;
+}
+
+/*
+//New class system
+==================
+Class_Model System
+==================
+*/
+// ------------------------------------------------------------
+// CLASS + SCALE ASSIGNMENT HELPER
+// ------------------------------------------------------------
+// The class table row for a model string: BG_ClassModelIndex (bg_classmodel.c, shared with the ui's character menu;
+// SJE->MD parity 2026-10-13: the same steps as before - exact model/skin row, exact folder row, substring scan without
+// the exactOnly rows - plus SJE's character-menu variant folders and uniform head_X|torso_X|lower_X skins).
+static const classModel_t* G_ClassModelFor(const char* model)
+{
+	const int i = BG_ClassModelIndex(model);
+	return i >= 0 ? &classModels[i] : NULL;
+}
+
+// SP's AnimationstylesTable names (NPC_stats.cpp), in ANIMSTYLE_* order: g_PlayerAnimationStyle / "animationstyle"
+static const char* const g_animStyleNames[ANIMSTYLE_COUNT] = {
+	"default", "anakin", "battle_droid", "ben_kenobi", "cal_kestis", "clone_trooper", "darkforces2", "count_dooku",
+	"galen_marek", "qui_gon_jinn", "grievous", "jango", "kotor", "luke_skywalker", "mace_windu", "maul", "movie_duels",
+	"obiwan", "obiwan_ep3", "palpatine", "rebels", "kylo_ren", "rey", "vader", "yoda"
+};
+
+int G_AnimStyleFromName(const char* name)
+{
+	if (!name)
+	{
+		return -1;
+	}
+	for (int i = 0; i < ANIMSTYLE_COUNT; i++)
+	{
+		if (!Q_stricmp(name, g_animStyleNames[i]))
+		{
+			return i;
+		}
+	}
+	return -1;
+}
+
+const char* G_AnimStyleName(const int style)
+{
+	return style >= 0 && style < ANIMSTYLE_COUNT ? g_animStyleNames[style] : "?";
+}
+
+// The SP animation style of a model string (table: g_animstyles.h): the exact model ("folder" / "folder/skin"), else
+// its folder; ANIMSTYLE_DEFAULT when neither is listed or the Master animation style is not in force (Classic: every
+// model plays its own dedicated animation set, which has no style variants).
+static int G_AnimStyleForModel(const char* model)
+{
+	char clean[MAX_QPATH], folder[MAX_QPATH];
+	int n = 0;
+
+	if (!g_mdAnimStyleActive)
+	{
+		return ANIMSTYLE_DEFAULT;
+	}
+
+	// super battle droid / droideka run on their own skeleton and animation.cfg: no style variants
+	if (BG_IsOwnSkeletonModel(model))
+	{
+		return ANIMSTYLE_DEFAULT;
+	}
+
+	for (const char* s = model; *s && n < (int)sizeof clean - 1; s++)
+	{
+		const char c = *s; // read before Q_IsColorString (its null test made the analyser think s could be null)
+		if (Q_IsColorString(s))
+		{
+			s++;
+			continue;
+		}
+		clean[n++] = c;
+	}
+	clean[n] = 0;
+	Q_strncpyz(folder, clean, sizeof folder);
+	{
+		char* slash = strchr(folder, '/');
+		if (slash)
+		{
+			*slash = 0;
+		}
+	}
+
+	for (int i = 0; i < (int)ARRAY_LEN(modelAnimStyles); i++)
+	{
+		if (!Q_stricmp(modelAnimStyles[i].model, clean))
+		{
+			return modelAnimStyles[i].animStyle;
+		}
+	}
+	for (int i = 0; i < (int)ARRAY_LEN(modelAnimStyles); i++)
+	{
+		if (!Q_stricmp(modelAnimStyles[i].model, folder))
+		{
+			return modelAnimStyles[i].animStyle;
+		}
+	}
+	return ANIMSTYLE_DEFAULT;
+}
+
+// The client's animation style. Master style (solo games only, g_mdAnimStyleActive): the solo player plays the style
+// picked in the menu (g_PlayerAnimationStyle, as SP's G_ApplyPlayerAnimationStyle: "default" = no style, whatever the
+// model), bots the style of their model (their class / default style, as SP's NPCs). Classic: ANIMSTYLE_DEFAULT.
+// Models on their own (non-humanoid) skeleton never get a style.
+static int G_AnimStyleForClient(const gentity_t* ent, const char* model)
+{
+	static int warnedModification = -1;
+
+	if (!g_mdAnimStyleActive || BG_IsOwnSkeletonModel(model))
+	{
+		return ANIMSTYLE_DEFAULT;
+	}
+	if (ent->s.number < MAX_CLIENTS && !(ent->r.svFlags & SVF_BOT) && ent->client->pers.localClient)
+	{
+		// the solo player (the host's own client; another human joining makes the game Classic at the next map load)
+		const int style = G_AnimStyleFromName(g_PlayerAnimationStyle.string);
+		if (style >= 0)
+		{
+			return style;
+		}
+		if (warnedModification != g_PlayerAnimationStyle.modificationCount)
+		{
+			warnedModification = g_PlayerAnimationStyle.modificationCount;
+			Com_Printf(S_COLOR_RED "g_PlayerAnimationStyle: unknown animation style \"%s\", type animationstyle for the list.\n",
+				g_PlayerAnimationStyle.string);
+		}
+		return ANIMSTYLE_DEFAULT;
+	}
+	return G_AnimStyleForModel(model);
+}
+
+void G_SetClientAnimStyle(gentity_t* ent)
+{
+	char userinfo[MAX_INFO_STRING];
+
+	if (!ent || !ent->client || ent->s.number >= MAX_CLIENTS)
+	{
+		return;
+	}
+	trap->GetUserinfo(ent->s.number, userinfo, sizeof userinfo);
+	ent->client->pers.animStyle = G_AnimStyleForClient(ent, Info_ValueForKey(userinfo, "model"));
+	ent->client->ps.animStyle = ent->client->pers.animStyle;
+}
+
+static void G_AssignClassAndScaleFromModel(gentity_t* ent, const int clientNum, char* userinfo, char* model, const size_t modelSize)
+{
+	gclient_t* client = ent->client;
+
+	// remember the state before this userinfo change for client_userinfo_Message
+	s_classMsgOldClass = client->pers.botclass;
+	s_classMsgOldScale = client->pers.botmodelscale;
+	s_classMsgModelChanged = qfalse;
+	if (clientNum >= 0 && clientNum < MAX_CLIENTS)
+	{
+		s_classMsgModelChanged = Q_stricmp(model, s_classMsgLastModel[clientNum]) ? qtrue : qfalse;
+		Q_strncpyz(s_classMsgLastModel[clientNum], model, sizeof s_classMsgLastModel[clientNum]);
+	}
+
+	// ------------------------------------------------------------------
+	// LOAD CLASS SYSTEM (PLAYERS + BOTS ONLY, NO NPC, NO SIEGE)
+	// ------------------------------------------------------------------
+	if (ent->s.eType != ET_NPC && level.gametype != GT_SIEGE)
+	{
+		qboolean model_changed = qfalse;
+
+		// ------------------------------------------------------------------
+		// 1. Block non-humanoid / vehicle / droid models
+		//    These should NEVER use the humanoid BCLASS system.
+		//    We force them back to DEFAULT_MODEL and normal scale.
+		// ------------------------------------------------------------------
+		if (BG_ModelBlocked(model)) // SJE->MD parity (2026-10-13): the same list, in bg_classmodel.c (the ui hides the same models)
+		{
+			// Don't allow them to pick these models
+			Q_strncpyz(model, DEFAULT_MODEL, modelSize);
+			Q_strncpyz(client->modelname, DEFAULT_MODEL, sizeof(client->modelname));
+			client->pers.botmodelscale = BOTZIZE_NORMAL;
+			model_changed = qtrue;
+		}
+		// If we changed the model string, push it back into userinfo so
+		// server and client stay in sync.
+		if (model_changed == qtrue)
+		{
+			Info_SetValueForKey(userinfo, "model", model);
+			trap->SetUserinfo(clientNum, userinfo);
+		}
+
+		// ------------------------------------------------------------------
+		// 2. Bot class + model scale from the model (table: g_classmodels.h). The first row whose pattern is in the
+		//    model string wins (case-insensitive substring, colour codes skipped).
+		// ------------------------------------------------------------------
+		const classModel_t* classModel = G_ClassModelFor(model);
+
+		// ------------------------------------------------------------------
+		// MovieDuels (port of SJE MP): a model on its own skeleton without the full humanoid bolts (creatures, droids)
+		// is only playable as a creature class with the bolts that class needs (BG_ClassSkeletonOk; e.g. no hand
+		// needed for R2's stun or the wampa's claws, a hand for the hazard trooper's guns). Others (vehicles, props,
+		// probe, mark1/2, or a creature mapped to a humanoid class) fall back to the default model, for players and
+		// bots alike. The client (CG_RegisterClientModelname) accepts the same skeletons.
+		// ------------------------------------------------------------------
+		{
+			const int skelFlags = BG_ModelSkeletonFlags(model);
+			const int wantClass = classModel ? classModel->botclass : BCLASS_SABERNOFP;
+
+			// SJE->MD parity (2026-10-13), as SJE: a model on neither a humanoid set nor a usable own skeleton (props, a GLA
+			// without its animation.cfg...) is drawn as the default model by every client (CG_RegisterClientModelname), so
+			// reset it here too, class-correct
+			if (!skelFlags && model[0] && !BG_ModelUsesHumanoidGLA(model))
+			{
+				Com_Printf("%s: model %s has no usable player skeleton, using " DEFAULT_MODEL "\n", client->pers.netname, model);
+				Q_strncpyz(model, DEFAULT_MODEL, modelSize);
+				Q_strncpyz(client->modelname, DEFAULT_MODEL, sizeof client->modelname);
+				Info_SetValueForKey(userinfo, "model", model);
+				trap->SetUserinfo(clientNum, userinfo);
+				classModel = G_ClassModelFor(model);
+			}
+			else if (skelFlags && !BG_ClassSkeletonOk(wantClass, skelFlags))
+			{
+				Com_Printf("%s: model %s cannot be played as its class (skeleton lacks what the class needs), using " DEFAULT_MODEL "\n",
+					client->pers.netname, model);
+				Q_strncpyz(model, DEFAULT_MODEL, modelSize);
+				Q_strncpyz(client->modelname, DEFAULT_MODEL, sizeof client->modelname);
+				Info_SetValueForKey(userinfo, "model", model);
+				trap->SetUserinfo(clientNum, userinfo);
+				classModel = G_ClassModelFor(model);
+			}
+		}
+
+		if (classModel)
+		{
+			client->pers.nextbotclass = classModel->adminClass != BCLASS_NONE && ent->r.svFlags & SVF_ADMIN
+				? classModel->adminClass
+				: classModel->botclass;
+			client->pers.botmodelscale = classModel->scale;
+			client_userinfo_Message(clientNum);
+		}
+		// ------------------------------------------------------------------
+		// FALLBACK CLASS (NO MATCH FOUND)
+		// ------------------------------------------------------------------
+		else
+		{
+			// Debug print so you can see which models need mapping
+			Com_Printf(
+				"WARNING: No BCLASS mapping for model '%s' (client %d). "
+				"Applying fallback class.\n",
+				model, clientNum
+			);
+
+			// Safe fallback class:
+			// BCLASS_SABERNOFP is neutral, humanoid, and works for any model.
+			client->pers.nextbotclass = BCLASS_SABERNOFP;
+
+			// Safe fallback scale:
+			client->pers.botmodelscale = BOTZIZE_NORMAL;
+
+			// Apply the change (kills player if needed)
+			client_userinfo_Message(clientNum);
+		}
+	}
+
+	// a new class (another character picked): the next spawn re-reads the player's own Force setup before the class
+	// rules apply, or a Jedi turned stormtrooper and back keeps the stormtrooper's zeroed powers (2026-10-13)
+	if (client->pers.botclass != client->pers.nextbotclass)
+	{
+		client->ps.fd.forceDoInit = 1;
+	}
+	client->pers.botclass = client->pers.nextbotclass;   // if you use pers.botclass
+	ent->s.botclass = client->pers.nextbotclass;   // this is what cgame can see
+	client->ps.botclass = client->pers.nextbotclass; // BG_PlayerStateToEntityState(ExtraPolate) copies ps.botclass into s.botclass every frame: without this the class was 0 for clients
+	client->pers.animStyle = G_AnimStyleForClient(ent, model); // the SP animation style (g_animstyles.h / the solo player's menu choice)
+	client->ps.animStyle = client->pers.animStyle;
+#ifdef _DEBUG
+	Com_Printf("SERVER: Assigned nextbotclass %d to client %d\n", client->pers.nextbotclass, clientNum);
+#endif
+
+	// End of bot class checks
+	//New class system
+}
+
+qboolean WinterGear = qfalse; //sets weither or not the models go for winter gear skins
+
+extern qboolean Bot_Is_Saber_ClassNum(int botclass);
+
+// Force power string and sabers (saber1|saber2) of each client at the last userinfo change. When one of them
+// changes while the player is alive in game, the player is killed (MOD_TEAM_CHANGE gives the point back) and
+// respawns with the new setup (force powers and sabers are applied at spawn), as in SerenityJediEngine MP.
+static char s_lastForcePowers[MAX_CLIENTS][FORCEPOWERS_MAX_LEN + 1];
+static char s_lastSabers[MAX_CLIENTS][MAX_QPATH * 2 + 2];
+
+qboolean client_userinfo_changed(const int clientNum)
+{
+	gentity_t* ent = g_entities + clientNum;
+	gclient_t* client = ent->client;
+	int team = 0;
+	int health = 0;
+	int max_health = 100;
+	const char* value = NULL;
+	char userinfo[MAX_INFO_STRING];
+	char buf[MAX_INFO_STRING] = { 0 };
+	char oldClientinfo[MAX_INFO_STRING];
+	char model[MAX_QPATH];
+	char forcePowers[FORCEPOWERS_MAX_LEN + 1];
+	char oldname[MAX_NETNAME];
+	char className[MAX_QPATH];
+	char color1[16];
+	char color2[16];
+	qboolean model_changed = qfalse;
+	gender_t gender;
+	char rgb1[MAX_INFO_STRING];
+	char rgb2[MAX_INFO_STRING];
+	char script1[MAX_INFO_STRING];
+	char script2[MAX_INFO_STRING];
+
+	trap->GetUserinfo(clientNum, userinfo, sizeof userinfo);
+
+	// check for malformed or illegal info strings
+	const char* s = G_ValidateUserinfo(userinfo);
+	if (s && *s)
+	{
+		G_SecurityLogPrintf("Client %d (%s) failed userinfo validation: %s [IP: %s]\n", clientNum,
+			ent->client->pers.netname, s, client->sess.IP);
+		trap->DropClient(clientNum, va("Failed userinfo validation: %s", s));
+		G_LogPrintf("Userinfo: %s\n", userinfo);
+		return qfalse;
+	}
+
+	s = Info_ValueForKey(userinfo, "g_adminpassword");
+	if (!Q_stricmp(s, ""))
+	{
+		//Blank? Don't log in!
+	}
+	else if (!Q_stricmp(s, g_adminpassword.string))
+	{
+		if (!(ent->r.svFlags & SVF_BOT))
+		{ //bots login automatically for some reason
+			ent->client->pers.iamanadmin = 1;
+			ent->r.svFlags |= SVF_ADMIN;
+			strcpy(ent->client->pers.login, g_adminlogin_saying.string);
+			strcpy(ent->client->pers.logout, g_adminlogout_saying.string);
+		}
+	}
+
+	// check for local client
+	s = Info_ValueForKey(userinfo, "ip");
+	if (strcmp(s, "localhost") == 0 && !(ent->r.svFlags & SVF_BOT))
+		client->pers.localClient = qtrue;
+
+	// check the item prediction
+	s = Info_ValueForKey(userinfo, "cg_predictItems");
+	if (!atoi(s)) client->pers.predictItemPickup = qfalse;
+	else client->pers.predictItemPickup = qtrue;
+
+	// set name
+	Q_strncpyz(oldname, client->pers.netname, sizeof oldname);
+	s = Info_ValueForKey(userinfo, "name");
+	client_clean_name(s, client->pers.netname, sizeof client->pers.netname);
+	Q_strncpyz(client->pers.netname_nocolor, client->pers.netname, sizeof client->pers.netname_nocolor);
+	Q_StripColor(client->pers.netname_nocolor);
+
+	if (client->sess.sessionTeam == TEAM_SPECTATOR && client->sess.spectatorState == SPECTATOR_SCOREBOARD)
+	{
+		Q_strncpyz(client->pers.netname, "scoreboard", sizeof client->pers.netname);
+		Q_strncpyz(client->pers.netname_nocolor, "scoreboard", sizeof client->pers.netname_nocolor);
+	}
+
+	if (client->pers.connected == CON_CONNECTED)
+	{
+		if (strcmp(oldname, client->pers.netname) != 0)
+		{
+			if (client->pers.netnameTime > level.time)
+			{
+				trap->SendServerCommand(clientNum, va("print \"%s\n\"", G_GetStringEdString("MD_MP_SVGAME", "NONAMECHANGE")));
+
+				Info_SetValueForKey(userinfo, "name", oldname);
+				trap->SetUserinfo(clientNum, userinfo);
+				Q_strncpyz(client->pers.netname, oldname, sizeof client->pers.netname);
+				Q_strncpyz(client->pers.netname_nocolor, oldname, sizeof client->pers.netname_nocolor);
+				Q_StripColor(client->pers.netname_nocolor);
+			}
+			else
+			{
+				trap->SendServerCommand(-1, va("print \"%s" S_COLOR_WHITE " %s %s\n\"", oldname, G_GetStringEdString("MD_MP_SVGAME", "PLRENAME"), client->pers.netname));
+				G_LogPrintf("ClientRename: %i [%s] (%s) \"%s^7\" -> \"%s^7\"\n", clientNum, ent->client->sess.IP, ent->client->pers.guid, oldname, ent->client->pers.netname);
+				client->pers.netnameTime = level.time + 5000;
+			}
+		}
+
+		if (Q_stristr(client->pers.netname, "Padawan"))
+		{
+			if (g_noPadawanNames.integer != 0)
+			{
+				client->pers.padawantimer = 30;
+				client->pers.isapadawan = 1;
+			}
+		}
+		else
+		{
+			client->pers.isapadawan = 0;
+		}
+	}
+
+	// set model
+	Q_strncpyz(model, Info_ValueForKey(userinfo, "model"), sizeof(model));
+
+	//New class system
+	// ------------------------------------------------------------------
+	// LOAD CLASS SYSTEM (PLAYERS + BOTS ONLY, NO NPC, NO SIEGE)
+	// ------------------------------------------------------------------
+	if (ent->s.eType != ET_NPC && level.gametype != GT_SIEGE)
+	{
+		// model already filled from userinfo above
+		G_AssignClassAndScaleFromModel(ent, clientNum, userinfo, model, sizeof(model));
+
+		// MovieDuels character menu (ui "md_player"): the menu sends a new "md_charsel" number together with the
+		// model. A saber class (Jedi/Sith, picked by the class system above) goes on to the character force
+		// menu, a gunner just respawns as his new class.
+		if (!(ent->r.svFlags & SVF_BOT) && clientNum >= 0 && clientNum < MAX_CLIENTS)
+		{
+			static char s_mdCharSel[MAX_CLIENTS][16];
+			const char* char_sel = Info_ValueForKey(userinfo, "md_charsel");
+
+			if (Q_stricmp(char_sel, s_mdCharSel[clientNum]))
+			{
+				// the first value seen for this client (connecting, new map) is not a selection
+				const qboolean selected = s_mdCharSel[clientNum][0] && char_sel[0] ? qtrue : qfalse;
+
+				Q_strncpyz(s_mdCharSel[clientNum], char_sel, sizeof s_mdCharSel[clientNum]);
+				if (selected && Bot_Is_Saber_ClassNum(client->pers.nextbotclass))
+				{
+					trap->SendServerCommand(clientNum, "md_charforce");
+				}
+			}
+		}
+	}
+
+	if (WinterGear)
+	{
+		//use winter gear
+		char* skinname = strstr(model, "|");
+		if (skinname)
+		{
+			//we're using a species player model, try to use their hoth clothes.
+			skinname++;
+			strcpy(skinname, "torso_g1|lower_e1\0");
+		}
+	}
+
+	if (d_perPlayerGhoul2.integer && Q_stricmp(model, client->modelname))
+	{
+		Q_strncpyz(client->modelname, model, sizeof client->modelname);
+		model_changed = qtrue;
+	}
+	else
+	{
+		// switching to or from a model on its own skeleton (super battle droid, droideka...) mid-game: rebuild the
+		// server ghoul2 instance and anim index (SetupGameGhoul2Model below), or it keeps the old one until respawn.
+		// The second test catches a server instance still on a droid skeleton after the model was reset to the
+		// default above (client->modelname already holds it then).
+		const qboolean ownSkeleton = (qboolean)(G_PlayerHasCustomSkeleton(ent) || BG_IsOwnSkeletonModel(model));
+		if ((Q_stricmp(model, client->modelname) && (ownSkeleton || ent->localAnimIndex != 0)) ||
+			(!ownSkeleton && ent->localAnimIndex != 0))
+		{
+			Q_strncpyz(client->modelname, model, sizeof client->modelname);
+			model_changed = qtrue;
+		}
+	}
+
+	client->ps.customRGBA[0] = ((value = Info_ValueForKey(userinfo, "char_color_red")))
+		? Com_Clampi(0, 255, atoi(value))
+		: 255;
+	client->ps.customRGBA[1] = ((value = Info_ValueForKey(userinfo, "char_color_green")))
+		? Com_Clampi(0, 255, atoi(value))
+		: 255;
+	client->ps.customRGBA[2] = ((value = Info_ValueForKey(userinfo, "char_color_blue")))
+		? Com_Clampi(0, 255, atoi(value))
+		: 255;
+
+	//Prevent skins being too dark
+	if (g_charRestrictRGB.integer && client->ps.customRGBA[0] + client->ps.customRGBA[1] + client->ps.customRGBA[2] <
+		100)
+		client->ps.customRGBA[0] = client->ps.customRGBA[1] = client->ps.customRGBA[2] = 255;
+
+	client->ps.customRGBA[3] = 255;
+
+	Q_strncpyz(forcePowers, Info_ValueForKey(userinfo, "forcepowers"), sizeof forcePowers);
+
+	if (clientNum >= 0 && clientNum < MAX_CLIENTS)
+	{
+		char sabers[MAX_QPATH * 2 + 2];
+
+		Com_sprintf(sabers, sizeof sabers, "%s|%s", Info_ValueForKey(userinfo, "saber1"), Info_ValueForKey(userinfo, "saber2"));
+
+		const qboolean forceChanged = s_lastForcePowers[clientNum][0] && forcePowers[0] &&
+			Q_stricmp(forcePowers, s_lastForcePowers[clientNum]) ? qtrue : qfalse;
+		const qboolean saberChanged = s_lastSabers[clientNum][0] && Q_stricmp(sabers, s_lastSabers[clientNum]) ? qtrue : qfalse;
+
+		if ((forceChanged || saberChanged) &&
+			!(ent->r.svFlags & SVF_BOT) &&
+			level.gametype != GT_DUEL && level.gametype != GT_POWERDUEL && level.gametype != GT_SIEGE &&
+			!level.intermissiontime &&
+			client->pers.connected == CON_CONNECTED &&
+			client->sess.sessionTeam != TEAM_SPECTATOR &&
+			ent->health > 0)
+		{
+			client->ps.fd.forceDoInit = 1;
+			client->ps.stats[STAT_HEALTH] = 0;
+			ent->health = 0;
+
+			player_die(ent, ent, ent, 100000, MOD_TEAM_CHANGE);
+			trap->UnlinkEntity((sharedEntity_t*)ent);
+		}
+		Q_strncpyz(s_lastForcePowers[clientNum], forcePowers, sizeof s_lastForcePowers[clientNum]);
+		Q_strncpyz(s_lastSabers[clientNum], sabers, sizeof s_lastSabers[clientNum]);
+	}
+
+	// update our customRGBA for team colors.
+	// no team colour tint in team games any more: everyone keeps their own colours (DH 2026-10-13)
+
+	// bots set their team a few frames later
+	if (level.gametype >= GT_TEAM && g_entities[clientNum].r.svFlags & SVF_BOT)
+	{
+		s = Info_ValueForKey(userinfo, "team");
+		if (!Q_stricmp(s, "red") || !Q_stricmp(s, "r"))
+			team = TEAM_RED;
+		else if (!Q_stricmp(s, "blue") || !Q_stricmp(s, "b"))
+			team = TEAM_BLUE;
+		else
+			team = PickTeam(clientNum); // pick the team with the least number of players
+	}
+	else
+		team = client->sess.sessionTeam;
+
+	//Testing to see if this fixes the problem with a bot's team getting set incorrectly.
+	team = client->sess.sessionTeam;
+
+	//Set the siege class
+	if (level.gametype == GT_SIEGE)
+	{
+		Q_strncpyz(className, client->sess.siegeClass, sizeof className);
+
+		//Now that the team is legal for sure, we'll go ahead and get an index for it.
+		client->siegeClass = BG_SiegeFindClassIndexByName(className);
+		if (client->siegeClass == -1)
+		{
+			// ok, get the first valid class for the team you're on then, I guess.
+			BG_SiegeCheckClassLegality(team, className);
+			Q_strncpyz(client->sess.siegeClass, className, sizeof client->sess.siegeClass);
+			client->siegeClass = BG_SiegeFindClassIndexByName(className);
+		}
+		else
+		{
+			// otherwise, make sure the class we are using is legal.
+			G_ValidateSiegeClassForTeam(ent, team);
+			Q_strncpyz(className, client->sess.siegeClass, sizeof className);
+		}
+
+		if (client->siegeClass != -1)
+		{
+			// Set the sabers if the class dictates
+			siegeClass_t* scl = &bgSiegeClasses[client->siegeClass];
+
+			G_SetSaber(ent, 0, scl->saber1[0] ? scl->saber1 : DEFAULT_SABER, qtrue);
+			G_SetSaber(ent, 1, scl->saber2[0] ? scl->saber2 : "none", qtrue);
+
+			//make sure the saber models are updated
+			G_SaberModelSetup(ent);
+
+			if (scl->forcedModel[0])
+			{
+				// be sure to override the model we actually use
+				Q_strncpyz(model, scl->forcedModel, sizeof model);
+				if (d_perPlayerGhoul2.integer && Q_stricmp(model, client->modelname))
+				{
+					Q_strncpyz(client->modelname, model, sizeof client->modelname);
+					model_changed = qtrue;
+				}
+			}
+
+			if (G_PlayerHasCustomSkeleton(ent))
+			{
+				//force them to use their class model on the server, if the class dictates
+				if (Q_stricmp(model, client->modelname) || ent->localAnimIndex == 0)
+				{
+					Q_strncpyz(client->modelname, model, sizeof client->modelname);
+					model_changed = qtrue;
+				}
+			}
+		}
+	}
+	else
+		Q_strncpyz(className, "none", sizeof className);
+
+	// only set the saber name on the first connect.
+	//	it will be read from userinfo on ClientSpawn and stored in client->pers.saber1/2
+	if (!VALIDSTRING(client->pers.saber1) || !VALIDSTRING(client->pers.saber2))
+	{
+		G_SetSaber(ent, 0, Info_ValueForKey(userinfo, "saber1"), qfalse);
+		G_SetSaber(ent, 1, Info_ValueForKey(userinfo, "saber2"), qfalse);
+	}
+
+	// set max health
+	if (level.gametype == GT_SIEGE && client->siegeClass != -1)
+	{
+		const siegeClass_t* scl = &bgSiegeClasses[client->siegeClass];
+
+		if (scl->maxhealth)
+			max_health = scl->maxhealth;
+
+		health = max_health;
+	}
+	else
+		health = Com_Clampi(1, 100, atoi(Info_ValueForKey(userinfo, "handicap")));
+
+	client->pers.maxHealth = health;
+	if (client->pers.maxHealth < 1 || client->pers.maxHealth > max_health)
+		client->pers.maxHealth = 100;
+	client->ps.stats[STAT_MAX_HEALTH] = client->pers.maxHealth;
+
+	if (level.gametype >= GT_TEAM)
+		client->pers.teamInfo = qtrue;
+	else
+	{
+		s = Info_ValueForKey(userinfo, "teamoverlay");
+		if (!*s || atoi(s) != 0)
+			client->pers.teamInfo = qtrue;
+		else
+			client->pers.teamInfo = qfalse;
+	}
+
+	const int team_leader = client->sess.teamLeader;
+
+	// colors
+	Q_strncpyz(color1, Info_ValueForKey(userinfo, "color1"), sizeof color1);
+	Q_strncpyz(color2, Info_ValueForKey(userinfo, "color2"), sizeof color2);
+
+	s = Info_ValueForKey(userinfo, "MovieDuels_Clientplugin");
+	if (!*s)
+	{
+		client->pers.MovieDuels_Clientplugin = qfalse;
+	}
+	else if (strcmp(CURRENT_MD_CLIENTVERSION, s) == 0)
+	{
+		client->pers.MovieDuels_Clientplugin = qtrue;
+	}
+
+	Q_strncpyz(rgb1, Info_ValueForKey(userinfo, "rgb_saber1"), sizeof rgb1);
+	Q_strncpyz(rgb2, Info_ValueForKey(userinfo, "rgb_saber2"), sizeof rgb2);
+
+	Q_strncpyz(script1, Info_ValueForKey(userinfo, "rgb_script1"), sizeof script1);
+	Q_strncpyz(script2, Info_ValueForKey(userinfo, "rgb_script2"), sizeof script2);
+
+	// gender hints
+	s = Info_ValueForKey(userinfo, "sex");
+	if (!Q_stricmp(s, "female"))
+	{
+		gender = GENDER_FEMALE;
+	}
+	else
+	{
+		gender = GENDER_MALE;
+	}
+
+	s = Info_ValueForKey(userinfo, "snaps");
+	if (atoi(s) < sv_fps.integer)
+	{
+		trap->SendServerCommand(clientNum, va(
+			"print \"" S_COLOR_YELLOW
+			"Recommend setting /snaps %d or higher to match this server's sv_fps\n\"",
+			sv_fps.integer));
+	}
+
+	// send over a subset of the userinfo keys so other clients can
+	// print scoreboards, display models, and play custom sounds
+	buf[0] = '\0';
+	Q_strcat(buf, sizeof buf, va("n\\%s\\", client->pers.netname));
+	Q_strcat(buf, sizeof buf, va("t\\%i\\", client->sess.sessionTeam));
+	Q_strcat(buf, sizeof buf, va("model\\%s\\", model));
+
+	if (gender == GENDER_FEMALE)
+	{
+		Q_strcat(buf, sizeof buf, va("ds\\%c\\", 'f'));
+	}
+	else
+	{
+		Q_strcat(buf, sizeof buf, va("ds\\%c\\", 'm'));
+	}
+
+	Q_strcat(buf, sizeof buf, va("st\\%s\\", client->pers.saber1));
+	Q_strcat(buf, sizeof buf, va("st2\\%s\\", client->pers.saber2));
+	Q_strcat(buf, sizeof buf, va("c1\\%s\\", color1));
+	Q_strcat(buf, sizeof buf, va("c2\\%s\\", color2));
+	Q_strcat(buf, sizeof buf, va("hc\\%i\\", client->pers.maxHealth));
+	// the guns he doesn't carry on his body (his cg_holsterHide, weapon wheel "On Person"): the others' cgame skip them
+	{
+		const unsigned int holsterHide = (unsigned int)strtoul(Info_ValueForKey(userinfo, "cg_holsterHide"), NULL, 16);
+		if (holsterHide)
+		{
+			Q_strcat(buf, sizeof buf, va("hh\\%x\\", holsterHide));
+		}
+	}
+	//RGBSaber STUFF
+	Q_strcat(buf, sizeof buf, va("tc1\\%s\\", rgb1));
+	Q_strcat(buf, sizeof buf, va("tc2\\%s\\", rgb2));
+	Q_strcat(buf, sizeof buf, va("ss1\\%s\\", script1));
+	Q_strcat(buf, sizeof buf, va("ss2\\%s\\", script2));
+
+	if (ent->r.svFlags & SVF_BOT)
+	{
+		Q_strcat(buf, sizeof buf, va("skill\\%s\\", Info_ValueForKey(userinfo, "skill")));
+	}
+
+	if (level.gametype == GT_DUEL || level.gametype == GT_POWERDUEL)
+	{
+		Q_strcat(buf, sizeof buf, va("w\\%i\\", client->sess.wins));
+		Q_strcat(buf, sizeof buf, va("l\\%i\\", client->sess.losses));
+	}
+
+	if (level.gametype == GT_POWERDUEL)
+	{
+		Q_strcat(buf, sizeof buf, va("dt\\%i\\", client->sess.duelTeam));
+	}
+
+	if (level.gametype >= GT_TEAM)
+	{
+		Q_strcat(buf, sizeof buf, va("tl\\%d\\", team_leader));
+	}
+
+	if (level.gametype == GT_SIEGE)
+	{
+		Q_strcat(buf, sizeof buf, va("siegeclass\\%s\\", className));
+		Q_strcat(buf, sizeof buf, va("sdt\\%i\\", client->sess.siegeDesiredTeam));
+	}
+
+	trap->GetConfigstring(CS_PLAYERS + clientNum, oldClientinfo, sizeof oldClientinfo);
+	trap->SetConfigstring(CS_PLAYERS + clientNum, buf);
+
+	// only going to be true for allowable server-side custom skeleton cases
+	if (model_changed)
+	{
+		// update the server g2 instance if appropriate
+		char* modelname = Info_ValueForKey(userinfo, "model");
+		SetupGameGhoul2Model(ent, modelname, NULL);
+
+		if (ent->ghoul2 && ent->client)
+			ent->client->renderInfo.lastG2 = NULL; //update the renderinfo bolts next update.
+
+		client->torsoAnimExecute = client->legsAnimExecute = -1;
+		client->torsoLastFlip = client->legsLastFlip = qfalse;
+	}
+
+	if (g_logClientInfo.integer)
+	{
+		if (strcmp(oldClientinfo, buf) != 0)
+			G_LogPrintf("client_userinfo_changed: %i %s\n", clientNum, buf);
+		else
+			G_LogPrintf("client_userinfo_changed: %i <no change>\n", clientNum);
+	}
+
+	return qtrue;
+}
+
+/*
+===========
+ClientConnect
+
+Called when a player begins connecting to the server.
+Called again for every map change or tournament restart.
+
+The session information will be valid after exit.
+
+Return NULL if the client should be allowed, otherwise return
+a string with the reason for denial.
+
+Otherwise, the client will be sent the current gamestate
+and will eventually get to ClientBegin.
+
+firstTime will be qtrue the very first time a client connects
+to the server machine, but qfalse on map changes and tournament
+restarts.
+============
+*/
+
+static qboolean CompareIPs(const char* ip1, const char* ip2)
+{
+	while (1)
+	{
+		if (*ip1 != *ip2)
+			return qfalse;
+		if (!*ip1 || *ip1 == ':')
+			break;
+		ip1++;
+		ip2++;
+	}
+
+	return qtrue;
+}
+
+char* ClientConnect(int clientNum, const qboolean firstTime, const qboolean isBot)
+{
+	char userinfo[MAX_INFO_STRING] = { 0 },
+		tmpIP[NET_ADDRSTRMAXLEN] = { 0 },
+		guid[33] = { 0 };
+
+	gentity_t* ent = &g_entities[clientNum];
+
+	ent->s.number = clientNum;
+	ent->classname = "connecting";
+
+	trap->GetUserinfo(clientNum, userinfo, sizeof userinfo);
+
+	if (g_lms.integer > 0 && BG_IsLMSGametype(g_gametype.integer))
+	{
+		//LMS mode, set up lives.
+		ent->lives = g_lmslives.integer >= 1 ? g_lmslives.integer : 1;
+		if (level.gametype == GT_SINGLE_PLAYER)
+		{
+			//LMS mode, playing missions, setup liveExp
+			ent->liveExp = 0;
+		}
+	}
+
+	char* value = Info_ValueForKey(userinfo, "ja_guid");
+	if (value[0])
+		Q_strncpyz(guid, value, sizeof guid);
+	else if (isBot)
+		Q_strncpyz(guid, "BOT", sizeof guid);
+	else
+		Q_strncpyz(guid, "NOGUID", sizeof guid);
+
+	// check to see if they are on the banned IP list
+	value = Info_ValueForKey(userinfo, "ip");
+	Q_strncpyz(tmpIP, isBot ? "Bot" : value, sizeof tmpIP);
+	if (G_FilterPacket(value))
+	{
+		return "Banned.";
+	}
+
+	if (!isBot && g_needpass.integer)
+	{
+		// check for a password
+		value = Info_ValueForKey(userinfo, "password");
+		if (g_password.string[0] && Q_stricmp(g_password.string, "none") &&
+			strcmp(g_password.string, value) != 0)
+		{
+			static char sTemp[1024];
+			Q_strncpyz(sTemp, G_GetStringEdString("MD_MP_SVGAME", "INVALID_ESCAPE_TO_MAIN"), sizeof sTemp);
+			return sTemp; // return "Invalid password";
+		}
+	}
+
+	if (!isBot && firstTime)
+	{
+		if (g_antiFakePlayer.integer)
+		{
+			// patched, check for > g_maxConnPerIP connections from same IP
+			int count = 0;
+			for (int i = 0; i < sv_maxclients.integer; i++)
+			{
+#if 0
+				if (level.clients[i].pers.connected != CON_DISCONNECTED && i != clientNum)
+				{
+					if (CompareIPs(clientNum, i))
+					{
+						if (!level.security.clientConnectionActive[i])
+						{//This IP has a dead connection pending, wait for it to time out
+						//	client->pers.connected = CON_DISCONNECTED;
+							return "Please wait, another connection from this IP is still pending...";
+						}
+					}
+				}
+#else
+				if (CompareIPs(tmpIP, level.clients[i].sess.IP))
+					count++;
+#endif
+			}
+			if (count > g_maxConnPerIP.integer)
+			{
+				//	client->pers.connected = CON_DISCONNECTED;
+				return "Too many connections from the same IP";
+			}
+		}
+	}
+
+	if (ent->inuse)
+	{
+		// if a player reconnects quickly after a disconnect, the client disconnect may never be called, thus flag can get lost in the ether
+		G_LogPrintf("Forcing disconnect on active client: %i\n", clientNum);
+		// so lets just fix up anything that should happen on a disconnect
+		ClientDisconnect(clientNum);
+	}
+
+	// they can connect
+	gclient_t* client = &level.clients[clientNum];
+	ent->client = client;
+
+	//assign the pointer for bg entity access
+	ent->playerState = &ent->client->ps;
+
+	memset(client, 0, sizeof * client);
+
+	Q_strncpyz(client->pers.guid, guid, sizeof client->pers.guid);
+
+	client->pers.connected = CON_CONNECTING;
+	client->pers.connectTime = level.time;
+
+	// read or initialize the session data
+	if (firstTime || level.newSession)
+	{
+		G_InitSessionData(client, userinfo, isBot);
+	}
+	G_ReadSessionData(client);
+
+	if (level.gametype == GT_SIEGE &&
+		(firstTime || level.newSession))
+	{
+		//if this is the first time then auto-assign a desired siege team and show briefing for that team
+		client->sess.siegeDesiredTeam = 0; //PickTeam(ent->s.number);
+	}
+
+	if (level.gametype == GT_SIEGE && client->sess.sessionTeam != TEAM_SPECTATOR)
+	{
+		if (firstTime || level.newSession)
+		{
+			//start as spec
+			client->sess.siegeDesiredTeam = client->sess.sessionTeam;
+			client->sess.sessionTeam = TEAM_SPECTATOR;
+		}
+	}
+	else if (level.gametype == GT_POWERDUEL && client->sess.sessionTeam != TEAM_SPECTATOR)
+	{
+		client->sess.sessionTeam = TEAM_SPECTATOR;
+	}
+
+	if (isBot)
+	{
+		ent->r.svFlags |= SVF_BOT;
+		ent->inuse = qtrue;
+		if (!G_BotConnect(clientNum, !firstTime))
+		{
+			return "BotConnectfailed";
+		}
+	}
+
+	// get and distribute relevent paramters
+	if (!client_userinfo_changed(clientNum))
+		return "Failed userinfo validation";
+
+	if (!isBot && firstTime)
+	{
+		if (!tmpIP[0])
+		{
+			//No IP sent when connecting, probably an unban hack attempt
+			client->pers.connected = CON_DISCONNECTED;
+			G_SecurityLogPrintf("Client %i (%s) sent no IP when connecting.\n", clientNum, client->pers.netname);
+			return "Invalid userinfo detected";
+		}
+	}
+
+	if (firstTime)
+		Q_strncpyz(client->sess.IP, tmpIP, sizeof client->sess.IP);
+
+	G_LogPrintf("ClientConnect: %i [%s] (%s) \"%s^7\"\n", clientNum, tmpIP, guid, client->pers.netname);
+
+	// don't do the "xxx connected" messages if they were caried over from previous level
+	if (firstTime)
+	{
+		trap->SendServerCommand(-1, va("print \"%s" S_COLOR_WHITE " %s\n\"", client->pers.netname,
+			G_GetStringEdString("MD_MP_SVGAME", "PLCONNECT")));
+	}
+
+	if (level.gametype >= GT_TEAM &&
+		client->sess.sessionTeam != TEAM_SPECTATOR)
+	{
+		BroadcastTeamChange(client, -1);
+	}
+
+	// count current clients and rank for scoreboard
+	CalculateRanks();
+
+	gentity_t* te = G_TempEntity(vec3_origin, EV_CLIENTJOIN);
+	te->r.svFlags |= SVF_BROADCAST;
+	te->s.eventParm = clientNum;
+
+	// for statistics
+	//	client->areabits = areabits;
+	//	if ( !client->areabits )
+	//		client->areabits = G_Alloc( (trap->AAS_PointReachabilityAreaIndex( NULL ) + 7) / 8 );
+
+	return NULL;
+}
+
+void G_WriteClientSessionData(const gclient_t* client);
+void WP_SetSaber(int entNum, saberInfo_t* sabers, int saberNum, const char* saber_name);
+
+/*
+===========
+ClientBegin
+
+called when a client has finished connecting, and is ready
+to be placed into the level.  This will happen every level load,
+and on transition between teams, but doesn't happen on respawns
+============
+*/
+extern void PlayerPain(gentity_t* self, int damage);
+extern qboolean gSiegeRoundBegun;
+extern qboolean gSiegeRoundEnded;
+extern qboolean g_dontPenalizeTeam; //g_cmds.c
+void SetTeamQuick(const gentity_t* ent, const int team, const qboolean doBegin);
+
+#include "ai_main.h"
+extern bot_state_t* botstates[MAX_CLIENTS];
+extern void Bot_GiveStartingCredits(bot_state_t* bs);
+
+void ClientBegin(const int clientNum, const qboolean allowTeamReset)
+{
+	char userinfo[MAX_INFO_STRING]; // SJE (2026-10-16): was MAX_INFO_VALUE (1024) - GetUserinfo / Info_SetValueForKey below
+	// write up to MAX_INFO_STRING, a bot's longer userinfo overran it and overwrote ent on the stack (the Team FFA crash)
+	char motd[1024];
+
+	gentity_t* ent = g_entities + clientNum;
+
+	if (ent->r.svFlags & SVF_BOT)
+	{
+		bot_state_t* bs = botstates[clientNum];
+		if (bs)
+		{
+			Bot_GiveStartingCredits(bs);
+		}
+	}
+
+	if (ent->r.svFlags & SVF_BOT && level.gametype >= GT_TEAM)
+	{
+		if (allowTeamReset)
+		{
+			const char* team = NULL;
+
+			//SetTeam(ent, "");
+			ent->client->sess.sessionTeam = PickTeam(-1);
+			trap->GetUserinfo(clientNum, userinfo, sizeof userinfo);
+
+			if (ent->client->sess.sessionTeam == TEAM_SPECTATOR)
+			{
+				ent->client->sess.sessionTeam = TEAM_RED;
+			}
+
+			if (ent->client->sess.sessionTeam == TEAM_RED)
+			{
+				team = "Red";
+			}
+			else
+			{
+				team = "Blue";
+			}
+
+			Info_SetValueForKey(userinfo, "team", team);
+
+			trap->SetUserinfo(clientNum, userinfo);
+
+			ent->client->ps.persistant[PERS_TEAM] = ent->client->sess.sessionTeam;
+
+			const int preSess = ent->client->sess.sessionTeam;
+			G_ReadSessionData(ent->client);
+			ent->client->sess.sessionTeam = preSess;
+			G_WriteClientSessionData(ent->client);
+			if (!client_userinfo_changed(clientNum))
+				return;
+			ClientBegin(clientNum, qfalse);
+			return;
+		}
+	}
+
+	gclient_t* client = level.clients + clientNum;
+
+	if (ent->r.linked)
+	{
+		trap->UnlinkEntity((sharedEntity_t*)ent);
+	}
+	G_InitGentity(ent);
+	ent->touch = 0;
+	ent->pain = 0;
+	ent->client = client;
+
+	//assign the pointer for bg entity access
+	ent->playerState = &ent->client->ps;
+
+	client->pers.connected = CON_CONNECTED;
+	client->pers.enterTime = level.time;
+	client->pers.teamState.state = TEAM_BEGIN;
+
+	// save eflags around this, because changing teams will
+	// cause this to happen with a valid entity, and we
+	// want to make sure the teleport bit is set right
+	// so the viewpoint doesn't interpolate through the
+	// world to the new position
+	const int flags = client->ps.eFlags;
+	const int spawnCount = client->ps.persistant[PERS_SPAWN_COUNT];
+
+	int i = 0;
+
+	while (i < NUM_FORCE_POWERS)
+	{
+		if (ent->client->ps.fd.forcePowersActive & 1 << i)
+		{
+			WP_ForcePowerStop(ent, i);
+		}
+		i++;
+	}
+
+	i = TRACK_CHANNEL_1;
+
+	while (i < NUM_TRACK_CHANNELS)
+	{
+		if (ent->client->ps.fd.killSoundEntIndex[i - 50] && ent->client->ps.fd.killSoundEntIndex[i - 50] < MAX_GENTITIES
+			&& ent->client->ps.fd.killSoundEntIndex[i - 50] > 0)
+		{
+			G_MuteSound(ent->client->ps.fd.killSoundEntIndex[i - 50], CHAN_VOICE);
+		}
+		i++;
+	}
+	i = 0;
+
+	memset(&client->ps, 0, sizeof client->ps);
+	client->ps.eFlags = flags;
+	client->ps.persistant[PERS_SPAWN_COUNT] = spawnCount;
+
+	client->ps.hasDetPackPlanted = qfalse;
+
+	//first-time force power initialization
+	WP_InitForcePowers(ent);
+
+	//init saber ent
+	wp_saber_init_blade_data(ent);
+
+	// First time model setup for that player.
+	trap->GetUserinfo(clientNum, userinfo, sizeof userinfo);
+	char* modelname = Info_ValueForKey(userinfo, "model");
+	SetupGameGhoul2Model(ent, modelname, NULL);
+
+	if (ent->ghoul2 && ent->client)
+		ent->client->renderInfo.lastG2 = NULL; //update the renderinfo bolts next update.
+
+	if (level.gametype == GT_POWERDUEL && client->sess.sessionTeam != TEAM_SPECTATOR && client->sess.duelTeam ==
+		DUELTEAM_FREE)
+		SetTeam(ent, "s");
+	else
+	{
+		if (level.gametype == GT_SIEGE && (!gSiegeRoundBegun || gSiegeRoundEnded))
+		{
+			SetTeamQuick(ent, TEAM_SPECTATOR, qfalse);
+		}
+
+		if (g_lms.integer > 0 && ent->lives < 1 && BG_IsLMSGametype(g_gametype.integer) && LMS_EnoughPlayers() && client
+			->sess.sessionTeam != TEAM_SPECTATOR)
+		{
+			//don't allow players to respawn in LMS by switching teams.
+			g_Spectator(ent);
+		}
+		else
+		{
+			ClientSpawn(ent);
+			if (client->sess.sessionTeam != TEAM_SPECTATOR && LMS_EnoughPlayers())
+			{
+				//costs a life to switch teams to something other than spectator.
+				ent->lives--;
+			}
+		}
+	}
+
+	if (client->sess.sessionTeam != TEAM_SPECTATOR)
+	{
+		// send event
+		if (g_lms.integer <= 0 || ent->lives >= 1 || !BG_IsLMSGametype(g_gametype.integer))
+		{
+			//don't do the "teleport in" effect if we're playing LMS and we're "out"
+			gentity_t* tent = G_TempEntity(ent->client->ps.origin, EV_PLAYER_TELEPORT_IN);
+			tent->s.clientNum = ent->s.clientNum;
+		}
+		if (level.gametype != GT_DUEL || level.gametype == GT_POWERDUEL)
+		{
+			trap->SendServerCommand(-1, va("print \"%s" S_COLOR_WHITE " %s\n\"", client->pers.netname,
+				G_GetStringEdString("MD_MP_SVGAME", "PLENTER")));
+		}
+	}
+	G_LogPrintf("ClientBegin: %i\n", clientNum);
+
+	if (client->pers.MovieDuels_Clientplugin)
+	{
+		//send this client the MOTD for clients using the right version of sje.
+		TextWrapCenterPrint(MovieDuels_ClientMOTD.string, motd);
+		client->pers.plugindetect = qtrue;
+	}
+	else
+	{
+		//send this client the MOTD for clients aren't running sje or just not the right version.
+		TextWrapCenterPrint(MovieDuels_MOTD.string, motd);
+		client->pers.plugindetect = qfalse;
+	}
+
+	trap->SendServerCommand(clientNum, va("cp \"%s\n\"", motd));
+
+	// count current clients and rank for scoreboard
+	CalculateRanks();
+
+	G_ClearClientLog(clientNum);
+}
+
+qboolean AllForceDisabled(const int force)
+{
+	if (force)
+	{
+		for (int i = 0; i < NUM_FORCE_POWERS; i++)
+		{
+			if (!(force & 1 << i))
+			{
+				return qfalse;
+			}
+		}
+
+		return qtrue;
+	}
+
+	return qfalse;
+}
+
+//Convenient interface to set all my limb breakage stuff up -rww
+void G_BreakArm(gentity_t* ent, const int arm)
+{
+	int anim = -1;
+
+	assert(ent && ent->client);
+
+	if (ent->s.NPC_class == CLASS_VEHICLE || !BG_AnimSetIsHumanoidLike(ent->localAnimIndex))
+	{
+		//no broken limbs for vehicles and non-humanoids
+		return;
+	}
+
+	if (!arm)
+	{
+		//repair him
+		ent->client->ps.brokenLimbs = 0;
+		return;
+	}
+
+	if (ent->client->ps.fd.saberAnimLevel == SS_STAFF)
+	{
+		//I'm too lazy to deal with this as well for now.
+		return;
+	}
+
+	if (arm == BROKENLIMB_LARM)
+	{
+		if (ent->client->saber[1].model[0] &&
+			ent->client->ps.weapon == WP_SABER &&
+			!ent->client->ps.saberHolstered &&
+			ent->client->saber[1].soundOff)
+		{
+			//the left arm shuts off its saber upon being broken
+			G_Sound(ent, CHAN_AUTO, ent->client->saber[1].soundOff);
+		}
+	}
+
+	ent->client->ps.brokenLimbs = 0; //make sure it's cleared out
+	ent->client->ps.brokenLimbs |= 1 << arm; //this arm is now marked as broken
+
+	//Do a pain anim based on the side. Since getting your arm broken does tend to hurt.
+	if (arm == BROKENLIMB_LARM)
+	{
+		anim = BOTH_PAIN2;
+	}
+	else if (arm == BROKENLIMB_RARM)
+	{
+		anim = BOTH_PAIN3;
+	}
+
+	if (anim == -1)
+	{
+		return;
+	}
+
+	G_SetAnim(ent, &ent->client->pers.cmd, SETANIM_BOTH, anim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
+
+	//This could be combined into a single event. But I guess limbs don't break often enough to
+	//worry about it.
+	G_EntitySound(ent, CHAN_VOICE, G_SoundIndex("*pain25.wav"));
+	//FIXME: A nice bone snapping sound instead if possible
+	G_Sound(ent, CHAN_AUTO, G_SoundIndex(va("sound/player/bodyfall_human%i.wav", Q_irand(1, 3))));
+}
+
+//Update the ghoul2 instance anims based on the playerstate values
+qboolean PM_SaberStanceAnim(int anim);
+qboolean PM_RunningAnim(int anim);
+extern stringID_table_t animTable[MAX_ANIMATIONS + 1];
+
+void G_UpdateClientAnims(gentity_t* self, float animSpeedScale)
+{
+	static int torsoAnim;
+	static int legsAnim;
+	static int firstFrame, lastFrame;
+	static int aFlags;
+	static float animSpeed, lAnimSpeedScale;
+	qboolean setTorso = qfalse;
+
+	if (!self || !self->client || !self->ghoul2 || !trap->G2API_HaveWeGhoul2Models(self->ghoul2))
+	{// no ghoul2 instance (e.g. an NPC killed by a saber in the frame its model was freed): nothing to animate
+		return;
+	}
+
+	torsoAnim = self->client->ps.torsoAnim;
+	legsAnim = self->client->ps.legsAnim;
+
+	if (self->localAnimIndex < 0 || self->localAnimIndex >= MAX_ANIM_FILES)
+	{// no anim set (never expected): nothing to play
+		return;
+	}
+
+	if (self->localAnimIndex > 0)
+	{// own skeleton: the anims its set plays for these (an anim set directly by game code may be one it lacks)
+		legsAnim = BG_ResolveOwnSkelAnim(bgAllAnims[self->localAnimIndex].anims, legsAnim, qtrue);
+		torsoAnim = BG_ResolveOwnSkelAnim(bgAllAnims[self->localAnimIndex].anims, torsoAnim, qfalse);
+	}
+
+	if (self->client->ps.saberLockFrame)
+	{
+		trap->G2API_SetBoneAnim(self->ghoul2, 0, "model_root", self->client->ps.saberLockFrame,
+			self->client->ps.saberLockFrame + 1, BONE_ANIM_OVERRIDE_FREEZE | BONE_ANIM_BLEND,
+			animSpeedScale, level.time, -1, 150);
+		trap->G2API_SetBoneAnim(self->ghoul2, 0, "lower_lumbar", self->client->ps.saberLockFrame,
+			self->client->ps.saberLockFrame + 1, BONE_ANIM_OVERRIDE_FREEZE | BONE_ANIM_BLEND,
+			animSpeedScale, level.time, -1, 150);
+		trap->G2API_SetBoneAnim(self->ghoul2, 0, "Motion", self->client->ps.saberLockFrame,
+			self->client->ps.saberLockFrame + 1, BONE_ANIM_OVERRIDE_FREEZE | BONE_ANIM_BLEND,
+			animSpeedScale, level.time, -1, 150);
+		return;
+	}
+
+	if (self->localAnimIndex > 1 &&
+		bgAllAnims[self->localAnimIndex].anims[legsAnim].firstFrame == 0 &&
+		bgAllAnims[self->localAnimIndex].anims[legsAnim].numFrames == 0)
+	{
+		//We'll allow this for non-humanoids.
+		goto tryTorso;
+	}
+
+	if (self->client->legsAnimExecute != legsAnim || self->client->legsLastFlip != self->client->ps.legsFlip)
+	{
+		animSpeed = 50.0f / bgAllAnims[self->localAnimIndex].anims[legsAnim].frameLerp;
+		lAnimSpeedScale = animSpeed *= animSpeedScale;
+
+		if (bgAllAnims[self->localAnimIndex].anims[legsAnim].loopFrames != -1)
+		{
+			aFlags = BONE_ANIM_OVERRIDE_LOOP;
+		}
+		else
+		{
+			aFlags = BONE_ANIM_OVERRIDE_FREEZE;
+		}
+
+		if (animSpeed < 0)
+		{
+			lastFrame = bgAllAnims[self->localAnimIndex].anims[legsAnim].firstFrame;
+			// MovieDuels: its own last frame, as in the cgame (firstFrame + numFrames can be past the end of the GLA)
+			firstFrame = bgAllAnims[self->localAnimIndex].anims[legsAnim].firstFrame + (bgAllAnims[self->localAnimIndex].anims[legsAnim].numFrames > 0
+				? bgAllAnims[self->localAnimIndex].anims[legsAnim].numFrames - 1 : 0);
+		}
+		else
+		{
+			firstFrame = bgAllAnims[self->localAnimIndex].anims[legsAnim].firstFrame;
+			lastFrame = bgAllAnims[self->localAnimIndex].anims[legsAnim].firstFrame + bgAllAnims[self->localAnimIndex].
+				anims[legsAnim].numFrames;
+		}
+
+		aFlags |= BONE_ANIM_BLEND;
+		//since client defaults to blend. Not sure if this will make much difference if any on server position, but it's here just for the sake of matching them.
+
+		trap->G2API_SetBoneAnim(self->ghoul2, 0, "model_root", firstFrame, lastFrame, aFlags, lAnimSpeedScale,
+			level.time, -1, 150);
+		self->client->legsAnimExecute = legsAnim;
+		self->client->legsLastFlip = self->client->ps.legsFlip;
+	}
+
+tryTorso:
+	{
+		if (self->localAnimIndex > 1 &&
+			bgAllAnims[self->localAnimIndex].anims[torsoAnim].firstFrame == 0 &&
+			bgAllAnims[self->localAnimIndex].anims[torsoAnim].numFrames == 0)
+
+		{
+			//If this fails as well just return.
+			return;
+		}
+		if (self->s.number >= MAX_CLIENTS &&
+			self->s.NPC_class == CLASS_VEHICLE)
+		{
+			//we only want to set the root bone for vehicles
+			return;
+		}
+	}
+
+	if ((self->client->torsoAnimExecute != torsoAnim || self->client->torsoLastFlip != self->client->ps.torsoFlip) &&
+		!self->noLumbar)
+	{
+		static int f;
+		aFlags = 0;
+		animSpeed = 0;
+
+		f = torsoAnim;
+
+		PM_SaberStartTransAnim(self->s.number, self->client->ps.fd.saberAnimLevel, self->client->ps.weapon, f, &animSpeedScale, self->client->ps.userInt3);
+
+		animSpeed = 50.0f / bgAllAnims[self->localAnimIndex].anims[f].frameLerp;
+		lAnimSpeedScale = animSpeed *= animSpeedScale;
+
+		if (bgAllAnims[self->localAnimIndex].anims[f].loopFrames != -1)
+		{
+			aFlags = BONE_ANIM_OVERRIDE_LOOP;
+		}
+		else
+		{
+			aFlags = BONE_ANIM_OVERRIDE_FREEZE;
+		}
+
+		aFlags |= BONE_ANIM_BLEND;
+		//since client defaults to blend. Not sure if this will make much difference if any on client position, but it's here just for the sake of matching them.
+
+		if (animSpeed < 0)
+		{
+			lastFrame = bgAllAnims[self->localAnimIndex].anims[f].firstFrame;
+			// MovieDuels: its own last frame, as in the cgame (firstFrame + numFrames can be past the end of the GLA)
+			firstFrame = bgAllAnims[self->localAnimIndex].anims[f].firstFrame + (bgAllAnims[self->localAnimIndex].anims[f].numFrames > 0
+				? bgAllAnims[self->localAnimIndex].anims[f].numFrames - 1 : 0);
+		}
+		else
+		{
+			firstFrame = bgAllAnims[self->localAnimIndex].anims[f].firstFrame;
+			lastFrame = bgAllAnims[self->localAnimIndex].anims[f].firstFrame + bgAllAnims[self->localAnimIndex].anims[f]
+				.numFrames;
+		}
+
+		trap->G2API_SetBoneAnim(self->ghoul2, 0, "lower_lumbar", firstFrame, lastFrame, aFlags, lAnimSpeedScale,
+			level.time, /*firstFrame why was it this before?*/-1, 150);
+
+		self->client->torsoAnimExecute = torsoAnim;
+		self->client->torsoLastFlip = self->client->ps.torsoFlip;
+
+		setTorso = qtrue;
+	}
+
+	if (setTorso &&
+		BG_AnimSetIsHumanoidLike(self->localAnimIndex))
+	{
+		//only set the motion bone for humanoids.
+		trap->G2API_SetBoneAnim(self->ghoul2, 0, "Motion", firstFrame, lastFrame, aFlags, lAnimSpeedScale, level.time,
+			-1, 150);
+	}
+
+#if 0 //disabled for now
+	if (self->client->ps.brokenLimbs != self->client->brokenLimbs ||
+		setTorso)
+	{
+		if (BG_AnimSetIsHumanoidLike(self->localAnimIndex) && self->client->ps.brokenLimbs &&
+			(self->client->ps.brokenLimbs & (1 << BROKENLIMB_LARM)))
+		{ //broken left arm
+			char* brokenBone = "lhumerus";
+			animation_t* armAnim;
+			int armFirstFrame;
+			int armLastFrame;
+			int armFlags = 0;
+			float armAnimSpeed;
+
+			armAnim = &bgAllAnims[self->localAnimIndex].anims[BOTH_DEAD21];
+			self->client->brokenLimbs = self->client->ps.brokenLimbs;
+
+			armFirstFrame = armAnim->firstFrame;
+			armLastFrame = armAnim->firstFrame + armAnim->numFrames;
+			armAnimSpeed = 50.0f / armAnim->frameLerp;
+			armFlags = (BONE_ANIM_OVERRIDE_LOOP | BONE_ANIM_BLEND);
+
+			trap->G2API_SetBoneAnim(self->ghoul2, 0, brokenBone, armFirstFrame, armLastFrame, armFlags, armAnimSpeed, level.time, -1, 150);
+		}
+		else if (BG_AnimSetIsHumanoidLike(self->localAnimIndex) && self->client->ps.brokenLimbs &&
+			(self->client->ps.brokenLimbs & (1 << BROKENLIMB_RARM)))
+		{ //broken right arm
+			char* brokenBone = "rhumerus";
+			char* supportBone = "lhumerus";
+
+			self->client->brokenLimbs = self->client->ps.brokenLimbs;
+
+			//Only put the arm in a broken pose if the anim is such that we
+			//want to allow it.
+			if ((//self->client->ps.weapon == WP_MELEE ||
+				self->client->ps.weapon != WP_SABER ||
+				PM_SaberStanceAnim(self->client->ps.torsoAnim) ||
+				PM_RunningAnim(self->client->ps.torsoAnim)) &&
+				(!self->client->saber[1].model[0] || self->client->ps.weapon != WP_SABER))
+			{
+				int armFirstFrame;
+				int armLastFrame;
+				int armFlags = 0;
+				float armAnimSpeed;
+				animation_t* armAnim;
+
+				if (self->client->ps.weapon == WP_MELEE ||
+					self->client->ps.weapon == WP_SABER ||
+					self->client->ps.weapon == WP_BRYAR_PISTOL ||
+					self->client->ps.weapon == WP_REBELBLASTER ||
+					self->client->ps.weapon == WP_REY ||
+					self->client->ps.weapon == WP_JANGO ||
+					self->client->ps.weapon == WP_CLONEPISTOL)
+				{ //don't affect this arm if holding a gun, just make the other arm support it
+					armAnim = &bgAllAnims[self->localAnimIndex].anims[BOTH_ATTACK2];
+
+					//armFirstFrame = armAnim->firstFrame;
+					armFirstFrame = armAnim->firstFrame + armAnim->numFrames;
+					armLastFrame = armAnim->firstFrame + armAnim->numFrames;
+					armAnimSpeed = 50.0f / armAnim->frameLerp;
+					armFlags = (BONE_ANIM_OVERRIDE_LOOP | BONE_ANIM_BLEND);
+
+					trap->G2API_SetBoneAnim(self->ghoul2, 0, brokenBone, armFirstFrame, armLastFrame, armFlags, armAnimSpeed, level.time, -1, 150);
+				}
+				else
+				{ //we want to keep the broken bone updated for some cases
+					trap->G2API_SetBoneAnim(self->ghoul2, 0, brokenBone, firstFrame, lastFrame, aFlags, lAnimSpeedScale, level.time, -1, 150);
+				}
+
+				if (self->client->ps.torsoAnim != BOTH_MELEE1 &&
+					self->client->ps.torsoAnim != BOTH_MELEE2 &&
+					self->client->ps.torsoAnim != BOTH_MELEE3 &&
+					self->client->ps.torsoAnim != BOTH_MELEE4 &&
+					self->client->ps.torsoAnim != BOTH_MELEE5 &&
+					self->client->ps.torsoAnim != BOTH_MELEE6 &&
+					self->client->ps.torsoAnim != BOTH_MELEE_L &&
+					self->client->ps.torsoAnim != BOTH_MELEE_R &&
+					self->client->ps.torsoAnim != BOTH_MELEEUP &&
+					self->client->ps.torsoAnim != BOTH_WOOKIE_SLAP &&
+					(BG_UnstyleAnim(self->client->ps.torsoAnim) == TORSO_WEAPONREADY2 || BG_UnstyleAnim(self->client->ps.torsoAnim) == BOTH_ATTACK2 || self->client->ps.weapon < WP_BRYAR_PISTOL))
+				{
+					//Now set the left arm to "support" the right one
+					armAnim = &bgAllAnims[self->localAnimIndex].anims[BOTH_STAND2];
+					armFirstFrame = armAnim->firstFrame;
+					armLastFrame = armAnim->firstFrame + armAnim->numFrames;
+					armAnimSpeed = 50.0f / armAnim->frameLerp;
+					armFlags = (BONE_ANIM_OVERRIDE_LOOP | BONE_ANIM_BLEND);
+
+					trap->G2API_SetBoneAnim(self->ghoul2, 0, supportBone, armFirstFrame, armLastFrame, armFlags, armAnimSpeed, level.time, -1, 150);
+				}
+				else
+				{ //we want to keep the support bone updated for some cases
+					trap->G2API_SetBoneAnim(self->ghoul2, 0, supportBone, firstFrame, lastFrame, aFlags, lAnimSpeedScale, level.time, -1, 150);
+				}
+			}
+			else
+			{ //otherwise, keep it set to the same as the torso
+				trap->G2API_SetBoneAnim(self->ghoul2, 0, brokenBone, firstFrame, lastFrame, aFlags, lAnimSpeedScale, level.time, -1, 150);
+				trap->G2API_SetBoneAnim(self->ghoul2, 0, supportBone, firstFrame, lastFrame, aFlags, lAnimSpeedScale, level.time, -1, 150);
+			}
+		}
+		else if (self->client->brokenLimbs)
+		{ //remove the bone now so it can be set again
+			char* brokenBone = NULL;
+			int broken = 0;
+
+			//Warning: Don't remove bones that you've added as bolts unless you want to invalidate your bolt index
+			//(well, in theory, I haven't actually run into the problem)
+			if (self->client->brokenLimbs & (1 << BROKENLIMB_LARM))
+			{
+				brokenBone = "lhumerus";
+				broken |= (1 << BROKENLIMB_LARM);
+			}
+			else if (self->client->brokenLimbs & (1 << BROKENLIMB_RARM))
+			{ //can only have one arm broken at once.
+				brokenBone = "rhumerus";
+				broken |= (1 << BROKENLIMB_RARM);
+
+				//want to remove the support bone too then
+				trap->G2API_SetBoneAnim(self->ghoul2, 0, "lhumerus", 0, 1, 0, 0, level.time, -1, 0);
+				trap->G2API_RemoveBone(self->ghoul2, "lhumerus", 0);
+			}
+
+			assert(brokenBone);
+
+			//Set the flags and stuff to 0, so that the remove will succeed
+			trap->G2API_SetBoneAnim(self->ghoul2, 0, brokenBone, 0, 1, 0, 0, level.time, -1, 0);
+
+			//Now remove it
+			trap->G2API_RemoveBone(self->ghoul2, brokenBone, 0);
+			self->client->brokenLimbs &= ~broken;
+		}
+	}
+#endif
+}
+
+/*
+===========
+ClientSpawn
+
+Called every time a client is placed fresh in the world:
+after the first ClientBegin, and after each respawn
+Initializes all non-persistant parts of playerState
+============
+*/
+static void AI_SetBotSaberStyle(gentity_t* ent)
+{
+	if (!ent || !ent->client)
+		return;
+
+	// Server-only bot check
+	if (!(ent->r.svFlags & SVF_BOT))
+		return;
+
+	saberInfo_t* saber1 = &ent->client->saber[0];
+	saberInfo_t* saber2 = &ent->client->saber[1];
+
+	// -------------------------------
+	// STAFF SABER (two-handed)
+	// -------------------------------
+	if (saber1->model[0] && (saber1->saberFlags & SFL_TWO_HANDED))
+	{
+		ent->client->ps.fd.saberAnimLevel = SS_STAFF;
+		ent->client->ps.fd.saber_anim_levelBase = SS_STAFF;
+		ent->client->saberCycleQueue = SS_STAFF;
+		return;
+	}
+
+	// -------------------------------
+	// DUAL SABERS
+	// -------------------------------
+	if (saber1->model[0] && saber2->model[0])
+	{
+		ent->client->ps.fd.saberAnimLevel = SS_DUAL;
+		ent->client->ps.fd.saber_anim_levelBase = SS_DUAL;
+		ent->client->saberCycleQueue = SS_DUAL;
+		return;
+	}
+
+	// -------------------------------
+	// SINGLE SABER
+	// -------------------------------
+	if (saber1->model[0] && saber1->numBlades == 1)
+	{
+		ent->client->ps.fd.saberAnimLevel = SS_MEDIUM;
+		ent->client->ps.fd.saber_anim_levelBase = SS_MEDIUM;
+		ent->client->saberCycleQueue = SS_MEDIUM;
+		return;
+	}
+}
+
+extern void UpdatePlayerScriptTarget(void);
+extern qboolean UseSpawnWeapons;
+extern int SpawnWeapons;
+extern qboolean WP_HasForcePowers(const playerState_t* ps);
+
+static void ClassAmmoSetup(gentity_t* ent)
+{
+	if (!ent || !ent->client)
+	{
+		return;
+	}
+
+	gclient_t* client = ent->client;
+
+	if (ent->r.svFlags & SVF_BOT)
+	{
+		// Bots get true infinite ammo
+		client->ps.ammo[AMMO_BLASTER] = Q3_INFINITE;
+		client->ps.ammo[AMMO_POWERCELL] = Q3_INFINITE;
+		client->ps.ammo[AMMO_METAL_BOLTS] = Q3_INFINITE;
+	}
+	else
+	{
+		// Players get large finite ammo
+		client->ps.ammo[AMMO_BLASTER] = 900;
+		client->ps.ammo[AMMO_POWERCELL] = 900;
+		client->ps.ammo[AMMO_METAL_BOLTS] = 900;
+	}
+}
+
+static void ClassItemHealthSetup(gentity_t* ent)
+{
+	if (!ent || !ent->client)
+	{
+		return;
+	}
+
+	gclient_t* client = ent->client;
+
+	if (ent->r.svFlags & SVF_BOT)
+	{
+		//bots get zip.
+	}
+	else
+	{
+		client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_MEDPAC;
+	}
+}
+
+// the ten SJE SP powers (Stasis .. Blinding, FP_STASIS onwards): the classes without the Force lose them as well
+// (their rules in ClientSpawn only list the original eighteen) (2026-10-13)
+static void G_ClearNewForcePowers(gclient_t* client)
+{
+	for (int fp = FP_STASIS; fp < NUM_FORCE_POWERS; fp++)
+	{
+		client->ps.fd.forcePowerLevel[fp] = FORCE_LEVEL_0;
+	}
+}
+
+// after the class rules: a power at level 0 is not known and not running, and the selected power is a known one
+static void G_DropUnusableForcePowers(gentity_t* ent)
+{
+	gclient_t* client = ent->client;
+
+	for (int fp = 0; fp < NUM_FORCE_POWERS; fp++)
+	{
+		if (client->ps.fd.forcePowerLevel[fp] > FORCE_LEVEL_0)
+		{
+			continue;
+		}
+		if (client->ps.fd.forcePowersActive & 1 << fp)
+		{
+			WP_ForcePowerStop(ent, (forcePowers_t)fp);
+		}
+		client->ps.fd.forcePowersKnown &= ~(1 << fp);
+	}
+
+	if (!(client->ps.fd.forcePowersKnown & 1 << client->ps.fd.forcePowerSelected))
+	{
+		client->ps.fd.forcePowerSelected = FP_HEAL;
+		for (int fp = 0; fp < NUM_FORCE_POWERS; fp++)
+		{
+			if (client->ps.fd.forcePowersKnown & 1 << fp && fp != FP_LEVITATION && fp != FP_SABER_OFFENSE &&
+				fp != FP_SABER_DEFENSE && fp != FP_SABERTHROW)
+			{
+				client->ps.fd.forcePowerSelected = fp;
+				break;
+			}
+		}
+	}
+}
+
+void ClientSpawn(gentity_t* ent)
+{
+	int i = 0, index = 0, savesaber_num = ENTITYNUM_NONE, wDisable = 0, savedSiegeIndex = 0, maxHealth = 100;
+	vec3_t spawn_origin, spawn_angles;
+	gentity_t* spawnPoint = NULL, * tent = NULL;
+	gclient_t* client = NULL;
+	clientPersistant_t saved;
+	clientSession_t savedSess;
+	forcedata_t savedForce;
+	int savedDodgeMax = 0;
+	saberInfo_t saberSaved[MAX_SABERS] = { 0 };
+	int persistant[MAX_PERSISTANT] = { 0 };
+	int flags = 0, gameFlags = 0, savedPing = 0, accuracy_hits = 0, accuracy_shots = 0, eventSequence = 0;
+	void* g2WeaponPtrs[MAX_SABERS] = { 0 };
+	char userinfo[MAX_INFO_STRING] = { 0 }, * key = NULL, * value = NULL, * saber = NULL;
+	qboolean changedSaber = qfalse, inSiegeWithClass = qfalse;
+
+	index = ent - g_entities;
+	client = ent->client;
+	client->pers.botclass = client->pers.nextbotclass;  // if you use pers.botclass
+	ent->s.botclass = client->pers.nextbotclass;   // this is what cgame can see
+	client->ps.botclass = client->pers.nextbotclass; // BG_PlayerStateToEntityState(ExtraPolate) copies ps.botclass into s.botclass every frame: without this the class was 0 for clients
+	client->ps.animStyle = client->pers.animStyle; // the character's SP animation style (set with the class)
+#ifdef _DEBUG
+	Com_Printf("SERVER: Spawn botclass %d for client %d\n", ent->s.botclass, ent - g_entities);
+#endif
+
+	if (ent->r.svFlags & SVF_BOT)
+	{
+		bot_state_t* bs = botstates[index];
+		bs->startingCreditsGiven = qfalse;
+	}
+
+	//first we want the userinfo so we can see if we should update this client's saber -rww
+	trap->GetUserinfo(index, userinfo, sizeof userinfo);
+
+	for (i = 0; i < MAX_SABERS; i++)
+	{
+		saber = i & 1 ? ent->client->pers.saber2 : ent->client->pers.saber1;
+		value = Info_ValueForKey(userinfo, va("saber%i", i + 1));
+		if (saber && value &&
+			(Q_stricmp(value, saber) || !saber[0] || !ent->client->saber[0].model[0]))
+		{
+			//doesn't match up (or our saber is BS), we want to try setting it
+			if (G_SetSaber(ent, i, value, qfalse))
+				changedSaber = qtrue;
+
+			//Well, we still want to say they changed then (it means this is siege and we have some overrides)
+			else if (!saber[0] || !ent->client->saber[0].model[0])
+				changedSaber = qtrue;
+		}
+	}
+
+	if (changedSaber)
+	{
+		//make sure our new info is sent out to all the other clients, and give us a valid stance
+		if (!client_userinfo_changed(ent->s.number))
+			return;
+
+		//make sure the saber models are updated
+		G_SaberModelSetup(ent);
+
+		for (i = 0; i < MAX_SABERS; i++)
+		{
+			saber = i & 1 ? ent->client->pers.saber2 : ent->client->pers.saber1;
+			key = va("saber%d", i + 1);
+			value = Info_ValueForKey(userinfo, key);
+			if (Q_stricmp(value, saber))
+			{
+				// they don't match up, force the user info
+				Info_SetValueForKey(userinfo, key, saber);
+				trap->SetUserinfo(ent->s.number, userinfo);
+			}
+		}
+
+		if (ent->client->saber[0].model[0] && ent->client->saber[1].model[0])
+		{ //dual
+			ent->client->ps.fd.saber_anim_levelBase = ent->client->ps.fd.saberAnimLevel = ent->client->ps.fd.saberDrawAnimLevel = SS_DUAL;
+		}
+		else if ((ent->client->saber[0].saberFlags & SFL_TWO_HANDED))
+		{ //staff
+			ent->client->ps.fd.saberAnimLevel = ent->client->ps.fd.saberDrawAnimLevel = SS_STAFF;
+		}
+		else
+		{
+			ent->client->sess.saberLevel = Com_Clampi(SS_FAST, SS_STRONG, ent->client->sess.saberLevel);
+			ent->client->ps.fd.saber_anim_levelBase = ent->client->ps.fd.saberAnimLevel = ent->client->ps.fd.saberDrawAnimLevel = ent->client->sess.saberLevel;
+
+			// limit our saber style to our force points allocated to saber offense
+			if (level.gametype != GT_SIEGE && ent->client->ps.fd.saberAnimLevel > ent->client->ps.fd.forcePowerLevel[FP_SABER_OFFENSE])
+				ent->client->ps.fd.saber_anim_levelBase = ent->client->ps.fd.saberAnimLevel = ent->client->ps.fd.saberDrawAnimLevel = ent->client->sess.saberLevel = ent->client->ps.fd.forcePowerLevel[FP_SABER_OFFENSE];
+		}
+		if (level.gametype != GT_SIEGE)
+		{// let's just make sure the styles we chose are cool
+			if (!WP_SaberStyleValidForSaber(&ent->client->saber[0], &ent->client->saber[1], ent->client->ps.saberHolstered, ent->client->ps.fd.saberAnimLevel))
+			{
+				WP_UseFirstValidSaberStyle(&ent->client->saber[0], &ent->client->saber[1], ent->client->ps.saberHolstered, &ent->client->ps.fd.saberAnimLevel);
+				ent->client->ps.fd.saber_anim_levelBase = ent->client->saberCycleQueue = ent->client->ps.fd.saberAnimLevel;
+			}
+		}
+		AI_SetBotSaberStyle(ent);
+	}
+
+	if (client->ps.fd.forceDoInit || ent->r.svFlags & SVF_BOT)
+	{
+		//force a reread of force powers
+		WP_InitForcePowers(ent);
+		client->ps.fd.forceDoInit = 0;
+	}
+	if (ent->r.svFlags & SVF_BOT
+		&& ent->client->ps.fd.saberAnimLevel != SS_STAFF
+		&& ent->client->ps.fd.saberAnimLevel != SS_DUAL)
+	{
+		//Bots randomly switch styles on respawn if not using a staff or dual
+		int newLevel = Q_irand(SS_MEDIUM, SS_STAFF);
+
+		//new validation technique.
+		if (!G_ValidSaberStyle(ent, newLevel))
+		{
+			//had an illegal style, revert to a valid one
+			int count = 0;
+			for (count = SS_MEDIUM; count < SS_STAFF; count++)
+			{
+				newLevel++;
+				if (newLevel > SS_STAFF)
+				{
+					if (ent->client->saber[0].type == SABER_SINGLE_BACKHAND
+						|| ent->client->saber[0].type == SABER_SINGLE_ASBACKHAND)
+					{
+						newLevel = SS_STAFF;
+					}
+					else if (ent->client->saber[0].type == SABER_STAFF
+						|| ent->client->saber[0].type == SABER_STAFF_UNSTABLE
+						|| ent->client->saber[0].type == SABER_STAFF_THIN)
+					{
+						newLevel = SS_DESANN;
+					}
+					else
+					{
+						if (ent->client->saber[0].model[0] && ent->client->saber[1].model[0]
+							&& WP_SaberCanTurnOffSomeBlades(&ent->client->saber[1])
+							&& ent->client->ps.fd.saberAnimLevel != SS_DUAL)
+						{
+							//using dual sabers, but not the dual style
+							newLevel = SS_TAVION;
+						}
+						else
+						{
+							newLevel = SS_MEDIUM;
+						}
+					}
+				}
+
+				if (G_ValidSaberStyle(ent, newLevel))
+				{
+					break;
+				}
+			}
+		}
+
+		ent->client->ps.fd.saberAnimLevel = newLevel;
+	}
+
+	ent->client->ps.fd.saberAnimLevel = ent->client->ps.fd.saberDrawAnimLevel = ent->client->sess.saberLevel;
+
+	if (g_gametype.integer != GT_SIEGE)
+	{
+		//let's just make sure the styles we chose are cool
+		if (!G_ValidSaberStyle(ent, ent->client->ps.fd.saberAnimLevel))
+		{
+			//had an illegal style, revert to default
+			if ((ent->client->saber[0].type == SABER_SINGLE_BACKHAND))
+			{
+				ent->client->ps.fd.saberAnimLevel = SS_STAFF;
+			}
+			else if ((ent->client->saber[0].type == SABER_SINGLE_ASBACKHAND))
+			{
+				ent->client->ps.fd.saberAnimLevel = SS_STAFF;
+			}
+			else if ((ent->client->saber[0].type == SABER_STAFF_MAUL))
+			{
+				ent->client->ps.fd.saberAnimLevel = SS_STAFF;
+			}
+			else if ((ent->client->saber[0].type == SABER_STAFF_ELECTROSTAFF))
+			{
+				ent->client->ps.fd.saberAnimLevel = SS_STAFF;
+			}
+			else
+			{
+				ent->client->ps.fd.saberAnimLevel = SS_MEDIUM;
+			}
+			ent->client->saberCycleQueue = ent->client->ps.fd.saberAnimLevel;
+		}
+	}
+
+	// find a spawn point
+	// do it before setting health back up, so farthest
+	// ranging doesn't count this client
+
+	// ------------------------------------------------------------
+	// 1. Spectators always use spectator spawn logic
+	// ------------------------------------------------------------
+	if (client->sess.sessionTeam == TEAM_SPECTATOR)
+	{
+		spawnPoint = SelectSpectatorSpawnPoint(spawn_origin, spawn_angles);
+		goto spawn_done;
+	}
+
+	// Determine if this entity is a bot
+	const qboolean isBot = ((ent->r.svFlags & SVF_BOT) != 0) ? qtrue : qfalse;
+
+	// ------------------------------------------------------------
+	// 2. CTF / CTY (team-based) spawn logic
+	// Bots get waypoint spawns first
+	// ------------------------------------------------------------
+	if (level.gametype == GT_CTF || level.gametype == GT_CTY)
+	{
+		if (isBot == qtrue)
+		{
+			vec3_t wpSpawn;
+
+			if (client->sess.sessionTeam == TEAM_RED)
+			{
+				if (BOT_FindCTFWaypointSpawnPoint_red(ent, wpSpawn) == qtrue)
+				{
+					VectorCopy(wpSpawn, spawn_origin);
+					BOT_WaypointSpawnAngles(client->sess.sessionTeam, spawn_origin, spawn_angles);
+					spawnPoint = NULL;
+					goto spawn_done;
+				}
+			}
+			else if (client->sess.sessionTeam == TEAM_BLUE)
+			{
+				if (BOT_FindCTFWaypointSpawnPoint_blue(ent, wpSpawn) == qtrue)
+				{
+					VectorCopy(wpSpawn, spawn_origin);
+					BOT_WaypointSpawnAngles(client->sess.sessionTeam, spawn_origin, spawn_angles);
+					spawnPoint = NULL;
+					goto spawn_done;
+				}
+			}
+		}
+
+		// Fallback (humans AND bots if no waypoint spawns)
+		spawnPoint = SelectCTFSpawnPoint(
+			client->sess.sessionTeam,
+			client->pers.teamState.state,
+			spawn_origin,
+			spawn_angles,
+			isBot
+		);
+		goto spawn_done;
+	}
+
+	// ------------------------------------------------------------
+	// 3. Siege spawn logic
+	// ------------------------------------------------------------
+	if (G_SiegeMissionRules()) // SJE (2026-10-16): also siege missions in Team FFA (the enabled siege points)
+	{
+		spawnPoint = SelectSiegeSpawnPoint(
+			client->siegeClass,
+			client->sess.sessionTeam,
+			client->pers.teamState.state,
+			spawn_origin,
+			spawn_angles,
+			isBot
+		);
+		goto spawn_done;
+	}
+
+	// ------------------------------------------------------------
+	// 4. Single-player spawn logic
+	// ------------------------------------------------------------
+	if (level.gametype == GT_SINGLE_PLAYER)
+	{
+		spawnPoint = SelectSPSpawnPoint(spawn_origin, spawn_angles);
+		goto spawn_done;
+	}
+
+	// ------------------------------------------------------------
+	// 5. Duel / Powerduel spawn logic
+	// ------------------------------------------------------------
+	if (level.gametype == GT_POWERDUEL)
+	{
+		spawnPoint = SelectDuelSpawnPoint(
+			client->sess.duelTeam,
+			client->ps.origin,
+			spawn_origin,
+			spawn_angles,
+			isBot
+		);
+		goto spawn_done;
+	}
+
+	if (level.gametype == GT_DUEL)
+	{
+		spawnPoint = SelectDuelSpawnPoint(
+			DUELTEAM_SINGLE,
+			client->ps.origin,
+			spawn_origin,
+			spawn_angles,
+			isBot
+		);
+		goto spawn_done;
+	}
+
+	// ------------------------------------------------------------
+	// 6. Team FFA (GT_TEAM)
+	// Bots get waypoint spawns first
+	// ------------------------------------------------------------
+	if (level.gametype == GT_TEAM)
+	{
+		if (isBot == qtrue)
+		{
+			vec3_t wpSpawn;
+
+			if (client->sess.sessionTeam == TEAM_RED)
+			{
+				if (BOT_FindCTFWaypointSpawnPoint_red(ent, wpSpawn) == qtrue)
+				{
+					VectorCopy(wpSpawn, spawn_origin);
+					BOT_WaypointSpawnAngles(client->sess.sessionTeam, spawn_origin, spawn_angles);
+					spawnPoint = NULL;
+					goto spawn_done;
+				}
+			}
+			else if (client->sess.sessionTeam == TEAM_BLUE)
+			{
+				if (BOT_FindCTFWaypointSpawnPoint_blue(ent, wpSpawn) == qtrue)
+				{
+					VectorCopy(wpSpawn, spawn_origin);
+					BOT_WaypointSpawnAngles(client->sess.sessionTeam, spawn_origin, spawn_angles);
+					spawnPoint = NULL;
+					goto spawn_done;
+				}
+			}
+		}
+
+		// Human fallback (and bot fallback)
+		if (client->pers.initialSpawn == qfalse && client->pers.localClient == qtrue)
+		{
+			client->pers.initialSpawn = qtrue;
+			spawnPoint = SelectInitialSpawnPoint(
+				spawn_origin,
+				spawn_angles,
+				client->sess.sessionTeam,
+				isBot
+			);
+		}
+		else
+		{
+			spawnPoint = SelectSpawnPoint(
+				client->ps.origin,
+				spawn_origin,
+				spawn_angles,
+				client->sess.sessionTeam,
+				isBot
+			);
+		}
+
+		goto spawn_done;
+	}
+
+	// ------------------------------------------------------------
+	// 7. FFA / Holocron / JediMaster / Other modes
+	// Bots get waypoint spawns first
+	// ------------------------------------------------------------
+	if (isBot == qtrue)
+	{
+		vec3_t wpSpawn;
+
+		if (BOT_FindFFAWaypointSpawnPoint(ent, wpSpawn) == qtrue)
+		{
+			VectorCopy(wpSpawn, spawn_origin);
+			BOT_WaypointSpawnAngles(client->sess.sessionTeam, spawn_origin, spawn_angles);
+			spawnPoint = NULL;
+			goto spawn_done;
+		}
+	}
+
+	// Fallback (humans AND bots)
+	if (client->pers.initialSpawn == qfalse && client->pers.localClient == qtrue)
+	{
+		client->pers.initialSpawn = qtrue;
+
+		spawnPoint = SelectInitialSpawnPoint(
+			spawn_origin,
+			spawn_angles,
+			client->sess.sessionTeam,
+			isBot
+		);
+	}
+	else
+	{
+		spawnPoint = SelectSpawnPoint(
+			client->ps.origin,
+			spawn_origin,
+			spawn_angles,
+			client->sess.sessionTeam,
+			isBot
+		);
+	}
+
+spawn_done:
+
+	if (level.gametype != GT_SIEGE && client->sess.sessionTeam != TEAM_SPECTATOR)
+	{
+		// MovieDuels (port of SJE MP): creature classes with a bigger bbox than a human (wampa, rancor): the spawn point
+		// picked for a human may be too tight; then use another spawn point of the same kind where the creature's bbox fits
+		float halfWidth = 0.0f;
+		int standheight = 0;
+
+		if (BG_ClassCreatureSize(client->pers.botclass, &halfWidth, &standheight, NULL) &&
+			(halfWidth > player_maxs[0] || standheight > player_maxs[2]))
+		{
+			vec3_t cMins, cMaxs;
+			trace_t tr;
+
+			VectorSet(cMins, -halfWidth, -halfWidth, DEFAULT_MINS_2);
+			VectorSet(cMaxs, halfWidth, halfWidth, standheight);
+			// (bodies count too: the kill box at spawn uses this bigger bbox and would telefrag anyone in it)
+			trap->Trace(&tr, spawn_origin, cMins, cMaxs, spawn_origin, ent->s.number, MASK_PLAYERSOLID, qfalse, 0, 0);
+			if ((tr.startsolid || tr.allsolid) && spawnPoint && spawnPoint->classname)
+			{
+				gentity_t* spots[64];
+				gentity_t* other = NULL;
+				int numSpots = 0;
+
+				while ((other = G_Find(other, FOFS(classname), spawnPoint->classname)) != NULL && numSpots < (int)ARRAY_LEN(spots))
+				{
+					spots[numSpots++] = other;
+				}
+				const int first = numSpots > 0 ? Q_irand(0, numSpots - 1) : 0;
+				for (int s = 0; s < numSpots; s++)
+				{
+					vec3_t o;
+
+					other = spots[(first + s) % numSpots];
+					VectorCopy(other->s.origin, o);
+					o[2] += 9;
+					trap->Trace(&tr, o, cMins, cMaxs, o, ent->s.number, MASK_PLAYERSOLID, qfalse, 0, 0);
+					if (!tr.startsolid && !tr.allsolid)
+					{
+						VectorCopy(o, spawn_origin);
+						VectorCopy(other->s.angles, spawn_angles);
+						spawnPoint = other;
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	client->pers.teamState.state = TEAM_ACTIVE;
+
+	// toggle the teleport bit so the client knows to not lerp
+	// and never clear the voted flag
+	flags = ent->client->ps.eFlags & EF_TELEPORT_BIT;
+	flags ^= EF_TELEPORT_BIT;
+	gameFlags = ent->client->mGameFlags & (PSG_VOTED | PSG_TEAMVOTED);
+
+	// clear everything but the persistant data
+
+	saved = client->pers;
+	savedSess = client->sess;
+	savedPing = client->ps.ping;
+	accuracy_hits = client->accuracy_hits;
+	accuracy_shots = client->accuracy_shots;
+
+	for (i = 0; i < MAX_PERSISTANT; i++)
+		persistant[i] = client->ps.persistant[i];
+
+	eventSequence = client->ps.eventSequence;
+
+	savedForce = client->ps.fd;
+
+	savesaber_num = client->ps.saberEntityNum;
+
+	savedSiegeIndex = client->siegeClass;
+
+	savedDodgeMax = client->ps.stats[STAT_MAX_DODGE];
+
+	for (i = 0; i < MAX_SABERS; i++)
+	{
+		saberSaved[i] = client->saber[i];
+		g2WeaponPtrs[i] = client->weaponGhoul2[i];
+	}
+
+	for (i = 0; i < HL_MAX; i++)
+		ent->locationDamage[i] = 0;
+
+	memset(client, 0, sizeof * client); // bk FIXME: Com_Memset?
+	client->bodyGrabIndex = ENTITYNUM_NONE;
+
+	//Get the skin RGB based on his userinfo
+	client->ps.customRGBA[0] = ((value = Info_ValueForKey(userinfo, "char_color_red")))
+		? Com_Clampi(0, 255, atoi(value))
+		: 255;
+	client->ps.customRGBA[1] = ((value = Info_ValueForKey(userinfo, "char_color_green")))
+		? Com_Clampi(0, 255, atoi(value))
+		: 255;
+	client->ps.customRGBA[2] = ((value = Info_ValueForKey(userinfo, "char_color_blue")))
+		? Com_Clampi(0, 255, atoi(value))
+		: 255;
+
+	//Prevent skins being too dark
+	if (g_charRestrictRGB.integer && client->ps.customRGBA[0] + client->ps.customRGBA[1] + client->ps.customRGBA[2] <
+		100)
+		client->ps.customRGBA[0] = client->ps.customRGBA[1] = client->ps.customRGBA[2] = 255;
+
+	client->ps.customRGBA[3] = 255;
+
+	// no team colour tint in team games any more: everyone keeps their own colours (DH 2026-10-13)
+
+	client->siegeClass = savedSiegeIndex;
+
+	client->ps.stats[STAT_MAX_DODGE] = savedDodgeMax;
+
+	for (i = 0; i < MAX_SABERS; i++)
+	{
+		client->saber[i] = saberSaved[i];
+		client->weaponGhoul2[i] = g2WeaponPtrs[i];
+	}
+
+	//or the saber ent num
+	client->ps.saberEntityNum = savesaber_num;
+	client->saberStoredIndex = savesaber_num;
+
+	client->ps.fd = savedForce;
+
+	client->ps.duelIndex = ENTITYNUM_NONE;
+
+	//spawn with 100
+	client->ps.jetpackFuel = 100;
+	client->ps.sprintFuel = 100;
+	client->ps.cloakFuel = 100;
+	client->ps.fd.blockPoints = BLOCK_POINTS_MAX;
+
+	client->pers = saved;
+	// the memset above cleared the playerState: the class (BG_PlayerStateToEntityState copies ps.botclass into
+	// s.botclass every frame) and the SP animation style again
+	client->ps.botclass = client->pers.botclass;
+	client->ps.nextbotclass = client->pers.nextbotclass;
+	client->ps.animStyle = client->pers.animStyle;
+	client->sess = savedSess;
+	client->ps.ping = savedPing;
+	client->accuracy_hits = accuracy_hits;
+	client->accuracy_shots = accuracy_shots;
+	client->lastkilled_client = -1;
+
+	for (i = 0; i < MAX_PERSISTANT; i++)
+		client->ps.persistant[i] = persistant[i];
+
+	client->ps.eventSequence = eventSequence;
+	// increment the spawncount so the client will detect the respawn
+	client->ps.persistant[PERS_SPAWN_COUNT]++;
+	client->ps.persistant[PERS_TEAM] = client->sess.sessionTeam;
+
+	client->airOutTime = level.time + 12000;
+
+	// set max health
+	if (level.gametype == GT_SIEGE && client->siegeClass != -1)
+	{
+		siegeClass_t* scl = &bgSiegeClasses[client->siegeClass];
+		maxHealth = 100;
+
+		if (scl->maxhealth)
+		{
+			maxHealth = scl->maxhealth;
+		}
+	}
+	else
+	{
+		maxHealth = Com_Clampi(1, 100, atoi(Info_ValueForKey(userinfo, "handicap")));
+	}
+	client->pers.maxHealth = maxHealth;
+
+	if (client->pers.maxHealth < 1 || client->pers.maxHealth > maxHealth)
+	{
+		client->pers.maxHealth = 100;
+	}
+	// clear entity values
+	client->ps.stats[STAT_MAX_HEALTH] = client->pers.maxHealth;
+	client->ps.eFlags = flags;
+	client->mGameFlags = gameFlags;
+
+	client->ps.groundEntityNum = ent->s.groundEntityNum = ENTITYNUM_NONE;
+	ent->client = &level.clients[index];
+	ent->playerState = &ent->client->ps;
+	ent->takedamage = qtrue;
+	ent->inuse = qtrue;
+	ent->classname = "player";
+	ent->r.contents = CONTENTS_BODY;
+	ent->clipmask = MASK_PLAYERSOLID;
+	ent->die = player_die;
+	ent->waterlevel = 0;
+	ent->watertype = 0;
+	ent->flags = 0;
+
+	VectorCopy(player_mins, ent->r.mins);
+	VectorCopy(player_maxs, ent->r.maxs);
+	client->ps.crouchheight = CROUCH_MAXS_2;
+	client->ps.standheight = DEFAULT_MAXS_2;
+
+	if (level.gametype != GT_SIEGE)
+	{
+		// MovieDuels (port of SJE MP): creature/droid classes get the bbox of their SP .npc file (PM_CheckDuck keeps it,
+		// from ps.botclass)
+		float halfWidth = 0.0f;
+		int standheight = 0, crouchheight = 0;
+
+		if (BG_ClassCreatureSize(client->pers.botclass, &halfWidth, &standheight, &crouchheight))
+		{
+			VectorSet(ent->r.mins, -halfWidth, -halfWidth, DEFAULT_MINS_2);
+			VectorSet(ent->r.maxs, halfWidth, halfWidth, standheight);
+			client->ps.standheight = standheight;
+			client->ps.crouchheight = crouchheight;
+		}
+	}
+
+	client->ps.clientNum = index;
+
+	// ------------------------------------------------------------
+	// Apply model scale AFTER respawn rebuilds the entity
+	// ------------------------------------------------------------
+	if (ent->s.eType != ET_NPC && level.gametype != GT_SIEGE)
+	{
+		// Apply the scale stored in pers
+		ScalePlayer(ent, ent->client->pers.botmodelscale);
+	}
+
+	// ------------------------------------------------------------
+	// Clear temporary holocron powers on respawn (non-holocron modes)
+	// ------------------------------------------------------------
+	if (level.gametype != GT_HOLOCRON)
+	{
+		int fpIndex = 0;
+
+		// Remove all holocron-granted powers
+		while (fpIndex < NUM_FORCE_POWERS)
+		{
+			if (client->ps.holocronBits & (1 << fpIndex))
+			{
+				// Stop active use
+				if (client->ps.fd.forcePowersActive & (1 << fpIndex))
+				{
+					WP_ForcePowerStop(ent, fpIndex);
+				}
+
+				// Remove holocron-granted knowledge and level
+				client->ps.fd.forcePowerLevel[fpIndex] = FORCE_LEVEL_0;
+				client->ps.fd.forcePowersKnown &= ~(1 << fpIndex);
+
+				// Clear carried state
+				client->ps.holocronsCarried[fpIndex] = 0;
+			}
+
+			fpIndex++;
+		}
+
+		client->ps.holocronBits = 0;
+		client->ps.holocronExpireTime = 0;
+		client->ps.holocronGlobalCooldown = 0;
+	}
+
+	//give default weapons
+	client->ps.stats[STAT_WEAPONS] = 1 << WP_NONE;
+
+	if (level.gametype == GT_DUEL || level.gametype == GT_POWERDUEL)
+	{
+		wDisable = g_duelWeaponDisable.integer;
+	}
+	else
+	{
+		wDisable = g_weaponDisable.integer;
+	}
+
+	if (ent->r.svFlags & SVF_BOT)
+	{
+		client->skillLevel[SK_PISTOL] = FORCE_LEVEL_3;
+		client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+		client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+		client->skillLevel[SK_BOWCASTER] = FORCE_LEVEL_3;
+		client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
+		client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+		client->skillLevel[SK_DISRUPTOR] = FORCE_LEVEL_3;
+	}
+
+	//Give everyone fists as long as they aren't disabled.
+	// MovieDuels (port of SJE MP): except the classes that have no melee at all (SP NPC files: R2 only the stun; R5,
+	// gonk and protocol nothing)
+	if ((!wDisable || !(wDisable & 1 << WP_MELEE)) &&
+		!(level.gametype != GT_SIEGE && ent->s.eType != ET_NPC && BG_ClassHasNoFists(client->pers.botclass)))
+	{
+		client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+	}
+
+	if (level.gametype != GT_HOLOCRON
+		&& level.gametype != GT_JEDIMASTER
+		&& !HasSetSaberOnly()
+		&& !AllForceDisabled(g_forcePowerDisable.integer)
+		&& g_jediVmerc.integer)
+	{
+		if (level.gametype >= GT_TEAM && (client->sess.sessionTeam == TEAM_BLUE || client->sess.sessionTeam ==
+			TEAM_RED))
+		{
+			//In Team games, force one side to be merc and other to be jedi
+			if (level.numPlayingClients > 0)
+			{
+				//already someone in the game
+				int forceTeam = TEAM_SPECTATOR;
+				for (i = 0; i < level.maxclients; i++)
+				{
+					if (level.clients[i].pers.connected == CON_DISCONNECTED)
+					{
+						continue;
+					}
+					if (level.clients[i].sess.sessionTeam == TEAM_BLUE || level.clients[i].sess.sessionTeam == TEAM_RED)
+					{
+						//in-game
+						if (WP_HasForcePowers(&level.clients[i].ps))
+						{
+							//this side is using force
+							forceTeam = level.clients[i].sess.sessionTeam;
+						}
+						else
+						{
+							//other team is using force
+							if (level.clients[i].sess.sessionTeam == TEAM_BLUE)
+							{
+								forceTeam = TEAM_RED;
+							}
+							else
+							{
+								forceTeam = TEAM_BLUE;
+							}
+						}
+						break;
+					}
+				}
+				if (WP_HasForcePowers(&client->ps) && client->sess.sessionTeam != forceTeam)
+				{
+					//using force but not on right team, switch him over
+					const char* teamName = TeamName(forceTeam);
+					//client->sess.sessionTeam = forceTeam;
+					SetTeam(ent, (char*)teamName);
+					return;
+				}
+			}
+		}
+
+		if (WP_HasForcePowers(&client->ps))
+		{
+			client->ps.trueNonJedi = qfalse;
+			client->ps.trueJedi = qtrue;
+			//make sure they only use the saber
+			client->ps.weapon = WP_SABER;
+			client->ps.stats[STAT_WEAPONS] = 1 << WP_SABER;
+		}
+		else
+		{
+			//no force powers set
+			client->ps.trueNonJedi = qtrue;
+			client->ps.trueJedi = qfalse;
+			if (!wDisable || !(wDisable & 1 << WP_BRYAR_PISTOL))
+			{
+				client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+			}
+			if (!wDisable || !(wDisable & 1 << WP_BLASTER))
+			{
+				client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+			}
+			if (!wDisable || !(wDisable & 1 << WP_BOWCASTER))
+			{
+				client->ps.stats[STAT_WEAPONS] |= 1 << WP_BOWCASTER;
+			}
+			if (!wDisable || !(wDisable & 1 << WP_REPEATER))
+			{
+				client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+			}
+			if (!wDisable || !(wDisable & 1 << WP_DISRUPTOR))
+			{
+				client->ps.stats[STAT_WEAPONS] |= 1 << WP_DISRUPTOR;
+			}
+			if (!wDisable || !(wDisable & 1 << WP_FLECHETTE))
+			{
+				client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+			}
+			if (!wDisable || !(wDisable & 1 << WP_Z6_ROTARY_CANNON))
+			{
+				client->ps.stats[STAT_WEAPONS] |= 1 << WP_Z6_ROTARY_CANNON;
+			}
+			client->ps.stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
+			client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+			client->ps.ammo[AMMO_POWERCELL] = ammoData[AMMO_POWERCELL].max;
+			client->ps.ammo[AMMO_BLASTER] = ammoData[AMMO_BLASTER].max;
+			client->ps.ammo[AMMO_METAL_BOLTS] = ammoData[AMMO_METAL_BOLTS].max;
+			client->skillLevel[SK_PISTOL] = FORCE_LEVEL_3;
+			client->ps.eFlags |= EF3_DUAL_WEAPONS;
+			client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+			client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+			client->skillLevel[SK_BOWCASTER] = FORCE_LEVEL_3;
+			client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
+			client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+			client->skillLevel[SK_DISRUPTOR] = FORCE_LEVEL_3;
+			client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
+		}
+	}
+	else
+	{
+		//jediVmerc is incompatible with this gametype, turn it off!
+		trap->Cvar_Set("g_jediVmerc", "0");
+		trap->Cvar_Update(&g_jediVmerc);
+		if (level.gametype == GT_HOLOCRON)
+		{
+			//always get free saber level 1 in holocron
+			if (!wDisable || !(wDisable & 1 << WP_SABER))
+			{
+				client->ps.stats[STAT_WEAPONS] |= 1 << WP_SABER;
+			}
+		}
+		else if (g_gametype.integer == GT_JEDIMASTER || g_gametype.integer == GT_HOLOCRON)
+		{
+			//don't have selectable starting weapons, but we do have max max gun skills so
+			//people can actually fight well, when they get a gun.
+			client->skillLevel[SK_PISTOL] = FORCE_LEVEL_2;
+			client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+			client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+			client->skillLevel[SK_BOWCASTER] = FORCE_LEVEL_3;
+			client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
+			client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+			client->skillLevel[SK_DISRUPTOR] = FORCE_LEVEL_3;
+			client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
+		}
+		else
+		{
+			//New class system
+			if (ent->s.eType != ET_NPC && // no npcs,handled in npc.cfg
+				level.gametype != GT_SIEGE)
+			{
+				//use class-specified weapons
+				switch (client->pers.botclass)
+				{
+					//botclass weapons and ammo here
+				case BCLASS_CADENCE:
+				case BCLASS_SERENITY:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_SABER;
+					client->ps.stats[STAT_HOLDABLE_ITEMS] |= (1 << HI_SEEKER);
+					break;
+					// Force-only classes (no saber)
+				case BCLASS_FORCE_DARK_NO_SABER:
+				case BCLASS_FORCE_LIGHT_NO_SABER:
+					// Give only melee as a fallback, but do NOT grant a saber.
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
+					break;
+				case BCLASS_JEDITRAINER:
+				case BCLASS_ALORA:
+				case BCLASS_DESANN:
+				case BCLASS_KYLE:
+				case BCLASS_RAY:
+				case BCLASS_LUKE:
+				case BCLASS_JEDIMASTER:
+				case BCLASS_DUELS:
+				case BCLASS_CULTIST:
+				case BCLASS_JEDI:
+				case BCLASS_MORGANKATARN:
+				case BCLASS_REBORN_TWIN:
+				case BCLASS_REBORN_MASTER:
+				case BCLASS_REBORN:
+				case BCLASS_ROSH_PENIN:
+				case BCLASS_SABER_DROID:
+				case BCLASS_TAVION:
+				case BCLASS_SHADOWTROOPER:
+				case BCLASS_YODA:
+				case BCLASS_PADAWAN:
+				case BCLASS_GRIEVOUS:
+				case BCLASS_SITHLORD:
+				case BCLASS_DOOKU:
+				case BCLASS_VADER:
+				case BCLASS_SITH:
+				case BCLASS_APPRENTICE:
+				case BCLASS_JEDIKNIGHT1:
+				case BCLASS_JEDIKNIGHT2:
+				case BCLASS_JEDIKNIGHT3:
+				case BCLASS_SMUGGLER1:
+				case BCLASS_SMUGGLER3:
+				case BCLASS_JEDICONSULAR1:
+				case BCLASS_JEDICONSULAR2:
+				case BCLASS_JEDICONSULAR3:
+				case BCLASS_SABERNOFP:
+				case BCLASS_MANDO_SABER_NO_FP_ARMOUR:
+				case BCLASS_WOOKIE:
+				case BCLASS_SITHWORRIOR1:
+				case BCLASS_SITHWORRIOR2:
+				case BCLASS_SITHWORRIOR3:
+				case BCLASS_SITHINQUISITOR1:
+				case BCLASS_SITHINQUISITOR2:
+				case BCLASS_SITHINQUISITOR3:
+				case BCLASS_STAFFDARK:
+				case BCLASS_STAFF:
+				case BCLASS_UNSTABLESABER:
+				case BCLASS_OBIWAN:
+				case BCLASS_TUSKEN_RAIDER:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_SABER;
+					break;
+				case BCLASS_ASSASSIN_DROID:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DISRUPTOR;
+					client->skillLevel[SK_DISRUPTOR] = FORCE_LEVEL_3;
+					// MovieDuels 2026-10-12 (DH: closest existing): assassin_droid.npc carries a blaster (as SJE)
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_BARTENDER:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DISRUPTOR;
+					client->skillLevel[SK_DISRUPTOR] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DET_PACK;
+					client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_DETPACK] = 3;
+					break;
+				case BCLASS_BESPIN_COP:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REBELBLASTER;
+					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_2;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					break;
+				case BCLASS_BOBAFETT:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					client->skillLevel[SK_BLASTERRATEOFFIREUPGRADE] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BOBA;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_ROCKETS] = 3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->skillLevel[SK_SMOKEGRENADE] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					client->skillLevel[SK_GRAPPLE] = FORCE_LEVEL_3;
+					client->skillLevel[SK_FLAMETHROWER] = FORCE_LEVEL_3;
+					break;
+				case BCLASS_JANGO_NOJP:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CLONERIFLE;
+					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					client->skillLevel[SK_BLASTERRATEOFFIREUPGRADE] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_JANGO;
+					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_3;
+					client->ps.eFlags |= EF3_DUAL_WEAPONS;
+					ClassAmmoSetup(ent);
+					client->skillLevel[SK_GRAPPLE] = FORCE_LEVEL_3;
+					client->skillLevel[SK_FLAMETHROWER] = FORCE_LEVEL_3;
+					break;
+				case BCLASS_CHEWIE:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BOWCASTER;
+					client->skillLevel[SK_BOWCASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_TRIP_MINE;
+					client->ps.ammo[AMMO_TRIPMINE] = 3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DET_PACK;
+					client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_DETPACK] = 3;
+					break;
+				case BCLASS_ELDER:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					break;
+				case BCLASS_GALAK:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CLONECARBINE;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					client->skillLevel[SK_REPEATERUPGRADE] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_ROCKETS] = 3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					break;
+				case BCLASS_GRAN:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					break;
+				case BCLASS_GRAN_SHOOTER:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_HAZARDTROOPER:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_ROCKETS] = 3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DET_PACK;
+					client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_DETPACK] = 3;
+					break;
+				case BCLASS_HUMAN_MERC:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->skillLevel[SK_SMOKEGRENADE] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DET_PACK;
+					client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_DETPACK] = 4;
+					break;
+				case BCLASS_IMPERIAL:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DEMP2;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_IMPWORKER:
+				case BCLASS_IMPOFFICER:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_JAN:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->skillLevel[SK_FLASHGRENADE] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					break;
+				case BCLASS_JAWA:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_STUN_BATON;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_LANDO:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_2;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					client->skillLevel[SK_BLASTERRATEOFFIREUPGRADE] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_GALAKMECH:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					client->skillLevel[SK_REPEATERUPGRADE] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_ROCKETS] = 3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					client->ps.powerups[PW_GALAK_SHIELD] = Q3_INFINITE;
+					break;
+				case BCLASS_MONMOTHMA:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_2;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_NOGHRI:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CONCUSSION;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_PROTOCOL:
+				case BCLASS_GONK:
+				case BCLASS_R5D2:
+					// MovieDuels (port of SJE MP, owner decision 2026-10-11): as protocol.npc / gonk.npc (WP_NONE): no weapon
+					// at all, not even fists (BG_ClassHasNoFists); R5 has no weapon either - only R2-D2 has the stun
+					break;
+				case BCLASS_HOWLER:
+				case BCLASS_MINEMONSTER:
+					// MovieDuels (port of SJE MP): howler.npc / minemonster.npc: WP_MELEE (their bites, BG_ClassCreatureAttackAnim)
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					break;
+				case BCLASS_R2D2:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_STUN_BATON;
+					break;
+				case BCLASS_RAGNOS:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_SABER;
+					break;
+				case BCLASS_RANCOR:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					break;
+				case BCLASS_RAX:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CONCUSSION;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					break;
+				case BCLASS_REBEL:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REBELBLASTER;
+					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_2;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REBELRIFLE;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_REBEL_PILOT:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REBELBLASTER;
+					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_2;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_REELO:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CONCUSSION;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->skillLevel[SK_FLASHGRENADE] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					break;
+				case BCLASS_ROCKETTROOPER:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_ROCKETS] = 5;
+					break;
+				case BCLASS_RODIAN:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CONCUSSION;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					break;
+				case BCLASS_SABOTEUR:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_ARMOR] = 100;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DISRUPTOR;
+					client->skillLevel[SK_DISRUPTOR] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_STORMTROOPER:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_ARMOR] = 100;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					client->skillLevel[SK_GRAPPLE] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_STORMPILOT:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_ARMOR] = 100;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_2;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_SWAMPTROOPER:
+				case BCLASS_PAZVIZSLA:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CLONECOMMANDO;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					client->skillLevel[SK_REPEATERUPGRADE] = FORCE_LEVEL_3;
+					break;
+				case BCLASS_RESISTANCE:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REBELBLASTER;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REBELRIFLE;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					client->skillLevel[SK_REPEATERUPGRADE] = FORCE_LEVEL_3;
+					break;
+				case BCLASS_TRANDOSHAN:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_ARMOR] = 100;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					break;
+				case BCLASS_TUSKEN_SNIPER:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_ARMOR] = 100;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DISRUPTOR;
+					client->skillLevel[SK_DISRUPTOR] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_UGNAUGHT:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_ARMOR] = 100;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_2;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_WAMPA:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					break;
+				case BCLASS_WEEQUAY:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CONCUSSION;
+					if (Q_stristr(client->modelname, "weequay/sp"))
+					{
+						// MovieDuels 2026-10-12 (DH: closest existing): weequay/sp's NPC weapon is the bowcaster
+						client->ps.stats[STAT_WEAPONS] |= 1 << WP_BOWCASTER;
+					}
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					break;
+				case BCLASS_MANDOLORIAN: //boba fett
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BOBA;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					client->skillLevel[SK_GRAPPLE] = FORCE_LEVEL_3;
+					client->skillLevel[SK_FLAMETHROWER] = FORCE_LEVEL_3;
+					break;
+				case BCLASS_MANDOLORIAN1:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BATTLEDROID;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CLONEPISTOL;
+					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_3;
+					client->ps.eFlags |= EF3_DUAL_WEAPONS;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CLONECARBINE;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_ROCKETS] = 5;
+					client->skillLevel[SK_GRAPPLE] = FORCE_LEVEL_3;
+					client->skillLevel[SK_FLAMETHROWER] = FORCE_LEVEL_3;
+					break;
+				case BCLASS_MANDOLORIAN2:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_JANGO;
+					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_3;
+					client->ps.eFlags |= EF3_DUAL_WEAPONS;
+					ClassAmmoSetup(ent);
+					client->ps.ammo[AMMO_ROCKETS] = 5;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->skillLevel[SK_FLASHGRENADE] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					client->skillLevel[SK_GRAPPLE] = FORCE_LEVEL_3;
+					client->skillLevel[SK_FLAMETHROWER] = FORCE_LEVEL_3;
+					break;
+				case BCLASS_SOILDER:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REBELRIFLE;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_ROCKETS] = 3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->skillLevel[SK_SMOKEGRENADE] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					break;
+				case BCLASS_BATTLEDROID:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BATTLEDROID;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					if (Q_stristr(client->modelname, "battledroid/sniper"))
+					{
+						// MovieDuels 2026-10-12 (DH: closest existing): the B1 sniper's NPC weapon (the class stays BATTLEDROID:
+						// droid death, sounds, effects)
+						client->ps.stats[STAT_WEAPONS] |= 1 << WP_DISRUPTOR;
+						client->skillLevel[SK_DISRUPTOR] = FORCE_LEVEL_3;
+					}
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_SBD:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_OLD;
+					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_3;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_BLASTER] = 999;
+					break;
+				case BCLASS_WOOKIEMELEE:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
+					break;
+				case BCLASS_TROOPER1:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->skillLevel[SK_SMOKEGRENADE] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					break;
+				case BCLASS_TROOPER2:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_TROOPER3:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_ROCKETS] = 5;
+					break;
+				case BCLASS_SMUGGLER2:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_ARMOR] = 100;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					client->ps.ammo[AMMO_TRIPMINE] = 3;
+					break;
+				case BCLASS_BOUNTYHUNTER1:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_Z6_ROTARY_CANNON;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DET_PACK;
+					client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_DETPACK] = 3;
+					break;
+				case BCLASS_BOUNTYHUNTER2:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_3;
+					client->ps.eFlags |= EF3_DUAL_WEAPONS;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DET_PACK;
+					client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_DETPACK] = 3;
+					break;
+				case BCLASS_BOUNTYHUNTER3:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					break;
+				case BCLASS_IPPERIALAGENT1:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_METAL_BOLTS] = 675;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					break;
+				case BCLASS_IPPERIALAGENT2:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					break;
+				case BCLASS_IPPERIALAGENT3:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_3;
+					client->ps.eFlags |= EF3_DUAL_WEAPONS;
+					ClassAmmoSetup(ent);
+					client->ps.ammo[AMMO_TRIPMINE] = 3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					break;
+				case BCLASS_CLONETROOPER:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_ARMOR] = 100;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CLONERIFLE;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					break;
+				case BCLASS_HEAVYTROOPER:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_Z6_ROTARY_CANNON;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					client->ps.ammo[AMMO_THERMAL] = 4;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CLONECOMMANDO;
+					break;
+				case BCLASS_PLAYER:
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					ClassAmmoSetup(ent);
+					break;
+				default:
+					if (g_gametype.integer != GT_SIEGE)
+					{
+						if (g_gametype.integer == GT_JEDIMASTER)
+						{
+							if (!wDisable || !(wDisable & 1 << WP_BRYAR_PISTOL))
+							{
+								client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+							}
+						}
+						if (client->ps.fd.forcePowerSelected == FP_SABER_OFFENSE)
+						{
+							client->ps.stats[STAT_WEAPONS] |= 1 << WP_SABER;
+						}
+						else
+						{
+							if (!wDisable || !(wDisable & 1 << WP_BRYAR_PISTOL))
+							{
+								client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+							}
+						}
+					}
+
+					ClassAmmoSetup(ent);
+					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+					client->skillLevel[SK_BOWCASTER] = FORCE_LEVEL_3;
+					client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
+					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+					client->skillLevel[SK_DISRUPTOR] = FORCE_LEVEL_3;
+					client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
+					if (client->skillLevel[SK_PISTOL] >= FORCE_LEVEL_3 &&
+						(ent->client->ps.weapon == WP_BRYAR_PISTOL ||
+							ent->client->ps.weapon == WP_REY ||
+							ent->client->ps.weapon == WP_JANGO ||
+							ent->client->ps.weapon == WP_CLONEPISTOL))
+					{
+						client->ps.eFlags |= EF3_DUAL_WEAPONS;
+					}
+					break;
+				}
+			}
+			else
+			{
+				if (g_gametype.integer != GT_SIEGE)
+				{
+					if (g_gametype.integer == GT_JEDIMASTER)
+					{
+						if (!wDisable || !(wDisable & 1 << WP_BRYAR_PISTOL))
+						{
+							client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+						}
+					}
+					if (client->ps.fd.forcePowerSelected == FP_SABER_OFFENSE)
+					{
+						client->ps.stats[STAT_WEAPONS] |= 1 << WP_SABER;
+					}
+					else
+					{
+						if (!wDisable || !(wDisable & 1 << WP_BRYAR_PISTOL))
+						{
+							client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+						}
+					}
+				}
+				client->ps.ammo[AMMO_BLASTER] = 500;
+				client->ps.ammo[AMMO_POWERCELL] = 500;
+				client->ps.ammo[AMMO_METAL_BOLTS] = 500;
+				client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+				client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
+				client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
+				client->skillLevel[SK_BOWCASTER] = FORCE_LEVEL_3;
+				client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
+				client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
+				client->skillLevel[SK_DISRUPTOR] = FORCE_LEVEL_3;
+				client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
+				if (client->skillLevel[SK_PISTOL] >= FORCE_LEVEL_3 &&
+					(ent->client->ps.weapon == WP_BRYAR_PISTOL ||
+						ent->client->ps.weapon == WP_REY ||
+						ent->client->ps.weapon == WP_JANGO ||
+						ent->client->ps.weapon == WP_CLONEPISTOL))
+				{
+					client->ps.eFlags |= EF3_DUAL_WEAPONS;
+				}
+			}
+		}
+		if (wDisable == WP_ALLDISABLED)
+		{
+			//some joker disabled all the weapons.  Give everyone Melee
+			client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+			Com_Printf("ERROR:  The game doesn't like it when you disable ALL the weapons.\nReenabling Melee.\n");
+			if (g_gametype.integer == GT_DUEL || g_gametype.integer == GT_POWERDUEL)
+			{
+				trap->Cvar_Set("g_duelWeaponDisable", va("%i", WP_MELEEONLY));
+			}
+			else
+			{
+				trap->Cvar_Set("g_weaponDisable", va("%i", WP_MELEEONLY));
+			}
+		}
+
+		if (level.gametype == GT_JEDIMASTER)
+		{
+			client->ps.stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
+
+			if (!wDisable || !(wDisable & 1 << WP_BRYAR_PISTOL))
+			{
+				client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+			}
+		}
+
+		if (client->ps.stats[STAT_WEAPONS] & 1 << WP_SABER)
+		{
+			//sabers auto selected if we have them.
+			client->ps.weapon = WP_SABER;
+		}
+		else
+		{
+			int i1 = 0;
+			for (i1 = LAST_SELECTABLE_WEAPON; i1 > WP_NONE; i1--)
+			{
+				if (client->ps.stats[STAT_WEAPONS] & 1 << i1)
+				{
+					//have this one, equip it.
+					client->ps.weapon = i1;
+					break;
+				}
+			}
+			if (i1 == WP_NONE)
+			{
+				// MovieDuels (port of SJE MP): a class without any weapon (R5, gonk, protocol droid): hold nothing
+				client->ps.weapon = WP_NONE;
+			}
+		}
+	}
+
+	if (level.gametype == GT_SIEGE && client->siegeClass != -1 &&
+		client->sess.sessionTeam != TEAM_SPECTATOR)
+	{
+		//well then, we will use a custom weaponset for our class
+		int m = 0;
+
+		client->ps.stats[STAT_WEAPONS] = bgSiegeClasses[client->siegeClass].weapons;
+
+		if (client->ps.stats[STAT_WEAPONS] & 1 << WP_SABER)
+		{
+			client->ps.weapon = WP_SABER;
+		}
+		else if (client->ps.stats[STAT_WEAPONS] & 1 << WP_BRYAR_PISTOL)
+		{
+			client->ps.weapon = WP_BRYAR_PISTOL;
+		}
+		else
+		{
+			client->ps.weapon = WP_MELEE;
+		}
+		inSiegeWithClass = qtrue;
+
+		while (m < WP_NUM_WEAPONS)
+		{
+			if (client->ps.stats[STAT_WEAPONS] & 1 << m)
+			{
+				if (client->ps.weapon != WP_SABER)
+				{
+					//try to find the highest ranking weapon we have
+					if (m > client->ps.weapon)
+					{
+						client->ps.weapon = m;
+					}
+				}
+
+				if (m >= WP_BRYAR_PISTOL)
+				{
+					//Max his ammo out for all the weapons he has.
+					if (level.gametype == GT_SIEGE
+						&& m == WP_ROCKET_LAUNCHER)
+					{
+						//don't give full ammo!
+						//FIXME: extern this and check it when getting ammo from supplier, pickups or ammo stations!
+						if (client->siegeClass != -1 &&
+							bgSiegeClasses[client->siegeClass].classflags & 1 << CFL_SINGLE_ROCKET)
+						{
+							client->ps.ammo[weaponData[m].ammoIndex] = 1;
+						}
+						else
+						{
+							client->ps.ammo[weaponData[m].ammoIndex] = 10;
+						}
+					}
+					else
+					{
+						if (level.gametype == GT_SIEGE
+							&& client->siegeClass != -1
+							&& bgSiegeClasses[client->siegeClass].classflags & 1 << CFL_EXTRA_AMMO)
+						{
+							//double ammo
+							client->ps.ammo[weaponData[m].ammoIndex] = ammoData[weaponData[m].ammoIndex].max * 2;
+							client->ps.eFlags |= EF_DOUBLE_AMMO;
+						}
+						else
+						{
+							client->ps.ammo[weaponData[m].ammoIndex] = ammoData[weaponData[m].ammoIndex].max;
+						}
+					}
+				}
+			}
+			m++;
+		}
+	}
+
+	if (level.gametype == GT_SIEGE &&
+		client->siegeClass != -1 &&
+		client->sess.sessionTeam != TEAM_SPECTATOR)
+	{
+		//use class-specified inventory
+		client->ps.stats[STAT_HOLDABLE_ITEMS] = bgSiegeClasses[client->siegeClass].invenItems;
+		client->ps.stats[STAT_HOLDABLE_ITEM] = 0;
+	}
+	else
+	{
+		//New class system
+		switch (client->pers.botclass)
+		{
+			//botclass holdable stuff armour and health here
+		case BCLASS_ALORA:
+			client->ps.stats[STAT_ARMOR] = 200;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_ASSASSIN_DROID:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SPHERESHIELD;
+			client->ps.stats[STAT_ARMOR] = 500;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_BARTENDER:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_AMMODISP;
+			break;
+		case BCLASS_BESPIN_COP:
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			//client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SWOOP;
+			break;
+		case BCLASS_BOBAFETT:
+			client->ps.stats[STAT_ARMOR] = 300;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_FLAMETHROWER;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SWOOP;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_GRAPPLE;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_JETPACK;
+			ent->flags |= FL_SABERDAMAGE_RESIST;
+			ent->flags |= FL_DINDJARIN;
+			break;
+		case BCLASS_JANGO_NOJP:
+			client->ps.stats[STAT_ARMOR] = 300;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_FLAMETHROWER;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_GRAPPLE;
+			ent->flags |= FL_SABERDAMAGE_RESIST;
+			ent->flags |= FL_DINDJARIN;
+			break;
+		case BCLASS_CHEWIE:
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SENTRY_GUN;
+			client->ps.stats[STAT_ARMOR] = 300;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			client->ps.fd.forcePowerLevel[FP_RAGE] = FORCE_LEVEL_3; //chewie gets rage
+			break;
+		case BCLASS_CULTIST:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_DESANN:
+			client->ps.stats[STAT_ARMOR] = 300;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_UNSTABLESABER:
+			client->ps.stats[STAT_ARMOR] = 300;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_ELDER:
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SENTRY_GUN;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_GALAK:
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SPHERESHIELD;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SEEKER;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_GRAN:
+		case BCLASS_GRAN_SHOOTER:
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_ARMOR] = 300;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_HAZARDTROOPER:
+			client->ps.stats[STAT_ARMOR] = 300;
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SENTRY_GUN;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_JETPACK;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_FLAMETHROWER;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_HUMAN_MERC:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_AMMODISP;
+			break;
+		case BCLASS_IMPERIAL:
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SENTRY_GUN;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_IMPWORKER:
+		case BCLASS_IMPOFFICER:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_JAN:
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SENTRY_GUN;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SEEKER;
+			client->ps.stats[STAT_ARMOR] = 200;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_JAWA:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_JEDI:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_JEDIMASTER:
+			client->ps.stats[STAT_ARMOR] = 125;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_JEDITRAINER:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SEEKER;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_OBIWAN:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_KYLE:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_RAY:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_LANDO:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_HEALTHDISP;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_LUKE:
+			client->ps.stats[STAT_ARMOR] = 200;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_DUELS:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_GALAKMECH:
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SPHERESHIELD;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SEEKER;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_MONMOTHMA:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_MEDPAC_BIG;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_AMMODISP;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SPHERESHIELD;
+
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_MORGANKATARN:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_NOGHRI:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_ARMOR] = 200;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_RAX:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_MEDPAC_BIG;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_REBEL:
+		case BCLASS_REBEL_PILOT:
+			//client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SWOOP;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_REBORN:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_REBORN_TWIN:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_REBORN_MASTER:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_REELO:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_ROCKETTROOPER:
+			client->ps.stats[STAT_ARMOR] = 300;
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SEEKER;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_JETPACK;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_RODIAN:
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SHIELD;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_ROSH_PENIN:
+			client->ps.stats[STAT_ARMOR] = 150;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_SABER_DROID:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_SABOTEUR:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_SHADOWTROOPER:
+			client->ps.stats[STAT_ARMOR] = 175;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_CLOAK;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_MEDPAC_BIG;
+			ent->flags |= FL_SABERDAMAGE_RESIST;
+			ent->flags |= FL_DINDJARIN;
+			break;
+		case BCLASS_STORMTROOPER:
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SHIELD;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_STORMPILOT:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SEEKER;
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_DROIDEKA;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_SWAMPTROOPER:
+		case BCLASS_RESISTANCE:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_TAVION:
+			client->ps.stats[STAT_ARMOR] = 250;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_TRANDOSHAN:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_TUSKEN_SNIPER:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_BINOCULARS;
+			break;
+		case BCLASS_TUSKEN_RAIDER:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			//client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SWOOP;
+			break;
+		case BCLASS_UGNAUGHT:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SHIELD;
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_WEEQUAY:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_SERENITY:
+			client->ps.stats[STAT_ARMOR] = 500;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SEEKER;
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SENTRY_GUN;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SWOOP;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_DROIDEKA;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SHIELD;
+			break;
+		case BCLASS_CADENCE:
+			client->ps.stats[STAT_ARMOR] = 500;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SHIELD;
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_AMMODISP;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_CLOAK;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_HEALTHDISP;
+			break;
+		case BCLASS_YODA:
+			client->ps.stats[STAT_ARMOR] = 500;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_PADAWAN:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_GRIEVOUS:
+			client->ps.stats[STAT_ARMOR] = 200;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_SITHLORD:
+			client->ps.stats[STAT_ARMOR] = 200;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_DOOKU:
+			client->ps.stats[STAT_ARMOR] = 200;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_VADER:
+			client->ps.stats[STAT_ARMOR] = 500;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_SITH:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_STAFFDARK:
+		case BCLASS_STAFF:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_APPRENTICE:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_MANDOLORIAN:
+			client->ps.stats[STAT_ARMOR] = 300;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_JETPACK;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_GRAPPLE;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_FLAMETHROWER;
+			ent->flags |= FL_SABERDAMAGE_RESIST;
+			ent->flags |= FL_DINDJARIN;
+			break;
+		case BCLASS_MANDOLORIAN1:
+			client->ps.stats[STAT_ARMOR] = 300;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_JETPACK;
+			//client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SWOOP;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_GRAPPLE;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_FLAMETHROWER;
+			ent->flags |= FL_SABERDAMAGE_RESIST;
+			ent->flags |= FL_DINDJARIN;
+			break;
+		case BCLASS_MANDOLORIAN2:
+			client->ps.stats[STAT_ARMOR] = 300;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_FLAMETHROWER;
+			//client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SWOOP;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_GRAPPLE;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_JETPACK;
+			ent->flags |= FL_SABERDAMAGE_RESIST;
+			ent->flags |= FL_DINDJARIN;
+			break;
+		case BCLASS_SOILDER:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_BATTLEDROID:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SHIELD;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_SBD:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_DROIDEKA;
+			client->ps.stats[STAT_ARMOR] = 500;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_WOOKIE:
+			client->ps.stats[STAT_ARMOR] = 500;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_WOOKIEMELEE:
+			client->ps.stats[STAT_ARMOR] = 500;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_TROOPER1:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_TROOPER2:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SEEKER;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_TROOPER3:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_JETPACK;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_JEDIKNIGHT1:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_JEDIKNIGHT2:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_JEDIKNIGHT3:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_SMUGGLER1:
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			client->ps.stats[STAT_ARMOR] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_SMUGGLER2:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SEEKER;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_SMUGGLER3:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SEEKER;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_JEDICONSULAR1:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_JEDICONSULAR2:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_JEDICONSULAR3:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_SABERNOFP:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_MANDO_SABER_NO_FP_ARMOUR:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			ent->flags |= FL_SABERDAMAGE_RESIST;
+			ent->flags |= FL_DINDJARIN;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_GRAPPLE;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_FLAMETHROWER;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_JETPACK;
+			break;
+		case BCLASS_PAZVIZSLA:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			ent->flags |= FL_SABERDAMAGE_RESIST;
+			ent->flags |= FL_DINDJARIN;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_GRAPPLE;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_FLAMETHROWER;
+			break;
+			break;
+		case BCLASS_BOUNTYHUNTER1:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_JETPACK;
+			break;
+		case BCLASS_BOUNTYHUNTER2:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SHIELD;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_BOUNTYHUNTER3:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SENTRY_GUN;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_EWEB;
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_JETPACK;
+			break;
+		case BCLASS_SITHWORRIOR1:
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			client->ps.stats[STAT_ARMOR] = 200;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_SITHWORRIOR2:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_SITHWORRIOR3:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_IPPERIALAGENT2:
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SHIELD;
+			break;
+		case BCLASS_SITHINQUISITOR1:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_SITHINQUISITOR2:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_SITHINQUISITOR3:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			ClassItemHealthSetup(ent);
+			break;
+		case BCLASS_CLONETROOPER:
+			ClassItemHealthSetup(ent);
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SEEKER;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SPHERESHIELD;
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_PLAYER:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SHIELD;
+			break;
+		case BCLASS_FORCE_DARK_NO_SABER:
+			client->ps.stats[STAT_ARMOR] = 200;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_FORCE_LIGHT_NO_SABER:
+			client->ps.stats[STAT_ARMOR] = 200;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		case BCLASS_HEAVYTROOPER:
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SPHERESHIELD;
+			break;
+		case BCLASS_R2D2:
+		case BCLASS_R5D2:
+		case BCLASS_GONK:
+		case BCLASS_PROTOCOL:
+		case BCLASS_WAMPA:
+		case BCLASS_RANCOR:
+		case BCLASS_HOWLER:
+		case BCLASS_MINEMONSTER:
+			// MovieDuels (port of SJE MP): droids and creatures: no holdable items (the default gave every class a
+			// portable shield)
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			break;
+		default:
+			client->ps.stats[STAT_ARMOR] = 100;
+			client->ps.stats[STAT_MAX_HEALTH] = 100;
+			client->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_SHIELD;
+			break;
+		}
+	}
+
+	if (level.gametype == GT_SIEGE &&
+		client->siegeClass != -1 &&
+		bgSiegeClasses[client->siegeClass].powerups &&
+		client->sess.sessionTeam != TEAM_SPECTATOR)
+	{
+		//this class has some start powerups
+		i = 0;
+		while (i < PW_NUM_POWERUPS)
+		{
+			if (bgSiegeClasses[client->siegeClass].powerups & 1 << i)
+			{
+				client->ps.powerups[i] = Q3_INFINITE;
+			}
+			i++;
+		}
+	}
+	else
+	{
+		//New class system
+		switch (client->pers.botclass)
+		{
+			//botclass forcepowers and skills here
+		case BCLASS_ALORA:
+		case BCLASS_DESANN:
+		case BCLASS_CULTIST:
+		case BCLASS_JEDI:
+		case BCLASS_KYLE:
+		case BCLASS_RAY:
+		case BCLASS_JEDIMASTER:
+		case BCLASS_JEDITRAINER:
+		case BCLASS_DUELS:
+		case BCLASS_LUKE:
+		case BCLASS_MORGANKATARN:
+		case BCLASS_REBORN_TWIN:
+		case BCLASS_REBORN_MASTER:
+		case BCLASS_REBORN:
+		case BCLASS_ROSH_PENIN:
+		case BCLASS_SABER_DROID:
+		case BCLASS_TAVION:
+		case BCLASS_SHADOWTROOPER:
+		case BCLASS_SERENITY:
+		case BCLASS_CADENCE:
+		case BCLASS_YODA:
+		case BCLASS_PADAWAN:
+		case BCLASS_GRIEVOUS:
+		case BCLASS_SITHLORD:
+		case BCLASS_DOOKU:
+		case BCLASS_VADER:
+		case BCLASS_SITH:
+		case BCLASS_APPRENTICE:
+		case BCLASS_JEDIKNIGHT1:
+		case BCLASS_JEDIKNIGHT2:
+		case BCLASS_JEDIKNIGHT3:
+		case BCLASS_JEDICONSULAR1:
+		case BCLASS_JEDICONSULAR2:
+		case BCLASS_JEDICONSULAR3:
+		case BCLASS_SMUGGLER3:
+		case BCLASS_SITHWORRIOR1:
+		case BCLASS_SITHWORRIOR2:
+		case BCLASS_SITHWORRIOR3:
+		case BCLASS_SITHINQUISITOR1:
+		case BCLASS_SITHINQUISITOR2:
+		case BCLASS_SITHINQUISITOR3:
+		case BCLASS_STAFFDARK:
+		case BCLASS_STAFF:
+		case BCLASS_UNSTABLESABER:
+		case BCLASS_OBIWAN:
+			//Read bot.txt or Player FP setup for saber users
+			client->ps.fd.blockPoints = BLOCK_POINTS_MAX;
+			break;
+		case BCLASS_FORCE_DARK_NO_SABER:
+		case BCLASS_FORCE_LIGHT_NO_SABER:
+			client->ps.fd.forcePowerMax = 200;
+			client->ps.fd.forcePower = client->ps.fd.forcePowerMax;
+			break;
+			//never have force powers
+		case BCLASS_ASSASSIN_DROID:
+		case BCLASS_BARTENDER:
+		case BCLASS_BESPIN_COP:
+		case BCLASS_ELDER:
+		case BCLASS_GALAK:
+		case BCLASS_GRAN:
+		case BCLASS_GRAN_SHOOTER:
+		case BCLASS_HAZARDTROOPER:
+		case BCLASS_HUMAN_MERC:
+		case BCLASS_IMPERIAL:
+		case BCLASS_IMPWORKER:
+		case BCLASS_IMPOFFICER:
+		case BCLASS_JAN:
+		case BCLASS_JAWA:
+		case BCLASS_LANDO:
+		case BCLASS_GALAKMECH:
+		case BCLASS_MONMOTHMA:
+		case BCLASS_NOGHRI:
+		case BCLASS_RAX:
+		case BCLASS_REBEL:
+		case BCLASS_REBEL_PILOT:
+		case BCLASS_REELO:
+		case BCLASS_RODIAN:
+		case BCLASS_SABOTEUR:
+		case BCLASS_STORMTROOPER:
+		case BCLASS_STORMPILOT:
+		case BCLASS_SWAMPTROOPER:
+		case BCLASS_RESISTANCE:
+		case BCLASS_TRANDOSHAN:
+		case BCLASS_TUSKEN_SNIPER:
+		case BCLASS_UGNAUGHT:
+		case BCLASS_WEEQUAY:
+		case BCLASS_SOILDER:
+		case BCLASS_BATTLEDROID:
+		case BCLASS_SBD:
+		case BCLASS_TROOPER1:
+		case BCLASS_TROOPER2:
+		case BCLASS_SMUGGLER1:
+		case BCLASS_SMUGGLER2:
+		case BCLASS_BOUNTYHUNTER2:
+		case BCLASS_BOUNTYHUNTER3:
+		case BCLASS_IPPERIALAGENT1:
+		case BCLASS_IPPERIALAGENT2:
+		case BCLASS_IPPERIALAGENT3:
+		case BCLASS_CLONETROOPER:
+		case BCLASS_JANGO_NOJP:
+		case BCLASS_HEAVYTROOPER:
+		case BCLASS_PLAYER:
+			client->ps.fd.forcePowerLevel[FP_HEAL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_LEVITATION] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SPEED] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PUSH] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PULL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TELEPATHY] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_GRIP] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_LIGHTNING] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_RAGE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PROTECT] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_ABSORB] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TEAM_HEAL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TEAM_FORCE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_DRAIN] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SEE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SABER_OFFENSE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SABER_DEFENSE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SABERTHROW] = FORCE_LEVEL_0;
+			G_ClearNewForcePowers(client);
+			break;
+			//chewie gets rage
+		case BCLASS_CHEWIE:
+			client->ps.fd.forcePowerLevel[FP_HEAL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_LEVITATION] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SPEED] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PUSH] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PULL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TELEPATHY] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_GRIP] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_LIGHTNING] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PROTECT] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_ABSORB] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TEAM_HEAL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TEAM_FORCE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_DRAIN] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SEE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SABER_OFFENSE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SABER_DEFENSE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SABERTHROW] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_RAGE] = FORCE_LEVEL_3; //chewie gets rage
+			G_ClearNewForcePowers(client);
+			break;
+			//big jumps for the jetpack club
+		case BCLASS_ROCKETTROOPER:
+		case BCLASS_MANDOLORIAN:
+		case BCLASS_MANDOLORIAN1:
+		case BCLASS_MANDOLORIAN2:
+		case BCLASS_TROOPER3:
+		case BCLASS_BOUNTYHUNTER1:
+		case BCLASS_BOBAFETT:
+		case BCLASS_PAZVIZSLA:
+			client->ps.fd.forcePowerLevel[FP_HEAL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_LEVITATION] = FORCE_LEVEL_0; // no Force for the jetpack club (as SP): the normal jump, the jetpack does the height
+			client->ps.fd.forcePowerLevel[FP_SPEED] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PUSH] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PULL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TELEPATHY] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_GRIP] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_LIGHTNING] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_RAGE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PROTECT] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_ABSORB] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TEAM_HEAL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TEAM_FORCE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_DRAIN] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SEE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SABER_OFFENSE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SABER_DEFENSE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SABERTHROW] = FORCE_LEVEL_0;
+			G_ClearNewForcePowers(client);
+			break;
+		case BCLASS_WOOKIE:
+			client->ps.fd.forcePowerLevel[FP_HEAL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_LEVITATION] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SPEED] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PUSH] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PULL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TELEPATHY] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_GRIP] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_LIGHTNING] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_RAGE] = FORCE_LEVEL_3; //chewie gets rage
+			client->ps.fd.forcePowerLevel[FP_PROTECT] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_ABSORB] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TEAM_HEAL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TEAM_FORCE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_DRAIN] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SEE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SABER_OFFENSE] = FORCE_LEVEL_3;
+			client->ps.fd.forcePowerLevel[FP_SABER_DEFENSE] = FORCE_LEVEL_3;
+			client->ps.fd.forcePowerLevel[FP_SABERTHROW] = FORCE_LEVEL_3;
+			G_ClearNewForcePowers(client);
+			break;
+		case BCLASS_WOOKIEMELEE:
+			client->ps.fd.forcePowerLevel[FP_HEAL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_LEVITATION] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SPEED] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PUSH] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PULL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TELEPATHY] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_GRIP] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_LIGHTNING] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_RAGE] = FORCE_LEVEL_3; //chewie gets rage
+			client->ps.fd.forcePowerLevel[FP_PROTECT] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_ABSORB] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TEAM_HEAL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TEAM_FORCE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_DRAIN] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SEE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SABER_OFFENSE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SABER_DEFENSE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SABERTHROW] = FORCE_LEVEL_0;
+			G_ClearNewForcePowers(client);
+			break;
+			//he neads saber powers to be a threat in melee, but no force powers
+		case BCLASS_TUSKEN_RAIDER:
+		case BCLASS_SABERNOFP:
+		case BCLASS_MANDO_SABER_NO_FP_ARMOUR:
+			client->ps.fd.forcePowerLevel[FP_HEAL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_LEVITATION] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SPEED] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PUSH] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PULL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TELEPATHY] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_GRIP] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_LIGHTNING] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_RAGE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_PROTECT] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_ABSORB] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TEAM_HEAL] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_TEAM_FORCE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_DRAIN] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SEE] = FORCE_LEVEL_0;
+			client->ps.fd.forcePowerLevel[FP_SABER_OFFENSE] = FORCE_LEVEL_3;
+			client->ps.fd.forcePowerLevel[FP_SABER_DEFENSE] = FORCE_LEVEL_3;
+			client->ps.fd.forcePowerLevel[FP_SABERTHROW] = FORCE_LEVEL_3; // the saber needs all three to work right
+			G_ClearNewForcePowers(client);
+			break;
+		case BCLASS_PROTOCOL:
+		case BCLASS_R2D2:
+		case BCLASS_R5D2:
+		case BCLASS_GONK:
+		case BCLASS_RANCOR:
+		case BCLASS_WAMPA:
+		case BCLASS_HOWLER:
+		case BCLASS_MINEMONSTER:
+			// MovieDuels (port of SJE MP): droids and creatures have no Force at all (they only had the gunner levels
+			// zeroed before, so a player's own Force setup still knew e.g. push and grip as R2-D2)
+			for (int fp = 0; fp < NUM_FORCE_POWERS; fp++)
+			{
+				client->ps.fd.forcePowerLevel[fp] = FORCE_LEVEL_0;
+			}
+			client->ps.fd.forcePowersKnown = 0;
+			client->ps.fd.forcePowerSelected = 0;
+			break;
+		default:
+			//Read bot.txt or Player FP setup for saber users
+			break;
+		}
+	}
+	// every power the class (or the player's setup) leaves at level 0 is unknown and stopped, and the selected power is
+	// one that is known: a Jedi turned stormtrooper in the Select Character menu keeps no Force (2026-10-13)
+	G_DropUnusableForcePowers(ent);
+
+	if (client->sess.sessionTeam == TEAM_SPECTATOR)
+	{
+		client->ps.stats[STAT_WEAPONS] = 0;
+		client->ps.stats[STAT_HOLDABLE_ITEMS] = 0;
+		client->ps.stats[STAT_HOLDABLE_ITEM] = 0;
+	}
+
+	// nmckenzie: DESERT_SIEGE... or well, siege generally.  This was over-writing the max value, which was NOT good for siege.
+	if (inSiegeWithClass == qfalse)
+	{
+		client->ps.ammo[AMMO_BLASTER] = 500;
+	}
+	client->ps.rocketLockIndex = ENTITYNUM_NONE;
+	client->ps.rocketLockTime = 0;
+	client->ps.genericEnemyIndex = -1;
+
+	G_AddEvent(ent, EV_WEAPINVCHANGE, client->ps.stats[STAT_WEAPONS]);
+
+	if (developer.integer && (BG_ClassIsCreature(client->pers.botclass) || ent->r.svFlags & SVF_BOT))
+	{
+		// MovieDuels: creature/droid class and bot loadouts (developer only)
+		Com_Printf("ClientSpawn: %s class %d model %s: weapons 0x%x weapon %d items 0x%x force known 0x%x bbox %.0f %.0f %.0f / %.0f %.0f %.0f scale %d\n",
+			client->pers.netname, client->pers.botclass, client->modelname, client->ps.stats[STAT_WEAPONS],
+			client->ps.weapon, client->ps.stats[STAT_HOLDABLE_ITEMS], client->ps.fd.forcePowersKnown,
+			ent->r.mins[0], ent->r.mins[1], ent->r.mins[2], ent->r.maxs[0], ent->r.maxs[1], ent->r.maxs[2],
+			client->ps.iModelScale);
+	}
+
+	client->ps.isJediMaster = qfalse;
+
+	if (client->ps.fallingToDeath)
+	{
+		client->ps.fallingToDeath = 0;
+		client->noCorpse = qtrue;
+	}
+
+	//Do per-spawn force power initialization
+	WP_SpawnInitForcePowers(ent);
+
+	ent->reloadTime = 0;
+
+	//set saber_anim_levelBase
+	if (ent->client->saber[0].model[0] && ent->client->saber[1].model[0])
+	{
+		ent->client->ps.fd.saber_anim_levelBase = SS_DUAL;
+	}
+	else if (ent->client->saber[0].numBlades > 1
+		&& WP_SaberCanTurnOffSomeBlades(&ent->client->saber[0]))
+	{
+		ent->client->ps.fd.saber_anim_levelBase = SS_STAFF;
+	}
+	else
+	{
+		ent->client->ps.fd.saber_anim_levelBase = SS_MEDIUM;
+	}
+
+	//set initial saber holstered mode
+	if (ent->client->saber[0].model[0] && ent->client->saber[1].model[0]
+		&& WP_SaberCanTurnOffSomeBlades(&ent->client->saber[1])
+		&& ent->client->ps.fd.saberAnimLevel != SS_DUAL)
+	{
+		//using dual sabers, but not the dual style, turn off blade
+		ent->client->ps.saberHolstered = 1;
+	}
+	else if (ent->client->saber[0].numBlades > 1
+		&& WP_SaberCanTurnOffSomeBlades(&ent->client->saber[0])
+		&& ent->client->ps.fd.saberAnimLevel != SS_STAFF)
+	{
+		//using staff saber, but not the staff style, turn off blade
+		ent->client->ps.saberHolstered = 1;
+	}
+	else
+	{
+		ent->client->ps.saberHolstered = 0;
+	}
+
+	// health will count down towards max_health
+	if (level.gametype == GT_SIEGE &&
+		client->siegeClass != -1 &&
+		bgSiegeClasses[client->siegeClass].starthealth)
+	{
+		//class specifies a start health, so use it
+		ent->health = client->ps.stats[STAT_HEALTH] = bgSiegeClasses[client->siegeClass].starthealth;
+	}
+	else if (level.gametype == GT_DUEL || level.gametype == GT_POWERDUEL)
+	{
+		//only start with 100 health in Duel
+		if (level.gametype == GT_POWERDUEL && client->sess.duelTeam == DUELTEAM_LONE)
+		{
+			if (duel_fraglimit.integer)
+			{
+				ent->health = client->ps.stats[STAT_HEALTH] = client->ps.stats[STAT_MAX_HEALTH] =
+					g_powerDuelStartHealth.integer - (g_powerDuelStartHealth.integer - g_powerDuelEndHealth.integer) *
+					(float)client->sess.wins / (float)duel_fraglimit.integer;
+			}
+			else
+			{
+				ent->health = client->ps.stats[STAT_HEALTH] = client->ps.stats[STAT_MAX_HEALTH] = 150;
+			}
+		}
+		else
+		{
+			ent->health = client->ps.stats[STAT_HEALTH] = client->ps.stats[STAT_MAX_HEALTH] = 100;
+		}
+	}
+	else if (client->ps.stats[STAT_MAX_HEALTH] <= 100)
+	{
+		ent->health = client->ps.stats[STAT_HEALTH] = client->ps.stats[STAT_MAX_HEALTH] * 1.25;
+	}
+	else if (client->ps.stats[STAT_MAX_HEALTH] < 125)
+	{
+		ent->health = client->ps.stats[STAT_HEALTH] = 125;
+	}
+	else
+	{
+		ent->health = client->ps.stats[STAT_HEALTH] = client->ps.stats[STAT_MAX_HEALTH];
+	}
+
+	// Start with a small amount of armor as well.
+	if (level.gametype == GT_SIEGE &&
+		client->siegeClass != -1 /*&&
+		bgSiegeClasses[client->siegeClass].startarmor*/)
+	{
+		//class specifies a start armor amount, so use it
+		client->ps.stats[STAT_ARMOR] = bgSiegeClasses[client->siegeClass].startarmor;
+	}
+	else if (level.gametype == GT_DUEL || level.gametype == GT_POWERDUEL)
+	{
+		//no armor in duel
+		client->ps.stats[STAT_ARMOR] = 0;
+	}
+	else
+	{
+		client->ps.stats[STAT_ARMOR] = client->ps.stats[STAT_MAX_HEALTH] * 0.25;
+	}
+	client->ps.stats[STAT_DODGE] = client->ps.stats[STAT_MAX_DODGE];
+	G_SetOrigin(ent, spawn_origin);
+	VectorCopy(spawn_origin, client->ps.origin);
+
+	// the respawned flag will be cleared after the attack and jump keys come up
+	client->ps.pm_flags |= PMF_RESPAWNED;
+
+	trap->GetUsercmd(client - level.clients, &ent->client->pers.cmd);
+	SetClientViewAngle(ent, spawn_angles);
+
+	// don't allow full run speed for a bit
+	client->ps.pm_flags |= PMF_TIME_KNOCKBACK;
+	client->ps.pm_time = 100;
+
+	client->respawnTime = level.time;
+	client->inactivityTime = level.time + g_inactivity.integer * 1000;
+	client->latched_buttons = 0;
+
+	if (level.intermissiontime)
+	{
+		MoveClientToIntermission(ent);
+	}
+	else
+	{
+		if (ent->client->sess.sessionTeam != TEAM_SPECTATOR)
+		{
+			g_kill_box(ent);
+			if (client->ps.weapon <= WP_NONE && client->ps.stats[STAT_WEAPONS] & ~(1 << WP_NONE))
+			{
+				// (MovieDuels: only when there is a weapon; the weaponless classes - R5, gonk, protocol - keep WP_NONE)
+				client->ps.weapon = WP_BRYAR_PISTOL;
+			}
+
+			client->ps.torsoTimer = client->ps.legsTimer = 0;
+
+			if (client->ps.weapon == WP_SABER)
+			{
+				G_SetAnim(ent, NULL, SETANIM_BOTH, BOTH_STAND1TO2,
+					SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_HOLDLESS, 0);
+			}
+			else
+			{
+				G_SetAnim(ent, NULL, SETANIM_TORSO, TORSO_RAISEWEAP1,
+					SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_HOLDLESS, 0);
+
+				if (client->ps.eFlags & EF3_DUAL_WEAPONS)
+				{
+					client->ps.legsAnim = WeaponReadyAnim2[client->ps.weapon];
+				}
+				else
+				{
+					client->ps.legsAnim = WeaponReadyAnim[client->ps.weapon];
+				}
+			}
+			client->ps.weaponstate = WEAPON_RAISING;
+			client->ps.weaponTime = client->ps.torsoTimer;
+
+			if (g_spawnInvulnerability.integer)
+			{
+				if (!(ent->r.svFlags & SVF_BOT))
+				{
+					client->ps.powerups[PW_INVINCIBLE] = level.time + g_spawnInvulnerability.integer;
+					ent->flags |= FL_GODMODE;
+				}
+				client->ps.eFlags |= EF_INVULNERABLE;
+				client->invulnerableTimer = level.time + g_spawnInvulnerability.integer;
+			}
+
+			// fire the targets of the spawn point
+			UpdatePlayerScriptTarget();
+
+			// positively link the client, even if the command times are weird
+			VectorCopy(ent->client->ps.origin, ent->r.currentOrigin);
+
+			tent = G_TempEntity(ent->client->ps.origin, EV_PLAYER_TELEPORT_IN);
+			tent->s.clientNum = ent->s.clientNum;
+
+			trap->LinkEntity((sharedEntity_t*)ent);
+		}
+	}
+
+	//set teams for NPCs to recognize
+	if (level.gametype == GT_SIEGE)
+	{
+		//Imperial (team1) team is allied with "enemy" NPCs in this mode
+		if (client->sess.sessionTeam == SIEGETEAM_TEAM1)
+		{
+			client->playerTeam = ent->s.teamowner = NPCTEAM_ENEMY;
+			client->enemyTeam = NPCTEAM_PLAYER;
+		}
+		else
+		{
+			client->playerTeam = ent->s.teamowner = NPCTEAM_PLAYER;
+			client->enemyTeam = NPCTEAM_ENEMY;
+		}
+	}
+	else
+	{
+		client->playerTeam = ent->s.teamowner = NPCTEAM_PLAYER;
+		client->enemyTeam = NPCTEAM_ENEMY;
+	}
+
+	// run a client frame to drop exactly to the floor,
+	// initialize animations and other things
+	client->ps.commandTime = level.time - 100;
+	ent->client->pers.cmd.serverTime = level.time;
+	ClientThink(ent - g_entities, NULL);
+
+	// run the presend to set anything else, follow spectators wait
+	// until all clients have been reconnected after map_restart
+	if (ent->client->sess.spectatorState != SPECTATOR_FOLLOW)
+		ClientEndFrame(ent);
+
+	// clear entity state values
+	BG_PlayerStateToEntityState(&client->ps, &ent->s, qtrue);
+
+	//rww - make sure client has a valid icarus instance
+	trap->ICARUS_FreeEnt((sharedEntity_t*)ent);
+	trap->ICARUS_InitEnt((sharedEntity_t*)ent);
+
+	if (!level.intermissiontime)
+	{
+		//we want to use all the spawnpoint's triggers if we're not in intermission.
+		G_UseTargets(spawnPoint, ent);
+		if (level.gametype == GT_SINGLE_PLAYER && spawnPoint)
+		{
+			//remove the target of the spawnpoint to prevent multiple target firings
+			spawnPoint->target = NULL;
+		}
+	}
+
+	Player_CheckBurn(ent);
+	Player_CheckFreeze(ent);
+}
+
+/*
+===========
+ClientDisconnect
+
+Called when a player drops from the server.
+Will not be called between levels.
+
+This should NOT be called directly by any game logic,
+call trap->DropClient(), which will call this and do
+server system housekeeping.
+============
+*/
+extern void G_LeaveVehicle(gentity_t* ent, qboolean con_check);
+
+void G_ClearVote(const gentity_t* ent)
+{
+	if (level.voteTime)
+	{
+		if (ent->client->mGameFlags & PSG_VOTED)
+		{
+			if (ent->client->pers.vote == 1)
+			{
+				level.voteYes--;
+				trap->SetConfigstring(CS_VOTE_YES, va("%i", level.voteYes));
+			}
+			else if (ent->client->pers.vote == 2)
+			{
+				level.voteNo--;
+				trap->SetConfigstring(CS_VOTE_NO, va("%i", level.voteNo));
+			}
+		}
+		ent->client->mGameFlags &= ~(PSG_VOTED);
+		ent->client->pers.vote = 0;
+	}
+}
+
+void G_ClearTeamVote(const gentity_t* ent, const int team)
+{
+	int voteteam = 0;
+
+	if (team == TEAM_RED) voteteam = 0;
+	else if (team == TEAM_BLUE) voteteam = 1;
+	else return;
+
+	if (level.teamVoteTime[voteteam])
+	{
+		if (ent->client->mGameFlags & PSG_TEAMVOTED)
+		{
+			if (ent->client->pers.teamvote == 1)
+			{
+				level.teamVoteYes[voteteam]--;
+				trap->SetConfigstring(CS_TEAMVOTE_YES, va("%i", level.teamVoteYes[voteteam]));
+			}
+			else if (ent->client->pers.teamvote == 2)
+			{
+				level.teamVoteNo[voteteam]--;
+				trap->SetConfigstring(CS_TEAMVOTE_NO, va("%i", level.teamVoteNo[voteteam]));
+			}
+		}
+		ent->client->mGameFlags &= ~(PSG_TEAMVOTED);
+		ent->client->pers.teamvote = 0;
+	}
+}
+
+void ClientDisconnect(const int clientNum)
+{
+	// cleanup if we are kicking a bot that
+	// hasn't spawned yet
+	G_RemoveQueuedBotBegin(clientNum);
+
+	G_Pazaak_ClientDisconnect(clientNum);
+
+	gentity_t* ent = g_entities + clientNum;
+	if (!ent->client || ent->client->pers.connected == CON_DISCONNECTED)
+	{
+		return;
+	}
+
+	int i = 0;
+
+	while (i < NUM_FORCE_POWERS)
+	{
+		if (ent->client->ps.fd.forcePowersActive & 1 << i)
+		{
+			WP_ForcePowerStop(ent, i);
+		}
+		i++;
+	}
+
+	i = TRACK_CHANNEL_1;
+
+	while (i < NUM_TRACK_CHANNELS)
+	{
+		if (ent->client->ps.fd.killSoundEntIndex[i - 50] && ent->client->ps.fd.killSoundEntIndex[i - 50] < MAX_GENTITIES
+			&& ent->client->ps.fd.killSoundEntIndex[i - 50] > 0)
+		{
+			G_MuteSound(ent->client->ps.fd.killSoundEntIndex[i - 50], CHAN_VOICE);
+		}
+		i++;
+	}
+	i = 0;
+
+	G_LeaveVehicle(ent, qtrue);
+
+	if (ent->client->ewebIndex)
+	{
+		gentity_t* eweb = &g_entities[ent->client->ewebIndex];
+
+		ent->client->ps.emplacedIndex = 0;
+		ent->client->ewebIndex = 0;
+		ent->client->ewebHealth = 0;
+		G_FreeEntity(eweb);
+	}
+
+	// stop any following clients
+	for (i = 0; i < level.maxclients; i++)
+	{
+		if (level.clients[i].sess.sessionTeam == TEAM_SPECTATOR
+			&& level.clients[i].sess.spectatorState == SPECTATOR_FOLLOW
+			&& level.clients[i].sess.spectatorClient == clientNum)
+		{
+			StopFollowing(&g_entities[i]);
+		}
+	}
+
+	// send effect if they were completely connected
+	if (ent->client->pers.connected == CON_CONNECTED
+		&& ent->client->sess.sessionTeam != TEAM_SPECTATOR)
+	{
+		gentity_t* tent = G_TempEntity(ent->client->ps.origin, EV_PLAYER_TELEPORT_OUT);
+		tent->s.clientNum = ent->s.clientNum;
+
+		// They don't get to take powerups with them!
+		// Especially important for stuff like CTF flags
+		TossClientItems(ent);
+	}
+
+	G_LogPrintf("ClientDisconnect: %i [%s] (%s) \"%s^7\"\n", clientNum, ent->client->sess.IP, ent->client->pers.guid,
+		ent->client->pers.netname);
+
+	// if we are playing in tourney mode, give a win to the other player and clear his frags for this round
+	if (level.gametype == GT_DUEL && !level.intermissiontime && !level.warmupTime)
+	{
+		if (level.sortedClients[1] == clientNum)
+		{
+			level.clients[level.sortedClients[0]].ps.persistant[PERS_SCORE] = 0;
+			level.clients[level.sortedClients[0]].sess.wins++;
+			client_userinfo_changed(level.sortedClients[0]);
+		}
+		else if (level.sortedClients[0] == clientNum)
+		{
+			level.clients[level.sortedClients[1]].ps.persistant[PERS_SCORE] = 0;
+			level.clients[level.sortedClients[1]].sess.wins++;
+			client_userinfo_changed(level.sortedClients[1]);
+		}
+	}
+
+	if (level.gametype == GT_DUEL && ent->client->sess.sessionTeam == TEAM_FREE && level.intermissiontime)
+	{
+		trap->SendConsoleCommand(EXEC_APPEND, "map_restart 0\n");
+		level.restarted = qtrue;
+		level.changemap = NULL;
+		level.intermissiontime = 0;
+	}
+
+	if (ent->ghoul2 && trap->G2API_HaveWeGhoul2Models(ent->ghoul2))
+	{
+		trap->G2API_CleanGhoul2Models(&ent->ghoul2);
+	}
+	i = 0;
+	while (i < MAX_SABERS)
+	{
+		if (ent->client->weaponGhoul2[i] && trap->G2API_HaveWeGhoul2Models(ent->client->weaponGhoul2[i]))
+		{
+			trap->G2API_CleanGhoul2Models(&ent->client->weaponGhoul2[i]);
+		}
+		i++;
+	}
+
+	G_ClearVote(ent);
+	G_ClearTeamVote(ent, ent->client->sess.sessionTeam);
+
+	trap->UnlinkEntity((sharedEntity_t*)ent);
+	ent->s.modelIndex = 0;
+	ent->inuse = qfalse;
+	ent->classname = "disconnected";
+	ent->client->pers.connected = CON_DISCONNECTED;
+	ent->client->ps.persistant[PERS_TEAM] = TEAM_FREE;
+	ent->client->sess.sessionTeam = TEAM_FREE;
+	ent->r.contents = 0;
+	ent->client->pers.plugindetect = qfalse;
+	//============================grapplemod===================
+	if (ent->client->hook)
+	{
+		// free it!
+		Weapon_HookFree(ent->client->hook);
+	}
+	if (ent->client->stun)
+	{
+		// free it!
+		Weapon_StunFree(ent->client->stun);
+	}
+
+	if (ent->client->holdingObjectiveItem > 0)
+	{
+		//carrying a siege objective item - make sure it updates and removes itself from us now in case this is an instant death-respawn situation
+		gentity_t* objectiveItem = &g_entities[ent->client->holdingObjectiveItem];
+
+		if (objectiveItem->inuse && objectiveItem->think)
+		{
+			objectiveItem->think(objectiveItem);
+		}
+	}
+
+	trap->SetConfigstring(CS_PLAYERS + clientNum, "");
+
+	CalculateRanks();
+
+	if (ent->r.svFlags & SVF_BOT)
+	{
+		BotAIShutdownClient(clientNum);
+	}
+
+	G_ClearClientLog(clientNum);
+}
+
+qboolean g_standard_humanoid(gentity_t* self)
+{
+	char gla_name[MAX_QPATH];
+	char resolvedGLA[MAX_QPATH];
+
+	if (!self || !self->ghoul2)
+	{
+		return qfalse;
+	}
+
+	trap->G2API_GetGLAName(&self->ghoul2, 0, gla_name);
+
+	if (!gla_name[0])
+	{
+		return qfalse;
+	}
+
+	// Normalize GLA path
+	Q_strncpyz(resolvedGLA, gla_name, sizeof(resolvedGLA));
+
+	// If this GLA matches any humanoid prefix, force to MP humanoid
+	for (int i = 0; i < ARRAY_LEN(humanoid_prefixes); i++)
+	{
+		const char* prefix = humanoid_prefixes[i];
+
+		if (!Q_strncmp(resolvedGLA, prefix, strlen(prefix)))
+		{
+			Q_strncpyz(resolvedGLA,
+				"models/players/_humanoid/_humanoid",
+				sizeof(resolvedGLA));
+			return qtrue;
+		}
+	}
+
+	return qfalse;
+}
+
+qboolean LMS_EnoughPlayers()
+{
+	//checks to see if there's enough players in game to enable LMS rules
+	if (level.numNonSpectatorClients < 2)
+	{
+		//definitely not enough.
+		return qfalse;
+	}
+
+	if (level.gametype >= GT_TEAM
+		&& (TeamCount(-1, TEAM_RED) == 0 || TeamCount(-1, TEAM_BLUE) == 0))
+	{
+		//have to have at least one player on each team to be able to play LMS
+		return qfalse;
+	}
+
+	return qtrue;
+}
+
+qboolean MovieDuels_AllPlayersHaveClientPlugin(void)
+{
+	for (int i = 0; i < level.maxclients; i++)
+	{
+		if (g_entities[i].inuse && !g_entities[i].client->pers.MovieDuels_Clientplugin)
+		{
+			//a live player that doesn't have the plugin
+			return qfalse;
+		}
+	}
+
+	return qtrue;
+}

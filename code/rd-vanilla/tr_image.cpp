@@ -936,7 +936,6 @@ static image_t* R_FindImageFile_NoLoad(const char* name, const qboolean mipmap, 
 	return nullptr;
 }
 
-
 static int R_NearestPowerOf2(const int v)
 {
 	int p = 1;

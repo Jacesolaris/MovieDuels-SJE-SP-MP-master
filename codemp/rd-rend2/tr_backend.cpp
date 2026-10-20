@@ -3505,4 +3505,4 @@ void RB_ExecuteRenderCommands(const void* data) {
 			return;
 		}
 	}
-}
+}

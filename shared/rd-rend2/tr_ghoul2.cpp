@@ -3764,9 +3764,9 @@ void R_MeshClothShutdown()
 
 // Body capsules the cloth collides with, from _humanoid bone names.
 static const char* const mcColliderBones[][2] = {
-	{ "pelvis", "thoracic" }, { "thoracic", "cervical" }, { "cervical", "cranium" },
-	{ "lfemurYZ", "ltibia" }, { "ltibia", "ltalus" }, { "rfemurYZ", "rtibia" }, { "rtibia", "rtalus" },
-	{ "lhumerus", "lradius" }, { "lradius", "lhand" }, { "rhumerus", "rradius" }, { "rradius", "rhand" }
+	{ "pelvis", "thoracic" },{ "thoracic", "cervical" },{ "cervical", "cranium" },
+	{ "lfemurYZ", "ltibia" },{ "ltibia", "ltalus" },{ "rfemurYZ", "rtibia" },{ "rtibia", "rtalus" },
+	{ "lhumerus", "lradius" },{ "lradius", "lhand" },{ "rhumerus", "rradius" },{ "rradius", "rhand" }
 };
 static const float mcColliderRadius[] = { 6.0f, 4.5f, 3.8f, 5.0f, 3.8f, 5.0f, 3.8f, 2.5f, 2.2f, 2.5f, 2.2f };
 static const int MC_NUM_COLLIDERS = sizeof(mcColliderRadius) / sizeof(mcColliderRadius[0]);
@@ -4111,7 +4111,7 @@ static mcR2Inst_t* RB_MeshClothUpdate(CRenderableSurface* surf, const mdxmSurfac
 	prm.airDrag = r_meshClothAirDrag->value;
 	{
 		float w[3] = { 0, 0, 0 };
-		sscanf( r_meshClothWind->string, "%f %f %f", &w[0], &w[1], &w[2] );
+		sscanf(r_meshClothWind->string, "%f %f %f", &w[0], &w[1], &w[2]);
 		prm.wind[0] = w[0]; prm.wind[1] = w[1]; prm.wind[2] = w[2];
 	}
 	prm.gust = r_meshClothGust->value;
@@ -5544,4 +5544,4 @@ qboolean R_LoadMDXA(model_t* mod, void* buffer, const char* mod_name, qboolean& 
 	}
 
 	return qtrue;
-}
+}

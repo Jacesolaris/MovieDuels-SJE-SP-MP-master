@@ -2348,4 +2348,4 @@ static void RB_DrawGlowOverlay()
 	qglPopMatrix();
 
 	qglEnable(GL_DEPTH_TEST);
-}
+}

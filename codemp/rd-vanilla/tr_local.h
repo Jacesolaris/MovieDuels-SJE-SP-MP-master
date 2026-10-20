@@ -1225,7 +1225,7 @@ extern cvar_t* r_meshClothWind;
 extern cvar_t* r_meshClothGust;
 void R_MeshClothLoadConfig();
 void R_MeshClothShutdown();
-						// controls shadows: 0 = none, 1 = blur, 2 = stencil, 3 = black planar projection
+// controls shadows: 0 = none, 1 = blur, 2 = stencil, 3 = black planar projection
 extern	cvar_t* r_flares;						// light flares
 
 extern	cvar_t* r_intensity;

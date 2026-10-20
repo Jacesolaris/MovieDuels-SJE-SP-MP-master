@@ -2297,4 +2297,4 @@ void RB_EndSurface(void) {
 	glState.genShadows = qfalse;
 
 	GLimp_LogComment("----------\n");
-}
+}

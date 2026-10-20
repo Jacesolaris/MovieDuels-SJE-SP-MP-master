@@ -1551,14 +1551,13 @@ using consoleCommand_t = struct consoleCommand_s {
 	xcommand_t	func;
 };
 
-
 // meshcloth_blast [strength] [radius]: test explosion 96 units in front of the camera
-static void R_MeshClothBlast_f( void ) {
-	const float strength = ri->Cmd_Argc() > 1 ? (float)atof( ri->Cmd_Argv( 1 ) ) : 600.0f;
-	const float radius = ri->Cmd_Argc() > 2 ? (float)atof( ri->Cmd_Argv( 2 ) ) : 200.0f;
+static void R_MeshClothBlast_f(void) {
+	const float strength = ri->Cmd_Argc() > 1 ? (float)atof(ri->Cmd_Argv(1)) : 600.0f;
+	const float radius = ri->Cmd_Argc() > 2 ? (float)atof(ri->Cmd_Argv(2)) : 200.0f;
 	float c[3];
-	for ( int k = 0; k < 3; k++ ) c[k] = tr.refdef.vieworg[k] + tr.refdef.viewaxis[0][k] * 96.0f;
-	MC_Blast( c, strength, radius );
+	for (int k = 0; k < 3; k++) c[k] = tr.refdef.vieworg[k] + tr.refdef.viewaxis[0][k] * 96.0f;
+	MC_Blast(c, strength, radius);
 }
 
 static consoleCommand_t	commands[] = {

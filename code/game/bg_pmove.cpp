@@ -5424,7 +5424,7 @@ void G_StartRoll(gentity_t* ent, const int anim)
 
 static qboolean PM_TryRoll()
 {
-	constexpr float roll_dist = 192; //was 64;
+	constexpr float rollDist = 192; //was 64;
 
 	if (PM_SaberInAttack(pm->ps->saberMove) || PM_SaberInSpecialAttack(pm->ps->torsoAnim)
 		|| PM_SpinningSaberAnim(pm->ps->legsAnim)
@@ -5483,19 +5483,19 @@ static qboolean PM_TryRoll()
 		{
 			// backward roll
 			anim = BOTH_ROLL_B;
-			VectorMA(pm->ps->origin, -roll_dist, fwd, traceto);
+			VectorMA(pm->ps->origin, -rollDist, fwd, traceto);
 		}
 		else if (npc->npc_roll_direction == EVASION_ROLL_DIR_RIGHT)
 		{
 			//right
 			anim = BOTH_ROLL_R;
-			VectorMA(pm->ps->origin, roll_dist, right, traceto);
+			VectorMA(pm->ps->origin, rollDist, right, traceto);
 		}
 		else if (npc->npc_roll_direction == EVASION_ROLL_DIR_LEFT)
 		{
 			//left
 			anim = BOTH_ROLL_L;
-			VectorMA(pm->ps->origin, -roll_dist, right, traceto);
+			VectorMA(pm->ps->origin, -rollDist, right, traceto);
 		}
 		// No matter what, re-initialize the roll flag, so we dont end up with npcs rolling all around the map :)
 		npc->npc_roll_start = qfalse;
@@ -5505,37 +5505,38 @@ static qboolean PM_TryRoll()
 		if (pm->ps->pm_flags & PMF_BACKWARDS_RUN)
 		{
 			anim = BOTH_ROLL_B;
-			VectorMA(pm->ps->origin, -roll_dist, fwd, traceto);
+			VectorMA(pm->ps->origin, -rollDist, fwd, traceto);
 		}
 		else
 		{
 			if (pm->ps->weapon == WP_SABER)
 			{
 				anim = BOTH_ROLL_F;
-				VectorMA(pm->ps->origin, roll_dist, fwd, traceto);
+				VectorMA(pm->ps->origin, rollDist, fwd, traceto);
 			}
 			else if (pm->ps->weapon == WP_MELEE)
 			{
 				anim = BOTH_ROLL_F2;
-				VectorMA(pm->ps->origin, roll_dist, fwd, traceto);
+				VectorMA(pm->ps->origin, rollDist, fwd, traceto);
 			}
 			else
 			{
 				//GUNNERS WILL DO THIS
-				anim = BOTH_ROLL_F1;
-				VectorMA(pm->ps->origin, roll_dist, fwd, traceto);
+				anim = BOTH_ROLL_F;
+				//anim = BOTH_ROLL_F1;
+				VectorMA(pm->ps->origin, rollDist, fwd, traceto);
 			}
 		}
 	}
 	else if (pm->cmd.rightmove > 0)
 	{
 		anim = BOTH_ROLL_R;
-		VectorMA(pm->ps->origin, roll_dist, right, traceto);
+		VectorMA(pm->ps->origin, rollDist, right, traceto);
 	}
 	else if (pm->cmd.rightmove < 0)
 	{
 		anim = BOTH_ROLL_L;
-		VectorMA(pm->ps->origin, -roll_dist, right, traceto);
+		VectorMA(pm->ps->origin, -rollDist, right, traceto);
 	}
 	else
 	{
@@ -5623,7 +5624,7 @@ static qboolean PM_TryRoll()
 
 static qboolean pm_try_roll_md()
 {
-	constexpr float roll_dist = 192; //was 64;
+	constexpr float rollDist = 192; //was 64;
 
 	if (PM_SaberInAttack(pm->ps->saberMove) || PM_SaberInSpecialAttack(pm->ps->torsoAnim)
 		|| PM_SpinningSaberAnim(pm->ps->legsAnim)
@@ -5685,19 +5686,19 @@ static qboolean pm_try_roll_md()
 		{
 			// backward roll
 			anim = BOTH_ROLL_B;
-			VectorMA(pm->ps->origin, -roll_dist, fwd, traceto);
+			VectorMA(pm->ps->origin, -rollDist, fwd, traceto);
 		}
 		else if (npc->npc_roll_direction == EVASION_ROLL_DIR_RIGHT)
 		{
 			//right
 			anim = BOTH_ROLL_R;
-			VectorMA(pm->ps->origin, roll_dist, right, traceto);
+			VectorMA(pm->ps->origin, rollDist, right, traceto);
 		}
 		else if (npc->npc_roll_direction == EVASION_ROLL_DIR_LEFT)
 		{
 			//left
 			anim = BOTH_ROLL_L;
-			VectorMA(pm->ps->origin, -roll_dist, right, traceto);
+			VectorMA(pm->ps->origin, -rollDist, right, traceto);
 		}
 		// No matter what, re-initialize the roll flag, so we dont end up with npcs rolling all around the map :)
 		npc->npc_roll_start = qfalse;
@@ -5707,23 +5708,23 @@ static qboolean pm_try_roll_md()
 		if (pm->ps->pm_flags & PMF_BACKWARDS_RUN)
 		{
 			anim = BOTH_ROLL_B;
-			VectorMA(pm->ps->origin, -roll_dist, fwd, traceto);
+			VectorMA(pm->ps->origin, -rollDist, fwd, traceto);
 		}
 		else
 		{
 			anim = BOTH_ROLL_F;
-			VectorMA(pm->ps->origin, roll_dist, fwd, traceto);
+			VectorMA(pm->ps->origin, rollDist, fwd, traceto);
 		}
 	}
 	else if (pm->cmd.rightmove > 0)
 	{
 		anim = BOTH_ROLL_R;
-		VectorMA(pm->ps->origin, roll_dist, right, traceto);
+		VectorMA(pm->ps->origin, rollDist, right, traceto);
 	}
 	else if (pm->cmd.rightmove < 0)
 	{
 		anim = BOTH_ROLL_L;
-		VectorMA(pm->ps->origin, -roll_dist, right, traceto);
+		VectorMA(pm->ps->origin, -rollDist, right, traceto);
 	}
 	else
 	{

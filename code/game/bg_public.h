@@ -40,6 +40,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define DOUBLE_JUMP_MAX_RISE	(JUMP_VELOCITY * 0.5f)	// double jump: only while rising slower than this (second half of the rise, never falling)
 #define AIR_DASH_SPEED			400.0f		// air dash (Jedi Survivor style): horizontal speed of the dash
 #define AIR_DASH_TIME			250			// air dash: ms it holds that speed and the height (then falls normally)
+#define AIR_DASH_MIN_HEIGHT		24.0f		// air dash: only this high above the ground (just above a step, so running down steps doesn't air dash)
 #define AIR_WALL_RUN_REACH		28.0f		// wall-run from the air: a wall this close to the side catches the player
 #define AIR_WALL_RUN_MIN_SPEED	150.0f		// wall-run from the air: horizontal speed needed
 #define AIR_WALL_RUN_MAX_FALL	300.0f		// wall-run from the air: not when falling faster than this

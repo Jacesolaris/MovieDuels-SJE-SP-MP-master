@@ -76,6 +76,7 @@ extern qboolean manual_melee_dodging(const gentity_t* defender);
 extern qboolean PM_SaberInAttackPure(int move);
 extern int IsPressingDashButton(const gentity_t* self);
 extern void ForceSpeedDash(gentity_t* self);
+extern void ForceSpeedHop(gentity_t* self);
 static qboolean s_dashHeld[MAX_CLIENTS]; // the dash button is still held since the last dash (one dash per press)
 extern qboolean PM_StandingAnim(int anim);
 extern qboolean PM_InKnockDownOnly(int anim);
@@ -5681,7 +5682,14 @@ static void ClientThink_real(gentity_t* ent)
 					{
 						client->ps.communicatingflags |= (1 << CF_DASHING);
 					}
-					ForceSpeedDash(ent); // boost now, as SP: a tap is often released before the next force update
+					if (ent->client->ps.fd.forcePowerLevel[FP_SABER_OFFENSE] > FORCE_LEVEL_0)
+					{
+						ForceSpeedDash(ent);
+					}
+					else
+					{
+						ForceSpeedHop(ent);
+					} // boost now, as SP: a tap is often released before the next force update
 				}
 				else if ((level.time - client->ps.dashlaststartTime) >= 10)
 				{
@@ -5703,7 +5711,14 @@ static void ClientThink_real(gentity_t* ent)
 					{
 						client->ps.communicatingflags |= (1 << CF_DASHING);
 					}
-					ForceSpeedDash(ent); // boost now, as SP: a tap is often released before the next force update
+					if (ent->client->ps.fd.forcePowerLevel[FP_SABER_OFFENSE] > FORCE_LEVEL_0)
+					{
+						ForceSpeedDash(ent);
+					}
+					else
+					{
+						ForceSpeedHop(ent);
+					} // boost now, as SP: a tap is often released before the next force update
 				}
 				else if ((level.time - client->ps.dashlaststartTime) >= 2500)
 				{

@@ -10580,7 +10580,8 @@ static int pm_try_roll(void)
 			else
 			{
 				//GUNNERS WILL DO THIS
-				anim = BOTH_ROLL_F1;
+				anim = BOTH_ROLL_F;
+				//anim = BOTH_ROLL_F1;
 				VectorMA(pm->ps->origin, rollDist, fwd, traceto);
 			}
 		}

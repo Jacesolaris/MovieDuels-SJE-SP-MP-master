@@ -132,6 +132,7 @@ animFlags_t BG_AnimStyleFlags(int animStyle);
 #define AIR_DASH_SPEED			400.0f		// air dash (Jedi Survivor style): horizontal speed of the dash
 #define AIR_DASH_TIME			250			// air dash: ms it holds that speed and the height (then falls normally)
 #define AIR_WALL_RUN_REACH		28.0f		// wall-run from the air: a wall this close to the side catches the player
+#define AIR_DASH_MIN_HEIGHT		24.0f		// air dash: only this high above the ground (just above a step, so running down steps doesn't air dash)
 #define AIR_WALL_RUN_MIN_SPEED	150.0f		// wall-run from the air: horizontal speed needed
 #define AIR_WALL_RUN_MAX_FALL	300.0f		// wall-run from the air: not when falling faster than this
 
@@ -146,7 +147,7 @@ animFlags_t BG_AnimStyleFlags(int animStyle);
 #define DEFAULT_REDTEAM_NAME	"Empire"
 #define DEFAULT_BLUETEAM_NAME	"Rebellion"
 
-#define CURRENT_MD_CLIENTVERSION		"Day-20,Month-10,Year-26,BuildNum-01" // build date
+#define CURRENT_MD_CLIENTVERSION		"Day-20,Month-10,Year-26,BuildNum-02" // build date
 
 #define	STEPSIZE		18
 

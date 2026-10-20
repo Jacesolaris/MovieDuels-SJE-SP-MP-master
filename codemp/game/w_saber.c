@@ -5463,7 +5463,8 @@ qboolean G_DoDodge(gentity_t* self, gentity_t* shooter, vec3_t dmg_origin, int h
 					}
 					else
 					{
-						rolled = BOTH_ROLL_F1;
+						rolled = BOTH_ROLL_F;
+						//rolled = BOTH_ROLL_F1;
 					}
 				}
 				else if (rolled == BOTH_HOP_R)
@@ -6039,7 +6040,8 @@ static qboolean G_DoSaberDodge(gentity_t* dodger, gentity_t* attacker, vec3_t dm
 					}
 					else
 					{
-						rolled = BOTH_ROLL_F1;
+						rolled = BOTH_ROLL_F;
+						//rolled = BOTH_ROLL_F1;
 					}
 				}
 				else if (rolled == BOTH_HOP_R)

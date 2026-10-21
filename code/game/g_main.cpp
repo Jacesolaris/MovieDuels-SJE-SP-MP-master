@@ -990,7 +990,7 @@ static void G_InitCvars()
 	g_ActivateAnimationStyleSetting = gi.cvar("g_activateanimationstyle", "0", CVAR_ARCHIVE | CVAR_SAVEGAME);
 	g_ActivateAnimationStyle = gi.cvar(MD_ANIMSTYLE_ACTIVE_CVAR, "0", CVAR_ROM); // set by G_LatchAnimationStyle
 	g_PlayerAnimationStyle = gi.cvar("g_playeranimationstyle", "default", CVAR_ARCHIVE | CVAR_SAVEGAME);
-	md_update = gi.cvar("md_update", "8", CVAR_ROM); // default 8 so a start without the main menu (devmap) is Update 8 too
+	md_update = gi.cvar("md_update", "9", CVAR_ROM); // default 9 so a start without the main menu (devmap) is Update 9 too
 	// CVAR_INIT will be used for release, but CVAR_ARCHIVE will be used for testing and development.
 	//This is to allow the user to change the animation style without having to restart the game.
 

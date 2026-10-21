@@ -86,8 +86,10 @@ void MC_Clear(void);
 // True if this surface is configured as cloth (cached per surface).
 // surface is a const mdxmSurface_t* (passed opaquely: the .glm structs are
 // unnamed types, which can't cross translation units in C++ signatures).
-// modelName is the .glm's internal name, e.g. "models/players/palpatine/model".
-bool MC_IsClothSurface(const void* surface, const char* modelName, const char* surfaceName);
+// modelName is the path the model was loaded from, e.g. "models/players/palpatine/model.glm"
+// (SJE: the folder decides the config line, so stock models work whatever their internal name).
+// altModelName (optional) is the .glm's internal name, tried if modelName's folder has no line.
+bool MC_IsClothSurface(const void* surface, const char* modelName, const char* surfaceName, const char* altModelName = nullptr);
 
 // Replace the free vertices of an already-skinned surface with simulated
 // positions. xyz/normal point at the surface's first vertex in model space

@@ -3049,6 +3049,17 @@ static const float (*MC_BoneFn(void* ctx, const int boneIndex))[4]
 	return static_cast<CBoneCache*>(ctx)->EvalRender(boneIndex).matrix;
 }
 
+// SJE: cloth config is matched by the folder the model was loaded from. The bone
+// cache knows its .glm model; only trust it if it really owns this surface's header.
+static const char* MC_ModelPath(const CBoneCache* bones, const mdxmHeader_t* mdxm)
+{
+	if (bones && bones->mod && bones->mod->mdxm == mdxm && bones->mod->name[0])
+	{
+		return bones->mod->name;
+	}
+	return mdxm->name;
+}
+
 static void RB_MeshClothApply(CRenderableSurface* surf, const mdxmSurface_t* surface)
 {
 	CBoneCache* bones = surf->boneCache;
@@ -3064,7 +3075,7 @@ static void RB_MeshClothApply(CRenderableSurface* surf, const mdxmSurface_t* sur
 	VectorCopy(ent->e.axis[2], axis[2]);
 
 	// capsules: posed bone origin = skin matrix * bind position, then to world
-	mcCapsule_t caps[MC_NUM_COLLIDERS + 2];
+	mcCapsule_t caps[MC_NUM_COLLIDERS + 2]{};
 	int ncaps = 0;
 	const mcBoneLookup_t* lk = MC_Lookup(bones->header);
 	for (int k = 0; k < MC_NUM_COLLIDERS; k++)
@@ -3117,9 +3128,19 @@ static void RB_MeshClothApply(CRenderableSurface* surf, const mdxmSurface_t* sur
 	prm.maxAccel = r_meshClothMaxAccel->value;
 	prm.airDrag = r_meshClothAirDrag->value;
 	{
-		float w[3] = { 0, 0, 0 };
-		sscanf(r_meshClothWind->string, "%f %f %f", &w[0], &w[1], &w[2]);
-		prm.wind[0] = w[0]; prm.wind[1] = w[1]; prm.wind[2] = w[2];
+		const int parsed = sscanf(
+			r_meshClothWind->string,
+			"%f %f %f",
+			&prm.wind[0],
+			&prm.wind[1],
+			&prm.wind[2]);
+
+		if (parsed < 3)
+		{
+			prm.wind[0] = 0.0f;
+			prm.wind[1] = 0.0f;
+			prm.wind[2] = 0.0f;
+		}
 	}
 	prm.gust = r_meshClothGust->value;
 	prm.timeSec = 0.0f;
@@ -3450,7 +3471,7 @@ void RB_SurfaceGhoul(CRenderableSurface* surf)
 		const auto mdxm = reinterpret_cast<const mdxmHeader_t*>(reinterpret_cast<const byte*>(surface) + surface->ofsHeader);
 		const auto ho = reinterpret_cast<const mdxmHierarchyOffsets_t*>(reinterpret_cast<const byte*>(mdxm) + sizeof(mdxmHeader_t));
 		const auto sh = reinterpret_cast<const mdxmSurfHierarchy_t*>(reinterpret_cast<const byte*>(ho) + ho->offsets[surface->thisSurfaceIndex]);
-		if (MC_IsClothSurface(surface, mdxm->name, sh->name))
+		if (MC_IsClothSurface(surface, MC_ModelPath(surf->boneCache, mdxm), sh->name, mdxm->name))
 		{
 			RB_MeshClothApply(surf, surface);
 		}

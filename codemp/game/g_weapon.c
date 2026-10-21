@@ -3026,13 +3026,13 @@ static void StasismissileExplode(gentity_t* self)
 }
 #endif
 
+extern void G_StasisMissileThink(gentity_t* missile);
 //----------------------------------------------
 void wp_stasis_missile_blow(gentity_t* ent)
 //----------------------------------------------
 {
 	// a missile held by Force Stasis, every frame (g_missile.c G_StasisMissile): touched it goes off, its time up it
 	// flies on
-	extern void G_StasisMissileThink(gentity_t * missile);
 	G_StasisMissileThink(ent);
 }
 

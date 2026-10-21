@@ -3850,6 +3850,10 @@ static void MC_FreeRend2Buffers()
 
 static mcR2Surf_t* MC_R2Surface(const mdxmSurface_t* surface)
 {
+	if (!surface)
+	{
+		return nullptr;
+	}
 	auto it = mcR2Surfs.find(surface);
 	if (it != mcR2Surfs.end() && it->second.sigVerts == surface->numVerts &&
 		it->second.sigTris == surface->numTriangles && it->second.sigOfsVerts == surface->ofsVerts)
@@ -4021,7 +4025,7 @@ static mcR2Inst_t* RB_MeshClothUpdate(CRenderableSurface* surf, const mdxmSurfac
 	VectorCopy(ent->e.axis[2], axis[2]);
 
 	// capsules: posed bone origin = skin matrix * bind position, then to world
-	mcCapsule_t caps[MC_NUM_COLLIDERS + 2];
+	mcCapsule_t caps[MC_NUM_COLLIDERS + 2]{};
 	int ncaps = 0;
 	const mcBoneLookup_t* lk = MC_Lookup(bones->header);
 	for (int k = 0; k < MC_NUM_COLLIDERS; k++)
@@ -4110,9 +4114,19 @@ static mcR2Inst_t* RB_MeshClothUpdate(CRenderableSurface* surf, const mdxmSurfac
 	prm.maxAccel = r_meshClothMaxAccel->value;
 	prm.airDrag = r_meshClothAirDrag->value;
 	{
-		float w[3] = { 0, 0, 0 };
-		sscanf(r_meshClothWind->string, "%f %f %f", &w[0], &w[1], &w[2]);
-		prm.wind[0] = w[0]; prm.wind[1] = w[1]; prm.wind[2] = w[2];
+		const int parsed = sscanf(
+			r_meshClothWind->string,
+			"%f %f %f",
+			&prm.wind[0],
+			&prm.wind[1],
+			&prm.wind[2]);
+
+		if (parsed < 3)
+		{
+			prm.wind[0] = 0.0f;
+			prm.wind[1] = 0.0f;
+			prm.wind[2] = 0.0f;
+		}
 	}
 	prm.gust = r_meshClothGust->value;
 	prm.timeSec = 0.0f;
@@ -4167,6 +4181,19 @@ static mcR2Inst_t* RB_MeshClothUpdate(CRenderableSurface* surf, const mdxmSurfac
 
 // Draws a cloth surface from its own buffers. Returns false to let
 // RB_SurfaceGhoul draw it normally.
+// SJE: cloth config is matched by the folder the model was loaded from. The bone
+// cache knows its .glm model; only trust it if it really owns this surface's header.
+static const char* MC_ModelPath(const CBoneCache* bones, const mdxmHeader_t* mdxm)
+{
+	if (bones && bones->mod && bones->mod->data.glm && bones->mod->data.glm->header == mdxm && bones->mod->name[0])
+	{
+		return bones->mod->name;
+	}
+	return mdxm->name;
+}
+
+// Draws a cloth surface from its own buffers. Returns false to let
+// RB_SurfaceGhoul draw it normally.
 static bool RB_MeshClothDraw(CRenderableSurface* surf)
 {
 	if (!r_meshCloth || !r_meshCloth->integer || !surf->surfaceData)
@@ -4183,7 +4210,7 @@ static bool RB_MeshClothDraw(CRenderableSurface* surf)
 	const auto mdxm = reinterpret_cast<const mdxmHeader_t*>(reinterpret_cast<const byte*>(surface) + surface->ofsHeader);
 	const auto ho = reinterpret_cast<const mdxmHierarchyOffsets_t*>(reinterpret_cast<const byte*>(mdxm) + sizeof(mdxmHeader_t));
 	const auto sh = reinterpret_cast<const mdxmSurfHierarchy_t*>(reinterpret_cast<const byte*>(ho) + ho->offsets[surface->thisSurfaceIndex]);
-	if (!MC_IsClothSurface(surface, mdxm->name, sh->name))
+	if (!MC_IsClothSurface(surface, MC_ModelPath(surf->boneCache, mdxm), sh->name, mdxm->name))
 	{
 		return false;
 	}

@@ -41,8 +41,14 @@ R_MDRCullModel
 =============
 */
 
+#ifdef REND2_SP
 static int R_MDRCullModel(mdrHeader_t* header, trRefEntity_t* ent) {
 	vec3_t		bounds[2];
+#else // !REND2_SP
+static int R_MDRCullModel(mdrHeader_t* header, trRefEntity_t* ent)
+{
+	vec3_t		bounds[2]{};
+#endif // REND2_SP
 	mdrFrame_t* oldFrame = nullptr, * newFrame = nullptr;
 	int			i = 0, frameSize = 0;
 
@@ -135,7 +141,12 @@ R_MDRComputeFogNum
 =================
 */
 
+#ifdef REND2_SP
 int R_MDRComputeFogNum(mdrHeader_t* header, trRefEntity_t* ent) {
+#else // !REND2_SP
+static int R_MDRComputeFogNum(mdrHeader_t* header, trRefEntity_t* ent)
+{
+#endif // REND2_SP
 	int				i = 0, j = 0;
 	float			frameRadius = 0.0f;
 	fog_t* fog = nullptr;
@@ -249,9 +260,15 @@ void R_MDRAddAnimSurfaces(trRefEntity_t* ent, int entityNum)
 		|| (ent->e.frame < 0)
 		|| (ent->e.oldframe >= header->numFrames)
 		|| (ent->e.oldframe < 0))
+#ifdef REND2_SP
 	{
 		ri.Printf(PRINT_DEVELOPER, "R_MDRAddAnimSurfaces: no such frame %d to %d for '%s'\n",
 			ent->e.oldframe, ent->e.frame, tr.currentModel->name);
+#else // !REND2_SP
+	{
+		ri->Printf(PRINT_DEVELOPER, "R_MDRAddAnimSurfaces: no such frame %d to %d for '%s'\n",
+			ent->e.oldframe, ent->e.frame, tr.currentModel->name);
+#endif // REND2_SP
 		ent->e.frame = 0;
 		ent->e.oldframe = 0;
 	}
@@ -318,7 +335,11 @@ void R_MDRAddAnimSurfaces(trRefEntity_t* ent, int entityNum)
 			&& !(ent->e.renderfx & (RF_NOSHADOW | RF_DEPTHHACK))
 			&& shader->sort == SS_OPAQUE)
 		{
+#ifdef REND2_SP
 			R_AddDrawSurf((surfaceType_t*)surface, entityNum, tr.shadowShader, 0, qfalse, R_IsPostRenderEntity(ent), 0);
+#else // !REND2_SP
+			R_AddDrawSurf(reinterpret_cast<surfaceType_t*>(surface), entityNum, tr.shadowShader, 0, qfalse, R_IsPostRenderEntity(ent), 0);
+#endif // REND2_SP
 		}
 
 		// projection shadows work fine with personal models
@@ -327,11 +348,21 @@ void R_MDRAddAnimSurfaces(trRefEntity_t* ent, int entityNum)
 			&& (ent->e.renderfx & RF_SHADOW_PLANE)
 			&& shader->sort == SS_OPAQUE)
 		{
+#ifdef REND2_SP
 			R_AddDrawSurf((surfaceType_t*)surface, entityNum, tr.projectionShadowShader, 0, qfalse, R_IsPostRenderEntity(ent), 0);
+#else // !REND2_SP
+			R_AddDrawSurf(reinterpret_cast<surfaceType_t*>(surface), entityNum, tr.projectionShadowShader, 0, qfalse, R_IsPostRenderEntity(ent), 0);
+#endif // REND2_SP
 		}
 
 		if (!personalModel)
+#ifndef REND2_SP
+		{
+#endif // !REND2_SP
 			R_AddDrawSurf((surfaceType_t*)surface, entityNum, shader, fogNum, qfalse, R_IsPostRenderEntity(ent), cubemapIndex);
+#ifndef REND2_SP
+		}
+#endif // !REND2_SP
 
 		surface = (mdrSurface_t*)((byte*)surface + surface->ofsEnd);
 	}
@@ -354,7 +385,11 @@ void RB_MDRSurfaceAnim(mdrSurface_t* surface)
 	mdrHeader_t* header = nullptr;
 	mdrFrame_t* frame = nullptr;
 	mdrFrame_t* oldFrame = nullptr;
+#ifdef REND2_SP
 	mdrBone_t		bones[MDR_MAX_BONES], * bonePtr = nullptr, * bone = nullptr;
+#else // !REND2_SP
+	mdrBone_t		bones[MDR_MAX_BONES]{}, * bonePtr = nullptr, * bone = nullptr;
+#endif // REND2_SP
 
 	int			frameSize = 0;
 

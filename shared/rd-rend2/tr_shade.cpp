@@ -41,6 +41,7 @@ R_DrawElements
 
 ==================
 */
+#ifdef REND2_SP
 
 void R_DrawElementsVBO(int numIndexes, glIndex_t firstIndex, glIndex_t minIndex, glIndex_t maxIndex)
 {
@@ -59,6 +60,17 @@ static void R_DrawMultiElementsVBO(int multiDrawPrimitives, glIndex_t* multiDraw
 		multiDrawFirstIndex,
 		multiDrawPrimitives);
 }
+#else // !REND2_SP
+
+void R_DrawElementsVBO(int numIndexes, glIndex_t firstIndex, glIndex_t minIndex, glIndex_t maxIndex)
+{
+	size_t offset = firstIndex * sizeof(glIndex_t) +
+		(tess.useInternalVBO ? backEndData->currentFrame->dynamicIboCommitOffset : 0);
+
+	GL_DrawIndexed(GL_TRIANGLES, numIndexes, GL_INDEX_TYPE, offset, 1, 0);
+}
+
+#endif // REND2_SP
 
 /*
 =============================================================
@@ -82,8 +94,13 @@ void R_BindAnimatedImageToTMU(textureBundle_t* bundle, int tmu) {
 	if (bundle->isVideoMap) {
 		int oldtmu = glState.currenttmu;
 		GL_SelectTexture(tmu);
+#ifdef REND2_SP
 		ri.CIN_RunCinematic(bundle->videoMapHandle);
 		ri.CIN_UploadCinematic(bundle->videoMapHandle);
+#else // !REND2_SP
+		ri->CIN_RunCinematic(bundle->videoMapHandle);
+		ri->CIN_UploadCinematic(bundle->videoMapHandle);
+#endif // REND2_SP
 		GL_SelectTexture(oldtmu);
 		return;
 	}
@@ -170,7 +187,11 @@ extern float EvalWaveFormClamped(const waveForm_t* wf);
 static void ComputeTexMods(shaderStage_t* pStage, int bundleNum, float* outMatrix, float* outOffTurb)
 {
 	int tm = 0;
+#ifdef REND2_SP
 	float matrix[6], currentmatrix[6];
+#else // !REND2_SP
+	float matrix[6]{}, currentmatrix[6]{};
+#endif // REND2_SP
 	textureBundle_t* bundle = &pStage->bundle[bundleNum];
 
 	matrix[0] = 1.0f; matrix[2] = 0.0f; matrix[4] = 0.0f;
@@ -225,7 +246,11 @@ static void ComputeTexMods(shaderStage_t* pStage, int bundleNum, float* outMatri
 			break;
 
 		default:
+#ifdef REND2_SP
 			ri.Error(ERR_DROP, "ERROR: unknown texmod '%d' in shader '%s'", bundle->texMods[tm].type, tess.shader->name);
+#else // !REND2_SP
+			ri->Error(ERR_DROP, "ERROR: unknown texmod '%d' in shader '%s'", bundle->texMods[tm].type, tess.shader->name);
+#endif // REND2_SP
 			break;
 		}
 
@@ -541,7 +566,11 @@ static void CaptureDrawData(const shaderCommands_t* input, shaderStage_t* stage,
 			glState.currentVBO->vertexesVBO,
 			glState.currentIBO->indexesVBO,
 			numIndexes / 3);
+#ifdef REND2_SP
 		ri.FS_Write(data, int(strlen(data)), tr.debugFile);
+#else // !REND2_SP
+		ri->FS_Write(data, int(strlen(data)), tr.debugFile);
+#endif // REND2_SP
 	}
 	else
 	{
@@ -557,7 +586,11 @@ static void CaptureDrawData(const shaderCommands_t* input, shaderStage_t* stage,
 			glState.currentVBO->vertexesVBO,
 			glState.currentIBO->indexesVBO,
 			input->numIndexes / 3);
+#ifdef REND2_SP
 		ri.FS_Write(data, int(strlen(data)), tr.debugFile);
+#else // !REND2_SP
+		ri->FS_Write(data, int(strlen(data)), tr.debugFile);
+#endif // REND2_SP
 	}
 }
 
@@ -820,17 +853,29 @@ static UniformBlockBinding GetEntityBlockUniformBinding(
 		binding.ubo = currentFrameUbo;
 		if (!refEntity || refEntity == &tr.worldEntity)
 		{
+#ifdef REND2_SP
 			binding.offset = tr.entityUboOffsets[REFENTITYNUM_WORLD];
+#else // !REND2_SP
+			long offset = tr.entityUboOffsets[REFENTITYNUM_WORLD];
+			binding.offset = offset == -1 ? 0 : offset;
+#endif // REND2_SP
 		}
 		else
 		{
 			const int refEntityNum = refEntity - backEnd.refdef.entities;
+#ifdef REND2_SP
 			binding.offset = tr.entityUboOffsets[refEntityNum];
+#else // !REND2_SP
+			long offset = tr.entityUboOffsets[refEntityNum];
+			binding.offset = offset == -1 ? 0 : offset;
+#endif // REND2_SP
 		}
 	}
+#ifdef REND2_SP
 
 	if (binding.offset == -1)
 		binding.offset = 0;
+#endif // REND2_SP
 
 	return binding;
 }
@@ -859,17 +904,29 @@ static UniformBlockBinding GetPreviousEntityBlockUniformBinding(
 		if (!refEntity || refEntity == &tr.worldEntity)
 		{
 			binding.ubo = backEndData->currentFrame->ubo[currentFrameScene];
+#ifdef REND2_SP
 			binding.offset = tr.entityUboOffsets[REFENTITYNUM_WORLD];
+#else // !REND2_SP
+			long offset = tr.entityUboOffsets[REFENTITYNUM_WORLD];
+			binding.offset = offset == -1 ? 0 : offset;
+#endif // REND2_SP
 		}
 		else
 		{
 			const int refEntityNum = refEntity - backEnd.refdef.entities;
+#ifdef REND2_SP
 			binding.offset = tr.previousEntityUboOffsets[refEntityNum];
+#else // !REND2_SP
+			long offset = tr.previousEntityUboOffsets[refEntityNum];
+			binding.offset = offset == -1 ? 0 : offset;
+#endif // REND2_SP
 		}
 	}
+#ifdef REND2_SP
 
 	if (binding.offset == -1)
 		binding.offset = 0;
+#endif // REND2_SP
 
 	return binding;
 }
@@ -885,9 +942,11 @@ static UniformBlockBinding GetBonesBlockUniformBinding()
 	if (glState.skeletalAnimation)
 		binding.offset = tr.animationBoneUboOffset;
 	else
+#ifdef REND2_SP
 		binding.offset = 0;
 
 	if (binding.offset == -1)
+#endif // REND2_SP
 		binding.offset = 0;
 
 	return binding;
@@ -906,17 +965,24 @@ static UniformBlockBinding GetPreviousBonesBlockUniformBinding()
 	else
 		binding.offset = 0;
 
+#ifdef REND2_SP
 	if (binding.offset == -1)
 		binding.offset = 0;
 
+#endif // REND2_SP
 	return binding;
 }
 
 static UniformBlockBinding GetShaderInstanceBlockUniformBinding(
 	const trRefEntity_t* refEntity, const shader_t* shader)
 {
+#ifdef REND2_SP
 	const byte currentFrameScene = backEndData->currentFrame->currentScene;
 	const GLuint currentFrameUbo = backEndData->currentFrame->ubo[currentFrameScene];
+#else // !REND2_SP
+	//const byte currentFrameScene = backEndData->currentFrame->currentScene;
+	//const GLuint currentFrameUbo = backEndData->currentFrame->ubo[currentFrameScene];
+#endif // REND2_SP
 	UniformBlockBinding binding = {};
 	binding.ubo = tr.shaderInstanceUbo;
 	binding.block = UNIFORM_BLOCK_SHADER_INSTANCE;
@@ -1528,7 +1594,11 @@ RB_ShadowTessEnd
 */
 void RB_ShadowTessEnd(shaderCommands_t* input, const VertexArraysProperties* vertexArrays) {
 	if (glConfig.stencilBits < 4) {
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, "no stencil bits for stencil writing\n");
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, "no stencil bits for stencil writing\n");
+#endif // REND2_SP
 		return;
 	}
 
@@ -2246,10 +2316,18 @@ void RB_EndSurface(void) {
 	}
 
 	if (input->indexes[SHADER_MAX_INDEXES - 1] != 0) {
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "RB_EndSurface() - SHADER_MAX_INDEXES hit");
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "RB_EndSurface() - SHADER_MAX_INDEXES hit");
+#endif // REND2_SP
 	}
 	if (input->xyz[SHADER_MAX_VERTEXES - 1][0] != 0) {
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "RB_EndSurface() - SHADER_MAX_VERTEXES hit");
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "RB_EndSurface() - SHADER_MAX_VERTEXES hit");
+#endif // REND2_SP
 	}
 
 	// for debugging of sort order issues, stop rendering after a given sort value

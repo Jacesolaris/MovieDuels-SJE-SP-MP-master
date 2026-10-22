@@ -38,7 +38,12 @@ Used by both the front end (for DlightBmodel) and
 the back end (before doing the lighting calculation)
 ===============
 */
+#ifdef REND2_SP
 void R_TransformDlights(const int count, dlight_t* dl, const orientationr_t* ori) {
+#else // !REND2_SP
+void R_TransformDlights(int count, dlight_t* dl, orientationr_t* ori)
+{
+#endif // REND2_SP
 	int		i = 0;
 	vec3_t	temp;
 
@@ -57,7 +62,11 @@ R_DlightBmodel
 Determine which dynamic lights may effect this bmodel
 =============
 */
+#ifdef REND2_SP
 void R_DlightBmodel(const bmodel_t* bmodel, trRefEntity_t* ent)
+#else // !REND2_SP
+void R_DlightBmodel(bmodel_t* bmodel, trRefEntity_t* ent)
+#endif // REND2_SP
 {
 	int			i = 0, j = 0;
 	dlight_t* dl = nullptr;
@@ -140,15 +149,18 @@ static void R_SetupEntityLightingGrid(trRefEntity_t* ent, world_t* world)
 	vec3_t	direction;
 	float	totalFactor = 0.0f;
 	uint32_t startGridPos = 0;
+#ifdef REND2_SP
 
 	if (r_fullbright->integer || r_ambientScale->integer == -1 || tr.refdef.doLAGoggles)
+#else // !REND2_SP
+	if (r_fullbright->integer || tr.refdef.doLAGoggles)
+#endif // REND2_SP
 	{
 		ent->ambientLight[0] = ent->ambientLight[1] = ent->ambientLight[2] = 255.0f;
 		ent->directedLight[0] = ent->directedLight[1] = ent->directedLight[2] = 255.0f;
 		VectorCopy(tr.sunDirection, ent->lightDir);
 		return;
 	}
-
 	if (ent->e.renderfx & RF_LIGHTING_ORIGIN) {
 		// seperate lightOrigins are needed so an object that is
 		// sinking into the ground can still be lit, and so
@@ -211,7 +223,11 @@ static void R_SetupEntityLightingGrid(trRefEntity_t* ent, world_t* world)
 			}
 		}
 
+#ifdef REND2_SP
 		if (gridPos >= world->numGridArrayElements)
+#else // !REND2_SP
+		if (gridPos >= (unsigned)world->numGridArrayElements)
+#endif // REND2_SP
 		{//we've gone off the array somehow
 			continue;
 		}
@@ -250,7 +266,11 @@ static void R_SetupEntityLightingGrid(trRefEntity_t* ent, world_t* world)
 		{
 			for (j = 0; j < MAXLIGHTMAPS; j++)
 			{
+#ifdef REND2_SP
 				if (data->styles[j] != LS_LSNONE)
+#else // !REND2_SP
+				if (data->styles[j] != LS_LSNONE && data->styles[j] < MAX_LIGHT_STYLES) // styleColors has MAX_LIGHT_STYLES entries
+#endif // REND2_SP
 				{
 					const byte	style = data->styles[j];
 
@@ -302,7 +322,12 @@ static void R_SetupEntityLightingGrid(trRefEntity_t* ent, world_t* world)
 LogLight
 ===============
 */
+#ifdef REND2_SP
 static void LogLight(const trRefEntity_t* ent) {
+#else // !REND2_SP
+static void LogLight(trRefEntity_t* ent)
+{
+#endif // REND2_SP
 	int	max1 = 0, max2 = 0;
 
 	if (!(ent->e.renderfx & RF_FIRST_PERSON)) {
@@ -325,7 +350,11 @@ static void LogLight(const trRefEntity_t* ent) {
 		max2 = ent->directedLight[2];
 	}
 
+#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "amb:%i  dir:%i\n", max1, max2);
+#else // !REND2_SP
+	ri->Printf(PRINT_ALL, "amb:%i  dir:%i\n", max1, max2);
+#endif // REND2_SP
 }
 
 /*

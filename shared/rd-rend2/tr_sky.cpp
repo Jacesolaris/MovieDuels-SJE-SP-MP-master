@@ -54,10 +54,18 @@ static float	sky_min, sky_max;
 AddSkyPolygon
 ================
 */
+#ifdef REND2_SP
 static void AddSkyPolygon(int nump, vec3_t vecs)
+#else // !REND2_SP
+static void AddSkyPolygon(const int nump, vec3_t vecs)
+#endif // REND2_SP
 {
 	int		i = 0, j = 0;
+#ifdef REND2_SP
 	vec3_t	v, av;
+#else // !REND2_SP
+	vec3_t	v, av{};
+#endif // REND2_SP
 	float	s = 0.0f, t = 0.0f, dv = 0.0f;
 	int		axis = 0;
 	float* vp = nullptr;
@@ -147,20 +155,35 @@ static void AddSkyPolygon(int nump, vec3_t vecs)
 ClipSkyPolygon
 ================
 */
+#ifdef REND2_SP
 static void ClipSkyPolygon(int nump, vec3_t vecs, int stage)
+#else // !REND2_SP
+static void ClipSkyPolygon(const int nump, vec3_t vecs, const int stage)
+#endif // REND2_SP
 {
 	float* norm = nullptr;
 	float* v = nullptr;
 	qboolean	front, back;
 	float	d = 0.0f, e = 0.0f;
+#ifdef REND2_SP
 	float	dists[MAX_CLIP_VERTS];
 	int		sides[MAX_CLIP_VERTS];
 	vec3_t	newv[2][MAX_CLIP_VERTS];
 	int		newc[2];
+#else // !REND2_SP
+	float	dists[MAX_CLIP_VERTS]{};
+	int		sides[MAX_CLIP_VERTS]{};
+	vec3_t	newv[2][MAX_CLIP_VERTS]{};
+	int		newc[2]{};
+#endif // REND2_SP
 	int		i = 0, j = 0;
 
 	if (nump > MAX_CLIP_VERTS - 2)
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "ClipSkyPolygon: MAX_CLIP_VERTS");
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "ClipSkyPolygon: MAX_CLIP_VERTS");
+#endif // REND2_SP
 	if (stage == 6)
 	{	// fully clipped, so draw it
 		AddSkyPolygon(nump, vecs);
@@ -257,9 +280,17 @@ static void ClearSkyBox(void) {
 RB_ClipSkyPolygons
 ================
 */
+#ifdef REND2_SP
 void RB_ClipSkyPolygons(shaderCommands_t* input)
+#else // !REND2_SP
+void RB_ClipSkyPolygons(const shaderCommands_t* input)
+#endif // REND2_SP
 {
+#ifdef REND2_SP
 	vec3_t		p[5];	// need one extra point for clipping
+#else // !REND2_SP
+	vec3_t		p[5]{};	// need one extra point for clipping
+#endif // REND2_SP
 	int			i = 0, j = 0;
 
 	ClearSkyBox();
@@ -289,7 +320,11 @@ CLOUD VERTEX GENERATION
 **
 ** Parms: s, t range from -1 to 1
 */
+#ifdef REND2_SP
 static void MakeSkyVec(float s, float t, int axis, float outSt[2], vec3_t outXYZ)
+#else // !REND2_SP
+static void MakeSkyVec(float s, float t, const int axis, float outSt[2], vec3_t outXYZ)
+#endif // REND2_SP
 {
 	// 1 = s, 2 = t, 3 = 2048
 	static int	st_to_vec[6][3] =
@@ -304,7 +339,11 @@ static void MakeSkyVec(float s, float t, int axis, float outSt[2], vec3_t outXYZ
 		{ 2,-1,-3 }		// look straight down
 	};
 
+#ifdef REND2_SP
 	vec3_t		b;
+#else // !REND2_SP
+	vec3_t		b{};
+#endif // REND2_SP
 	int			j = 0, k = 0;
 	float	boxSize = 0.0f;
 
@@ -390,7 +429,11 @@ static void DrawSkySide(struct image_s* image, const int mins[2], const int maxs
 
 			if (tess.numVertexes >= SHADER_MAX_VERTEXES)
 			{
+#ifdef REND2_SP
 				ri.Error(ERR_DROP, "SHADER_MAX_VERTEXES hit in DrawSkySideVBO()");
+#else // !REND2_SP
+				ri->Error(ERR_DROP, "SHADER_MAX_VERTEXES hit in DrawSkySideVBO()");
+#endif // REND2_SP
 			}
 		}
 	}
@@ -404,7 +447,11 @@ static void DrawSkySide(struct image_s* image, const int mins[2], const int maxs
 		{
 			if ((tess.numIndexes + 6) >= SHADER_MAX_INDEXES)
 			{
+#ifdef REND2_SP
 				ri.Error(ERR_DROP, "SHADER_MAX_INDEXES hit in DrawSkySideVBO()");
+#else // !REND2_SP
+				ri->Error(ERR_DROP, "SHADER_MAX_INDEXES hit in DrawSkySideVBO()");
+#endif // REND2_SP
 			}
 
 			tess.indexes[tess.numIndexes++] = s + t * ssizePlusOne + firstVertex;
@@ -460,8 +507,13 @@ static void DrawSkySide(struct image_s* image, const int mins[2], const int maxs
 	const byte currentFrameScene = backEndData->currentFrame->currentScene;
 	const GLuint currentFrameUbo = backEndData->currentFrame->ubo[currentFrameScene];
 	const UniformBlockBinding uniformBlockBindings[] = {
+#ifdef REND2_SP
 		{ currentFrameUbo, tr.skyEntityUboOffset, UNIFORM_BLOCK_ENTITY },
 		{ currentFrameUbo, tr.cameraUboOffsets[tr.viewParms.currentViewParm], UNIFORM_BLOCK_CAMERA }
+#else // !REND2_SP
+		{ currentFrameUbo, (size_t)tr.skyEntityUboOffset, UNIFORM_BLOCK_ENTITY },
+		{ currentFrameUbo, (size_t)tr.cameraUboOffsets[tr.viewParms.currentViewParm], UNIFORM_BLOCK_CAMERA }
+#endif // REND2_SP
 	};
 
 	DrawItem item = {};
@@ -496,7 +548,11 @@ static void DrawSkySide(struct image_s* image, const int mins[2], const int maxs
 	tess.maxIndex = maxIndex;
 }
 
+#ifdef REND2_SP
 static void DrawSkyBox(shader_t* shader)
+#else // !REND2_SP
+static void DrawSkyBox(const shader_t* shader)
+#endif // REND2_SP
 {
 	int		i = 0;
 
@@ -507,7 +563,11 @@ static void DrawSkyBox(shader_t* shader)
 
 	for (i = 0; i < 6; i++)
 	{
+#ifdef REND2_SP
 		int sky_mins_subd[2], sky_maxs_subd[2];
+#else // !REND2_SP
+		int sky_mins_subd[2]{}, sky_maxs_subd[2]{};
+#endif // REND2_SP
 		int s = 0, t = 0;
 
 		sky_mins[0][i] = floor(sky_mins[0][i] * HALF_SKY_SUBDIVISIONS) / HALF_SKY_SUBDIVISIONS;
@@ -567,7 +627,11 @@ static void DrawSkyBox(shader_t* shader)
 	}
 }
 
+#ifdef REND2_SP
 static void FillCloudySkySide(const int mins[2], const int maxs[2], qboolean addIndexes)
+#else // !REND2_SP
+static void FillCloudySkySide(const int mins[2], const int maxs[2], const qboolean addIndexes)
+#endif // REND2_SP
 {
 	int s = 0, t = 0;
 	int vertexStart = tess.numVertexes;
@@ -589,7 +653,11 @@ static void FillCloudySkySide(const int mins[2], const int maxs[2], qboolean add
 
 			if (tess.numVertexes >= SHADER_MAX_VERTEXES)
 			{
+#ifdef REND2_SP
 				ri.Error(ERR_DROP, "SHADER_MAX_VERTEXES hit in FillCloudySkySide()");
+#else // !REND2_SP
+				ri->Error(ERR_DROP, "SHADER_MAX_VERTEXES hit in FillCloudySkySide()");
+#endif // REND2_SP
 			}
 		}
 	}
@@ -625,7 +693,11 @@ static void FillCloudBox(const shader_t* shader, int stage)
 	// don't want to draw the bottom
 	for (i = 0; i < 5; i++)
 	{
+#ifdef REND2_SP
 		int sky_mins_subd[2], sky_maxs_subd[2];
+#else // !REND2_SP
+		int sky_mins_subd[2]{}, sky_maxs_subd[2]{};
+#endif // REND2_SP
 		int s = 0, t = 0;
 		const float MIN_T = -HALF_SKY_SUBDIVISIONS;
 
@@ -691,7 +763,11 @@ static void FillCloudBox(const shader_t* shader, int stage)
 /*
 ** R_BuildCloudData
 */
+#ifdef REND2_SP
 void R_BuildCloudData(shaderCommands_t* input)
+#else // !REND2_SP
+void R_BuildCloudData(const shaderCommands_t* input)
+#endif // REND2_SP
 {
 	int			i = 0;
 	shader_t* shader = nullptr;
@@ -727,7 +803,11 @@ void R_BuildCloudData(shaderCommands_t* input)
 ** Called when a sky shader is parsed
 */
 #define SQR( a ) ((a)*(a))
+#ifdef REND2_SP
 void R_InitSkyTexCoords(float heightCloud)
+#else // !REND2_SP
+void R_InitSkyTexCoords(const float heightCloud)
+#endif // REND2_SP
 {
 	int i = 0, s = 0, t = 0;
 	float radiusWorld = 4096;
@@ -855,5 +935,7 @@ void RB_StageIteratorSky(void) {
 
 	// note that sky was drawn so we will draw a sun later
 	backEnd.skyRenderedThisView = qtrue;
+#ifdef REND2_SP
 	backEnd.skyNumber++;
+#endif // REND2_SP
 }

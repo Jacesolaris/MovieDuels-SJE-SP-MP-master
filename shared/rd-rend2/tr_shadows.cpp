@@ -39,6 +39,10 @@ void RB_ShadowFinish(void)
 	if (glConfig.stencilBits < 4) {
 		return;
 	}
+#ifndef REND2_SP
+
+	GL_Cull(CT_TWO_SIDED);
+#endif // !REND2_SP
 
 	GL_BindToTMU(tr.whiteImage, TB_COLORMAP);
 
@@ -56,7 +60,21 @@ void RB_ShadowFinish(void)
 	GLSL_SetUniformVec4(&tr.textureColorShader[TEXCOLORDEF_SCREEN_TRIANGLE], UNIFORM_COLOR, color);
 	GLSL_SetUniformMatrix4x4(&tr.textureColorShader[TEXCOLORDEF_SCREEN_TRIANGLE], UNIFORM_MODELVIEWPROJECTIONMATRIX, projection);
 
+#ifdef REND2_SP
 	RB_InstantTriangle();
+#else // !REND2_SP
+	vec4i_t dstBox{};
+	vec4_t quadVerts[4]; // all set below; no {} (it made /analyze report a NULL dereference, C6011)
+	vec2_t texCoords[4];
+	VectorSet4(dstBox, 0, glConfig.vidHeight, glConfig.vidWidth, 0);
+
+	VectorSet4(quadVerts[0], dstBox[0], dstBox[1], 0, 1);
+	VectorSet4(quadVerts[1], dstBox[2], dstBox[1], 0, 1);
+	VectorSet4(quadVerts[2], dstBox[2], dstBox[3], 0, 1);
+	VectorSet4(quadVerts[3], dstBox[0], dstBox[3], 0, 1);
+
+	RB_InstantQuad2(quadVerts, texCoords);
+#endif // REND2_SP
 
 	qglStencilFunc(GL_ALWAYS, 0, 0xff);
 }
@@ -71,8 +89,13 @@ void RB_ProjectionShadowDeform(void) {
 	float* xyz = nullptr;
 	int		i = 0;
 	float	h = 0.0f;
+#ifdef REND2_SP
 	vec3_t	ground;
 	vec3_t	light;
+#else // !REND2_SP
+	vec3_t	ground{};
+	vec3_t	light{};
+#endif // REND2_SP
 	float	groundDist = 0.0f;
 	float	d = 0.0f;
 	vec3_t	lightDir;

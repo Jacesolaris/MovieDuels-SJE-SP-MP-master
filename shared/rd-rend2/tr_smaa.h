@@ -1,4 +1,6 @@
+#ifdef REND2_SP
 #pragma once
+#endif // REND2_SP
 /**
  * Copyright (C) 2013 Jorge Jimenez (jorge@iryoku.com)
  * Copyright (C) 2013 Jose I. Echevarria (joseignacioechevarria@gmail.com)

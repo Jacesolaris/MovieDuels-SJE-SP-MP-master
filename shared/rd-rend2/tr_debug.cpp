@@ -22,16 +22,58 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 void R_PushDebugGroup(annotationLayer_t layer, const char* name)
 {
 	static GLuint currentLayer = (GLuint)AL_NONE;
+#ifdef REND2_SP
 	assert(layer <= currentLayer + 1);
+#else // !REND2_SP
+
+	// ----------------------------------------------------------------------
+	// Safety: validate layer ordering
+	// ----------------------------------------------------------------------
+	if (layer > currentLayer + 1)
+	{
+		// Replace assert with debug warning (rule #9)
+		ri->Printf(
+			PRINT_WARNING,
+			"R_PushDebugGroup WARNING: invalid layer order (requested %u, current %u)\n",
+			(unsigned int)layer,
+			(unsigned int)currentLayer
+		);
+
+		// Behaviour-preserving fallback:
+		// Clamp layer to currentLayer + 1 so the renderer does not crash.
+		layer = (annotationLayer_t)(currentLayer + 1);
+	}
+
+	// ----------------------------------------------------------------------
+	// Pop groups until we reach the requested layer
+	// ----------------------------------------------------------------------
+#endif // REND2_SP
 	while (layer <= currentLayer)
 	{
 		if (currentLayer == AL_NONE)
+#ifndef REND2_SP
+		{
+#endif // !REND2_SP
 			break;
+#ifndef REND2_SP
+		}
+
+#endif // !REND2_SP
 		qglPopDebugGroupKHR();
 		currentLayer--;
 	}
 	if (layer == AL_NONE)
+#ifndef REND2_SP
+	{
+#endif // !REND2_SP
 		return;
+#ifndef REND2_SP
+	}
+
+	// ----------------------------------------------------------------------
+	// Push new debug group
+	// ----------------------------------------------------------------------
+#endif // !REND2_SP
 	currentLayer = (GLuint)layer;
 	qglPushDebugGroupKHR(GL_DEBUG_SOURCE_APPLICATION, currentLayer, -1, name);
 }

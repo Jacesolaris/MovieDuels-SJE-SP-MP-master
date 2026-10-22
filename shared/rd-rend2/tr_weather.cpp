@@ -26,7 +26,11 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 // Cached to save test tume
 int CurrentWeatherBrushIndex;
 
+#ifdef REND2_SP
 extern	cvar_t* g_Weather;
+#else // !REND2_SP
+extern	cvar_t* r_Weather;
+#endif // REND2_SP
 
 namespace
 {
@@ -77,7 +81,11 @@ namespace
 	{
 		std::vector<rainVertex_t> rainVertices(maxParticleCount * CHUNK_COUNT);
 
+#ifdef REND2_SP
 		for (int i = 0; i < rainVertices.size(); ++i)
+#else // !REND2_SP
+		for (size_t i = 0; i < rainVertices.size(); ++i)
+#endif // REND2_SP
 		{
 			rainVertex_t& vertex = rainVertices[i];
 			vertex.position[0] = Q_flrand(-HALF_CHUNK_EXTENDS, HALF_CHUNK_EXTENDS);
@@ -189,7 +197,9 @@ namespace
 			qglClear(GL_DEPTH_BUFFER_BIT);
 			qglClearDepth(1.0f);
 
+#ifdef REND2_SP
 			vec4_t color = { 0.0f, 0.0f, 0.0f, 1.0f };
+#endif // REND2_SP
 			backEnd.currentEntity = &tr.worldEntity;
 
 			vec3_t stepSize = {
@@ -288,7 +298,9 @@ namespace
 						// Now test if the intersected point is actually on the brush
 						for (int j = 0; j < currentWeatherBrush->numPlanes; j++)
 						{
+#ifdef REND2_SP
 							vec4_t* plane = &currentWeatherBrush->planes[j];
+#endif // REND2_SP
 							vec3_t normal = {
 								currentWeatherBrush->planes[j][0],
 								currentWeatherBrush->planes[j][1],
@@ -475,7 +487,11 @@ namespace
 		const byte currentFrameScene = backEndData->currentFrame->currentScene;
 		const GLuint currentFrameUbo = backEndData->currentFrame->ubo[currentFrameScene];
 		const UniformBlockBinding uniformBlockBindings[] = {
+#ifdef REND2_SP
 			{ currentFrameUbo, tr.sceneUboOffset, UNIFORM_BLOCK_SCENE }
+#else // !REND2_SP
+			{ currentFrameUbo, (size_t)tr.sceneUboOffset, UNIFORM_BLOCK_SCENE }
+#endif // REND2_SP
 		};
 		DrawItemSetUniformBlockBindings(
 			item, uniformBlockBindings, frameAllocator);
@@ -507,7 +523,11 @@ void R_InitWeatherSystem()
 {
 	Com_Printf("Initializing weather system\n");
 	tr.weatherSystem =
+#ifdef REND2_SP
 		(weatherSystem_t*)R_Malloc(sizeof(*tr.weatherSystem), TAG_R_TERRAIN, qtrue);
+#else // !REND2_SP
+		(weatherSystem_t*)Z_Malloc(sizeof(*tr.weatherSystem), TAG_R_TERRAIN, qtrue);
+#endif // REND2_SP
 	tr.weatherSystem->weatherSurface.surfaceType = SF_WEATHER;
 	tr.weatherSystem->frozen = false;
 	tr.weatherSystem->shaking = false;
@@ -531,9 +551,15 @@ void R_ShutdownWeatherSystem()
 		tr.weatherSystem = nullptr;
 	}
 	else
+#ifdef REND2_SP
 	{
 		ri.Printf(PRINT_DEVELOPER,
 			"Weather system shutdown requested, but it is already shut down.\n");
+#else // !REND2_SP
+	{
+		ri->Printf(PRINT_DEVELOPER,
+			"Weather system shutdown requested, but it is already shut down.\n");
+#endif // REND2_SP
 	}
 }
 
@@ -549,14 +575,22 @@ static qboolean WE_ParseVector(const char** text, int count, float* v) {
 	// FIXME: spaces are currently required after parens, should change parseext...
 	token = COM_ParseExt(text, qfalse);
 	if (strcmp(token, "(")) {
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "WARNING: missing parenthesis in weather effect\n");
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "WARNING: missing parenthesis in weather effect\n");
+#endif // REND2_SP
 		return qfalse;
 	}
 
 	for (i = 0; i < count; i++) {
 		token = COM_ParseExt(text, qfalse);
 		if (!token[0]) {
+#ifdef REND2_SP
 			ri.Printf(PRINT_WARNING, "WARNING: missing vector element in weather effect\n");
+#else // !REND2_SP
+			ri->Printf(PRINT_WARNING, "WARNING: missing vector element in weather effect\n");
+#endif // REND2_SP
 			return qfalse;
 		}
 		v[i] = atof(token);
@@ -564,7 +598,11 @@ static qboolean WE_ParseVector(const char** text, int count, float* v) {
 
 	token = COM_ParseExt(text, qfalse);
 	if (strcmp(token, ")")) {
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "WARNING: missing parenthesis in weather effect\n");
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "WARNING: missing parenthesis in weather effect\n");
+#endif // REND2_SP
 		return qfalse;
 	}
 
@@ -575,7 +613,11 @@ void R_AddWeatherBrush(uint8_t numPlanes, vec4_t* planes)
 {
 	if (tr.weatherSystem->numWeatherBrushes >= (MAX_WEATHER_ZONES * 2))
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "Max weather brushes hit. Skipping new inside/outside brush\n");
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "Max weather brushes hit. Skipping new inside/outside brush\n");
+#endif // REND2_SP
 		return;
 	}
 	tr.weatherSystem->weatherBrushes[tr.weatherSystem->numWeatherBrushes].numPlanes = numPlanes;
@@ -607,6 +649,10 @@ void R_LoadWeatherImages()
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].drawImage = R_FindImageFile("gfx/effects/alpha_smoke2b", type, flags);
 }
 
+#ifndef REND2_SP
+static qboolean weatherCommandFromConsole; // "r_we" typed: print the command list for an unknown command
+
+#endif // !REND2_SP
 void RE_WorldEffectCommand(const char* command) // rend2 sp
 {
 	if (!command)
@@ -622,7 +668,23 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 
 	token = COM_ParseExt(&command, qfalse);
 
+#ifdef REND2_SP
 	if (!token)
+#else // !REND2_SP
+	if (!token || !token[0] || !tr.weatherSystem)
+	{
+		return;
+	}
+
+	// A number is one of the numbered presets (the menu's r_weather values, see the cgame's CG_ApplyWeather).
+	// Named commands always do what they say: before, the r_weather cvar replaced most of them with its own preset,
+	// and r_weather 0 (the default) turned every map weather command into "clear".
+	const int preset = token[0] >= '0' && token[0] <= '9' ? atoi(token) : -1;
+
+	// the wind commands below don't check for a free wind slot
+	if ((Q_stricmp(token, "wind") == 0 || Q_stricmp(token, "gustingwind") == 0 || preset == 8)
+		&& tr.weatherSystem->activeWindObjects >= MAX_WINDOBJECTS)
+#endif // REND2_SP
 	{
 		return;
 	}
@@ -646,7 +708,18 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		tr.weatherSystem->activeWeatherTypes = 0;
 		tr.weatherSystem->activeWindObjects = 0;
 		tr.weatherSystem->frozen = false;
+#ifdef REND2_SP
 		tr.weatherSystem->pain = 0.0f;
+#else // !REND2_SP
+	}
+	else if (preset == 0)
+	{
+		for (int i = 0; i < NUM_WEATHER_TYPES; i++)
+			tr.weatherSystem->weatherSlots[i].active = false;
+		tr.weatherSystem->activeWeatherTypes = 0;
+		tr.weatherSystem->activeWindObjects = 0;
+		tr.weatherSystem->frozen = false;
+#endif // REND2_SP
 	}
 
 	// Freeze / UnFreeze - Stops All Particle Motion Updates
@@ -660,12 +733,33 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 	////---------------
 	else if (Q_stricmp(token, "zone") == 0)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_DEVELOPER, "Weather zones aren't used in rend2, but inside/outside brushes\n");
+#else // !REND2_SP
+		ri->Printf(PRINT_DEVELOPER, "Weather zones aren't used in rend2, but inside/outside brushes\n");
+#endif // REND2_SP
 	}
 
 	// Basic Wind
 	//------------
 	else if (Q_stricmp(token, "wind") == 0)
+#ifndef REND2_SP
+	{
+		windObject_t* currentWindObject = &tr.weatherSystem->windSlots[tr.weatherSystem->activeWindObjects];
+		currentWindObject->chanceOfDeadTime = 0.3f;
+		currentWindObject->deadTimeMinMax[0] = 1000.0f;
+		currentWindObject->deadTimeMinMax[1] = 3000.0f;
+		currentWindObject->maxVelocity[0] = 1.5f;
+		currentWindObject->maxVelocity[1] = 1.5f;
+		currentWindObject->maxVelocity[2] = 0.01f;
+		currentWindObject->minVelocity[0] = -1.5f;
+		currentWindObject->minVelocity[1] = -1.5f;
+		currentWindObject->minVelocity[2] = -0.01f;
+		currentWindObject->targetVelocityTimeRemaining = 0;
+		tr.weatherSystem->activeWindObjects++;
+	}
+	else if (preset == 8)
+#endif // !REND2_SP
 	{
 		windObject_t* currentWindObject = &tr.weatherSystem->windSlots[tr.weatherSystem->activeWindObjects];
 		currentWindObject->chanceOfDeadTime = 0.3f;
@@ -765,6 +859,29 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 			0.5f,
 			tr.weatherSystem->weatherSlots[WEATHER_RAIN].color);
 	}
+#ifndef REND2_SP
+	else if (preset == 2)
+	{
+		if (!tr.weatherSystem->weatherSlots[WEATHER_RAIN].active)
+			tr.weatherSystem->activeWeatherTypes++;
+
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = 2000;
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].active = true;
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].gravity = 2.0f;
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].fadeDistance = 6000.f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].size[0] = 1.5f;
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].size[1] = 14.0f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].velocityOrientationScale = 1.0f;
+
+		VectorSet4(tr.weatherSystem->weatherSlots[WEATHER_RAIN].color, 0.5f, 0.5f, 0.5f, 0.5f);
+		VectorScale(
+			tr.weatherSystem->weatherSlots[WEATHER_RAIN].color,
+			0.5f,
+			tr.weatherSystem->weatherSlots[WEATHER_RAIN].color);
+	}
+#endif // !REND2_SP
 
 	// Create A Rain Storm
 	//---------------------
@@ -783,7 +900,34 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].velocityOrientationScale = 1.0f;
 
+#ifdef REND2_SP
 		tr.weatherSystem->pain = 0.1f;
+#else // !REND2_SP
+		//tr.weatherSystem->pain = 0.1f;
+
+		VectorSet4(tr.weatherSystem->weatherSlots[WEATHER_RAIN].color, 0.34f, 0.7f, 0.34f, 0.7f);
+		VectorScale(
+			tr.weatherSystem->weatherSlots[WEATHER_RAIN].color,
+			0.7f,
+			tr.weatherSystem->weatherSlots[WEATHER_RAIN].color);
+	}
+	else if (preset == 7)
+	{
+		if (!tr.weatherSystem->weatherSlots[WEATHER_RAIN].active)
+			tr.weatherSystem->activeWeatherTypes++;
+
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = 2000;
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].active = true;
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].gravity = 2.0f;
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].fadeDistance = 6000.0f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].size[0] = 2.0f;
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].size[1] = 14.0f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].velocityOrientationScale = 1.0f;
+
+		//tr.weatherSystem->pain = 0.1f;
+#endif // REND2_SP
 
 		VectorSet4(tr.weatherSystem->weatherSlots[WEATHER_RAIN].color, 0.34f, 0.7f, 0.34f, 0.7f);
 		VectorScale(
@@ -834,15 +978,64 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		tr.weatherSystem->weatherSlots[WEATHER_SNOW].velocityOrientationScale = 0.0f;
 
 		VectorSet4(tr.weatherSystem->weatherSlots[WEATHER_SNOW].color, 0.75f, 0.75f, 0.75f, 0.75f);
+#ifdef REND2_SP
 		VectorScale(
 			tr.weatherSystem->weatherSlots[WEATHER_SNOW].color,
 			0.75f,
 			tr.weatherSystem->weatherSlots[WEATHER_SNOW].color);
+#else // !REND2_SP
+		VectorScale(tr.weatherSystem->weatherSlots[WEATHER_SNOW].color, 0.75f, tr.weatherSystem->weatherSlots[WEATHER_SNOW].color);
+	}
+	else if (preset == 1)
+	{
+		if (!tr.weatherSystem->weatherSlots[WEATHER_SNOW].active)
+			tr.weatherSystem->activeWeatherTypes++;
+
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].particleCount = 1000;
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].active = true;
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].gravity = 0.3f;
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].fadeDistance = 6000.0f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].size[0] = 1.5f;
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].size[1] = 1.5f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].velocityOrientationScale = 0.0f;
+
+		VectorSet4(tr.weatherSystem->weatherSlots[WEATHER_SNOW].color, 0.75f, 0.75f, 0.75f, 0.75f);
+		VectorScale(tr.weatherSystem->weatherSlots[WEATHER_SNOW].color, 0.75f, tr.weatherSystem->weatherSlots[WEATHER_SNOW].color);
+#endif // REND2_SP
 	}
 
 	// Create A Some stuff
 	//---------------------
 	else if (Q_stricmp(token, "spacedust") == 0)
+#ifndef REND2_SP
+	{
+		int count = 0;
+		token = COM_ParseExt(&command, qfalse);
+		count = atoi(token);
+
+		if (!tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].active)
+			tr.weatherSystem->activeWeatherTypes++;
+
+		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].particleCount = 1200;
+		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].active = true;
+		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].gravity = 0.0f;
+		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].fadeDistance = 3000.f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].size[0] = 2.5f;
+		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].size[1] = 2.5f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].velocityOrientationScale = 0.0f;
+
+		VectorSet4(tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].color, 0.75f, 0.75f, 0.75f, 0.75f);
+		VectorScale(
+			tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].color,
+			0.75f,
+			tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].color);
+	}
+	else if (preset == 9)
+#endif // !REND2_SP
 	{
 		int count = 0;
 		token = COM_ParseExt(&command, qfalse);
@@ -887,6 +1080,42 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 
 		VectorSet4(tr.weatherSystem->weatherSlots[WEATHER_SAND].color, 0.9f, 0.6f, 0.0f, 0.5f);
 	}
+#ifndef REND2_SP
+	else if (Q_stricmp(token, "Sandstorm") == 0)
+	{
+		if (!tr.weatherSystem->weatherSlots[WEATHER_SAND].active)
+			tr.weatherSystem->activeWeatherTypes++;
+
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].particleCount = 1600;
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].active = true;
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].gravity = 0.0f;
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].fadeDistance = 3000.f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].size[0] = 300.f;
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].size[1] = 300.f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].velocityOrientationScale = 0.0f;
+
+		VectorSet4(tr.weatherSystem->weatherSlots[WEATHER_SAND].color, 0.9f, 0.6f, 0.0f, 0.5f);
+	}
+	else if (preset == 4)
+	{
+		if (!tr.weatherSystem->weatherSlots[WEATHER_SAND].active)
+			tr.weatherSystem->activeWeatherTypes++;
+
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].particleCount = 1600;
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].active = true;
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].gravity = 0.0f;
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].fadeDistance = 3000.f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].size[0] = 300.f;
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].size[1] = 300.f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].velocityOrientationScale = 0.0f;
+
+		VectorSet4(tr.weatherSystem->weatherSlots[WEATHER_SAND].color, 0.9f, 0.6f, 0.0f, 0.5f);
+	}
+#endif // !REND2_SP
 
 	// Create Blowing Clouds Of Fog
 	//------------------------------
@@ -908,10 +1137,50 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		VectorSet4(tr.weatherSystem->weatherSlots[WEATHER_FOG].color, 0.2f, 0.2f, 0.2f, 0.2f);
 		VectorScale(tr.weatherSystem->weatherSlots[WEATHER_FOG].color, 0.2f, tr.weatherSystem->weatherSlots[WEATHER_FOG].color);
 	}
+#ifndef REND2_SP
+	else if (preset == 6)
+	{
+		if (!tr.weatherSystem->weatherSlots[WEATHER_FOG].active)
+			tr.weatherSystem->activeWeatherTypes++;
+
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = 1600;
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].active = true;
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].gravity = 0.0f;
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].fadeDistance = 3000.f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].size[0] = 300.f;
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].size[1] = 300.f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].velocityOrientationScale = 0.0f;
+
+		VectorSet4(tr.weatherSystem->weatherSlots[WEATHER_FOG].color, 0.2f, 0.2f, 0.2f, 0.2f);
+		VectorScale(tr.weatherSystem->weatherSlots[WEATHER_FOG].color, 0.2f, tr.weatherSystem->weatherSlots[WEATHER_FOG].color);
+	}
+#endif // !REND2_SP
 
 	// Create Heavy Rain Particle Cloud
 	//-----------------------------------
 	else if (Q_stricmp(token, "heavyrainfog") == 0)
+#ifndef REND2_SP
+	{
+		if (!tr.weatherSystem->weatherSlots[WEATHER_FOG].active)
+			tr.weatherSystem->activeWeatherTypes++;
+
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = 210;
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].active = true;
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].gravity = 0.0f;
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].fadeDistance = 2400.f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].size[0] = 300.f;
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].size[1] = 300.f;
+
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].velocityOrientationScale = 0.0f;
+
+		VectorSet4(tr.weatherSystem->weatherSlots[WEATHER_FOG].color, 0.3f, 0.3f, 0.3f, 0.3f);
+		VectorScale(tr.weatherSystem->weatherSlots[WEATHER_FOG].color, 0.3f, tr.weatherSystem->weatherSlots[WEATHER_FOG].color);
+	}
+	else if (preset == 5)
+#endif // !REND2_SP
 	{
 		if (!tr.weatherSystem->weatherSlots[WEATHER_FOG].active)
 			tr.weatherSystem->activeWeatherTypes++;
@@ -970,21 +1239,14 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		VectorScale(tr.weatherSystem->weatherSlots[WEATHER_SNOW].color, 0.95f, tr.weatherSystem->weatherSlots[WEATHER_SNOW].color);
 	}
 
+#ifdef REND2_SP
 	else if (Q_stricmp(token, "outsideshake") == 0)
 	{
-#ifdef REND2_SP
 		tr.weatherSystem->shaking = true;
-#else
-		ri.Printf(PRINT_DEVELOPER, "outsideshake isn't supported in MP\n");
-#endif
 	}
 	else if (Q_stricmp(token, "outsidepain") == 0)
 	{
-#ifdef REND2_SP
 		tr.weatherSystem->pain = !tr.weatherSystem->pain;
-#else
-		ri.Printf(PRINT_DEVELOPER, "outsidepain isn't supported in MP\n");
-#endif
 	}
 	else
 	{
@@ -1193,6 +1455,9 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		}
 
 		else if (g_Weather->integer == 3)
+#else // !REND2_SP
+	else if (preset == 3)
+#endif // REND2_SP
 		{
 			if (!tr.weatherSystem->weatherSlots[WEATHER_SNOW].active)
 				tr.weatherSystem->activeWeatherTypes++;
@@ -1210,8 +1475,25 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 			VectorSet4(tr.weatherSystem->weatherSlots[WEATHER_SNOW].color, 0.95f, 0.0f, 0.0f, 0.0f);
 			VectorScale(tr.weatherSystem->weatherSlots[WEATHER_SNOW].color, 0.95f, tr.weatherSystem->weatherSlots[WEATHER_SNOW].color);
 		}
+#ifndef REND2_SP
+
+	else if (Q_stricmp(token, "outsideshake") == 0)
+	{
+		ri->Printf(PRINT_DEVELOPER, "outsideshake isn't supported in MP\n");
+	}
+	else if (Q_stricmp(token, "outsidepain") == 0)
+	{
+		ri->Printf(PRINT_DEVELOPER, "outsidepain isn't supported in MP\n");
+	}
+	else if (!weatherCommandFromConsole)
+	{
+		// a map's weather name this renderer doesn't have (e.g. fx_wind's "swirlingwind"): ignore it
+		ri->Printf(PRINT_DEVELOPER, "RE_WorldEffectCommand: unknown weather command '%s' ignored\n", token);
+	}
+#endif // !REND2_SP
 		else
 		{
+#ifdef REND2_SP
 			ri.Printf(PRINT_ALL, "Weather Effect: Please enter a valid command.\n");
 			ri.Printf(PRINT_ALL, "	die\n");
 			ri.Printf(PRINT_ALL, "	clear\n");
@@ -1220,7 +1502,18 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 			ri.Printf(PRINT_ALL, "	wind\n");
 			ri.Printf(PRINT_ALL, "	constantwind (velocity)\n");
 			ri.Printf(PRINT_ALL, "	gustingwind\n");
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, "Weather Effect: Please enter a valid command.\n");
+		ri->Printf(PRINT_ALL, "	die\n");
+		ri->Printf(PRINT_ALL, "	clear\n");
+		ri->Printf(PRINT_ALL, "	freeze\n");
+		ri->Printf(PRINT_ALL, "	zone (mins) (maxs)\n");
+		ri->Printf(PRINT_ALL, "	wind\n");
+		ri->Printf(PRINT_ALL, "	constantwind (velocity)\n");
+		ri->Printf(PRINT_ALL, "	gustingwind\n");
+#endif // REND2_SP
 			//ri.Printf(PRINT_ALL, "	windzone (mins) (maxs) (velocity)\n");
+#ifdef REND2_SP
 			ri.Printf(PRINT_ALL, "	lightrain\n");
 			ri.Printf(PRINT_ALL, "	rain\n");
 			ri.Printf(PRINT_ALL, "	acidrain\n");
@@ -1235,6 +1528,20 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 			ri.Printf(PRINT_ALL, "	outsideshake\n"); // not available in MP
 			ri.Printf(PRINT_ALL, "	outsidepain\n"); // not available in MP
 		}
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, "	lightrain\n");
+		ri->Printf(PRINT_ALL, "	rain\n");
+		ri->Printf(PRINT_ALL, "	acidrain\n");
+		ri->Printf(PRINT_ALL, "	heavyrain\n");
+		ri->Printf(PRINT_ALL, "	snow\n");
+		ri->Printf(PRINT_ALL, "	spacedust (count)\n");
+		ri->Printf(PRINT_ALL, "	sand\n");
+		ri->Printf(PRINT_ALL, "	fog\n");
+		ri->Printf(PRINT_ALL, "	heavyrainfog\n");
+		ri->Printf(PRINT_ALL, "	light_fog\n");
+		ri->Printf(PRINT_ALL, "	outsideshake\n"); // not available in MP
+		ri->Printf(PRINT_ALL, "	outsidepain\n"); // not available in MP
+#endif // REND2_SP
 	}
 #ifdef REND2_SP
 	COM_EndParseSession();
@@ -1246,21 +1553,37 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 void R_WorldEffect_f(void)
 {
 	char temp[2048] = { 0 };
+#ifdef REND2_SP
 	ri.Cmd_ArgsBuffer(temp, sizeof(temp));
+#else // !REND2_SP
+	ri->Cmd_ArgsBuffer(temp, sizeof(temp));
+	weatherCommandFromConsole = qtrue;
+#endif // REND2_SP
 	RE_WorldEffectCommand(temp);
+#ifndef REND2_SP
+	weatherCommandFromConsole = qfalse;
+#endif // !REND2_SP
 }
 
 void R_WeatherEffect_f(void)
 {
 	char temp[2048] = { 0 };
+#ifdef REND2_SP
 	ri.Cmd_ArgsBuffer(temp, sizeof(temp));
+#else // !REND2_SP
+	ri->Cmd_ArgsBuffer(temp, sizeof(temp));
+#endif // REND2_SP
 	RE_WorldEffectCommand(temp);
 }
 
 void R_SetWeatherEffect_f(void)
 {
 	char temp[2048] = { 0 };
+#ifdef REND2_SP
 	ri.Cmd_ArgsBuffer(temp, sizeof(temp));
+#else // !REND2_SP
+	ri->Cmd_ArgsBuffer(temp, sizeof(temp));
+#endif // REND2_SP
 	RE_WorldEffectCommand(temp);
 }
 
@@ -1313,7 +1636,6 @@ void RB_SurfaceWeather(srfWeather_t* surf)
 			{
 				chunkIndex = ((int(centerZoneOffsetX + numMinZonesX) + x + 1) % 3 + 3) % 3;
 				chunkIndex += (((int(centerZoneOffsetY + numMinZonesY) + y + 1) % 3 + 3) % 3) * 3;
-
 				VectorSet2(
 					zoneOffsets[chunkIndex],
 					x,
@@ -1397,7 +1719,11 @@ void RB_SurfaceWeather(srfWeather_t* surf)
 				const byte currentFrameScene = backEndData->currentFrame->currentScene;
 				const GLuint currentFrameUbo = backEndData->currentFrame->ubo[currentFrameScene];
 				const UniformBlockBinding uniformBlockBindings[] = {
+#ifdef REND2_SP
 					{ currentFrameUbo, tr.cameraUboOffsets[tr.viewParms.currentViewParm], UNIFORM_BLOCK_CAMERA }
+#else // !REND2_SP
+					{ currentFrameUbo, (size_t)tr.cameraUboOffsets[tr.viewParms.currentViewParm], UNIFORM_BLOCK_CAMERA }
+#endif // REND2_SP
 				};
 				DrawItemSetUniformBlockBindings(
 					item, uniformBlockBindings, frameAllocator);
@@ -1408,7 +1734,9 @@ void RB_SurfaceWeather(srfWeather_t* surf)
 					UNIFORM_ZONEOFFSET,
 					(centerZoneOffsetX + x) * CHUNK_EXTENDS,
 					(centerZoneOffsetY + y) * CHUNK_EXTENDS);
+#ifdef REND2_SP
 				uniformDataWriter.SetUniformFloat(UNIFORM_TIME, backEnd.refdef.frameTime);
+#endif // REND2_SP
 				uniformDataWriter.SetUniformVec4(UNIFORM_COLOR, weatherObject->color);
 				uniformDataWriter.SetUniformVec4(UNIFORM_VIEWINFO, viewInfo);
 				uniformDataWriter.SetUniformMatrix4x4(UNIFORM_SHADOWMVP, tr.weatherSystem->weatherMVP);

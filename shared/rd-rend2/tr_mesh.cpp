@@ -23,13 +23,21 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_local.h"
 
+#ifdef REND2_SP
 float ProjectRadius(float r, vec3_t location)
+#else // !REND2_SP
+float ProjectRadius(const float r, vec3_t location)
+#endif // REND2_SP
 {
 	float pr = 0.0f;
 	float dist = 0.0f;
 	float c = 0.0f;
 	vec3_t	p;
+#ifdef REND2_SP
 	float	projected[4];
+#else // !REND2_SP
+	float	projected[4]{};
+#endif // REND2_SP
 
 	c = DotProduct(tr.viewParms.ori.axis[0], tr.viewParms.ori.origin);
 	dist = DotProduct(tr.viewParms.ori.axis[0], location) - c;
@@ -74,8 +82,14 @@ float ProjectRadius(float r, vec3_t location)
 R_CullModel
 =============
 */
+#ifdef REND2_SP
 static int R_CullModel(mdvModel_t* model, trRefEntity_t* ent) {
 	vec3_t		bounds[2];
+#else // !REND2_SP
+static int R_CullModel(mdvModel_t* model, const trRefEntity_t* ent)
+{
+	vec3_t		bounds[2]{};
+#endif // REND2_SP
 	mdvFrame_t* oldFrame = nullptr, * newFrame = nullptr;
 	int			i = 0;
 
@@ -156,6 +170,7 @@ static int R_CullModel(mdvModel_t* model, trRefEntity_t* ent) {
 	}
 }
 
+#ifdef REND2_SP
 /*
 =================
 RE_GetModelBounds
@@ -194,6 +209,21 @@ int R_ComputeLOD(trRefEntity_t* ent)
 	mdvFrame_t* frame = nullptr;
 	mdrHeader_t* mdr = nullptr;
 	mdrFrame_t* mdrframe = nullptr;
+#else // !REND2_SP
+/*
+=================
+R_ComputeLOD
+
+=================
+*/
+int R_ComputeLOD(trRefEntity_t* ent) {
+	float radius = 0.0f;
+	float flod = 0.0f, lodscale = 0.0f;
+	float projectedRadius = 0.0f;
+	mdvFrame_t* frame = nullptr;
+	mdrHeader_t* mdr = nullptr;
+	mdrFrame_t* mdrframe = nullptr;
+#endif // REND2_SP
 	int lod = 0;
 
 	if (tr.currentModel->numLods < 2)
@@ -257,6 +287,7 @@ int R_ComputeLOD(trRefEntity_t* ent)
 	if (lod < 0)
 		lod = 0;
 
+#ifdef REND2_SP
 	return lod;
 }
 
@@ -281,23 +312,6 @@ int R_ComputeFogNum(mdvModel_t* model, trRefEntity_t* ent) {
 	mdvFrame = model->frames + ent->e.frame;
 	VectorAdd(ent->e.origin, mdvFrame->localOrigin, localOrigin);
 	frameRadius = mdvFrame->radius;
-#ifndef REND2_SP
-	for (i = 1; i < tr.world->numfogs; i++) {
-		fog = &tr.world->fogs[i];
-		for (j = 0; j < 3; j++) {
-			if (localOrigin[j] - frameRadius >= fog->bounds[1][j]) {
-				break;
-			}
-			if (localOrigin[j] + frameRadius <= fog->bounds[0][j]) {
-				break;
-			}
-		}
-		if (j == 3) {
-			return i;
-		}
-	}
-	return 0;
-#else
 	int partialFog = 0;
 	for (i = 1; i < tr.world->numfogs; i++) {
 		fog = &tr.world->fogs[i];
@@ -329,7 +343,6 @@ int R_ComputeFogNum(mdvModel_t* model, trRefEntity_t* ent) {
 		}
 	}
 	return partialFog;
-#endif
 }
 
 /*
@@ -338,6 +351,54 @@ R_AddMD3Surfaces
 
 =================
 */
+#else // !REND2_SP
+	return lod;
+}
+
+/*
+=================
+R_ComputeFogNum
+
+=================
+*/
+static int R_ComputeFogNum(mdvModel_t* model, trRefEntity_t* ent) {
+	int				i = 0, j = 0;
+	fog_t* fog = nullptr;
+	mdvFrame_t* mdvFrame = nullptr;
+	vec3_t			localOrigin;
+
+	if (tr.refdef.rdflags & RDF_NOWORLDMODEL) {
+		return 0;
+	}
+
+	// FIXME: non-normalized axis issues
+	mdvFrame = model->frames + ent->e.frame;
+	VectorAdd(ent->e.origin, mdvFrame->localOrigin, localOrigin);
+	for (i = 1; i < tr.world->numfogs; i++) {
+		fog = &tr.world->fogs[i];
+		for (j = 0; j < 3; j++) {
+			if (localOrigin[j] - mdvFrame->radius >= fog->bounds[1][j]) {
+				break;
+			}
+			if (localOrigin[j] + mdvFrame->radius <= fog->bounds[0][j]) {
+				break;
+			}
+		}
+		if (j == 3) {
+			return i;
+		}
+	}
+
+	return 0;
+}
+
+/*
+=================
+R_AddMD3Surfaces
+
+=================
+*/
+#endif // REND2_SP
 void R_AddMD3Surfaces(trRefEntity_t* ent, int entityNum)
 {
 	// don't add third_person objects if not in a portal
@@ -360,7 +421,11 @@ void R_AddMD3Surfaces(trRefEntity_t* ent, int entityNum)
 		|| (ent->e.oldframe >= tr.currentModel->data.mdv[0]->numFrames)
 		|| (ent->e.oldframe < 0))
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_DEVELOPER, "R_AddMD3Surfaces: no such frame %d to %d for '%s'\n", ent->e.oldframe, ent->e.frame, tr.currentModel->name);
+#else // !REND2_SP
+		ri->Printf(PRINT_DEVELOPER, "R_AddMD3Surfaces: no such frame %d to %d for '%s'\n", ent->e.oldframe, ent->e.frame, tr.currentModel->name);
+#endif // REND2_SP
 		ent->e.frame = 0;
 		ent->e.oldframe = 0;
 	}
@@ -430,11 +495,19 @@ void R_AddMD3Surfaces(trRefEntity_t* ent, int entityNum)
 			}
 			if (shader == tr.defaultShader)
 			{
+#ifdef REND2_SP
 				ri.Printf(PRINT_DEVELOPER, "WARNING: no shader for surface %s in skin %s\n", surface->name, skin->name);
+#else // !REND2_SP
+				ri->Printf(PRINT_DEVELOPER, "WARNING: no shader for surface %s in skin %s\n", surface->name, skin->name);
+#endif // REND2_SP
 			}
 			else if (shader->defaultShader)
 			{
+#ifdef REND2_SP
 				ri.Printf(PRINT_DEVELOPER, "WARNING: shader %s in skin %s not found\n", shader->name, skin->name);
+#else // !REND2_SP
+				ri->Printf(PRINT_DEVELOPER, "WARNING: shader %s in skin %s not found\n", shader->name, skin->name);
+#endif // REND2_SP
 			}
 		}
 		else if (surface->numShaderIndexes <= 0)

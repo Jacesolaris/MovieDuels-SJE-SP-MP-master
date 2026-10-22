@@ -24,8 +24,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 void RB_ToneMap(FBO_t* hdrFbo, vec4i_t hdrBox, FBO_t* ldrFbo, vec4i_t ldrBox, int autoExposure)
 {
+#ifdef REND2_SP
 	vec4i_t srcBox, dstBox;
 	vec4_t color;
+#else // !REND2_SP
+	vec4i_t srcBox{}, dstBox{};
+	vec4_t color{};
+#endif // REND2_SP
 	static int lastFrameCount = 0;
 
 	if (autoExposure)
@@ -114,8 +119,12 @@ Framebuffers can be identical.
 */
 void RB_BokehBlur(FBO_t* src, vec4i_t srcBox, FBO_t* dst, vec4i_t dstBox, float blur)
 {
+#ifdef REND2_SP
 	//	vec4i_t srcBox, dstBox;
 	vec4_t color;
+#else // !REND2_SP
+	vec4_t color{};
+#endif // REND2_SP
 
 	blur *= 10.0f;
 
@@ -125,13 +134,16 @@ void RB_BokehBlur(FBO_t* src, vec4i_t srcBox, FBO_t* dst, vec4i_t dstBox, float 
 	// bokeh blur
 	if (blur > 0.0f)
 	{
+#ifdef REND2_SP
 		vec4i_t quarterBox;
+#else // !REND2_SP
+		vec4i_t quarterBox{};
+#endif // REND2_SP
 
 		quarterBox[0] = 0;
 		quarterBox[1] = tr.quarterFbo[0]->height;
 		quarterBox[2] = tr.quarterFbo[0]->width;
 		quarterBox[3] = -tr.quarterFbo[0]->height;
-
 		// create a quarter texture
 		//FBO_Blit(NULL, NULL, NULL, tr.quarterFbo[0], NULL, NULL, NULL, 0);
 		FBO_FastBlit(src, srcBox, tr.quarterFbo[0], quarterBox, GL_COLOR_BUFFER_BIT, GL_LINEAR);
@@ -171,7 +183,11 @@ void RB_BokehBlur(FBO_t* src, vec4i_t srcBox, FBO_t* dst, vec4i_t dstBox, float 
 
 		for (i = 0; i < 2; i++)
 		{
+#ifdef REND2_SP
 			vec2_t blurTexScale;
+#else // !REND2_SP
+			vec2_t blurTexScale{};
+#endif // REND2_SP
 			float subblur = 0.0f;
 
 			subblur = ((blur - 2.0f) / 2.0f) / 3.0f * (float)(i + 1);
@@ -231,14 +247,23 @@ void RB_BokehBlur(FBO_t* src, vec4i_t srcBox, FBO_t* dst, vec4i_t dstBox, float 
 
 static void RB_RadialBlur(FBO_t* srcFbo, FBO_t* dstFbo, int passes, float stretch, float x, float y, float w, float h, float xcenter, float ycenter, float alpha)
 {
+#ifdef REND2_SP
 	vec4i_t srcBox, dstBox;
 	vec4_t color;
+#else // !REND2_SP
+	vec4i_t srcBox{}, dstBox{};
+	vec4_t color{};
+#endif // REND2_SP
 	const float inc = 1.f / passes;
 	const float mul = powf(stretch, inc);
 	float scale = 0.0f;
 
 	{
+#ifdef REND2_SP
 		vec2_t texScale;
+#else // !REND2_SP
+		vec2_t texScale{};
+#endif // REND2_SP
 
 		texScale[0] =
 			texScale[1] = 1.0f;
@@ -303,7 +328,11 @@ static qboolean RB_UpdateSunFlareVis(void)
 				break;
 		}
 
+#ifdef REND2_SP
 		ri.Printf(PRINT_DEVELOPER, "Waited %d iterations\n", iter);
+#else // !REND2_SP
+		ri->Printf(PRINT_DEVELOPER, "Waited %d iterations\n", iter);
+#endif // REND2_SP
 	}
 
 	qglGetQueryObjectuiv(tr.sunFlareQuery[tr.sunFlareQueryIndex], GL_QUERY_RESULT, &sampleCount);
@@ -312,7 +341,11 @@ static qboolean RB_UpdateSunFlareVis(void)
 
 void RB_SunRays(FBO_t* srcFbo, vec4i_t srcBox, FBO_t* dstFbo, vec4i_t dstBox)
 {
+#ifdef REND2_SP
 	vec4_t color;
+#else // !REND2_SP
+	vec4_t color{};
+#endif // REND2_SP
 	float dot = 0.0f;
 	const float cutoff = 0.25f;
 	qboolean colorize = qtrue;
@@ -355,8 +388,13 @@ void RB_SunRays(FBO_t* srcFbo, vec4i_t srcBox, FBO_t* dstFbo, vec4i_t dstBox)
 	// initialize quarter buffers
 	{
 		float mul = 1.f;
+#ifdef REND2_SP
 		vec2_t texScale;
 		vec4i_t rayBox, quarterBox;
+#else // !REND2_SP
+		vec2_t texScale{};
+		vec4i_t rayBox{}, quarterBox{};
+#endif // REND2_SP
 
 		texScale[0] =
 			texScale[1] = 1.0f;
@@ -410,7 +448,11 @@ void RB_SunRays(FBO_t* srcFbo, vec4i_t srcBox, FBO_t* dstFbo, vec4i_t dstBox)
 	// add result back on top of the main buffer
 	{
 		float mul = 1.f;
+#ifdef REND2_SP
 		vec2_t texScale;
+#else // !REND2_SP
+		vec2_t texScale{};
+#endif // REND2_SP
 
 		texScale[0] =
 			texScale[1] = 1.0f;
@@ -443,9 +485,15 @@ static void RB_BlurAxis(FBO_t* srcFbo, FBO_t* dstFbo, float strength, qboolean h
 	ymul *= strength;
 
 	{
+#ifdef REND2_SP
 		vec4i_t srcBox, dstBox;
 		vec4_t color;
 		vec2_t texScale;
+#else // !REND2_SP
+		vec4i_t srcBox{}, dstBox{};
+		vec4_t color{};
+		vec2_t texScale{};
+#endif // REND2_SP
 
 		texScale[0] =
 			texScale[1] = 1.0f;
@@ -486,7 +534,11 @@ void RB_VBlur(FBO_t* srcFbo, FBO_t* dstFbo, float strength)
 void RB_GaussianBlur(FBO_t* srcFbo, FBO_t* intermediateFbo, FBO_t* dstFbo, float spread)
 {
 	// Blur X
+#ifdef REND2_SP
 	vec2_t scale;
+#else // !REND2_SP
+	vec2_t scale{};
+#endif // REND2_SP
 	VectorSet2(scale, spread, spread);
 
 	FBO_Blit(srcFbo, NULL, scale, intermediateFbo, NULL, &tr.gaussianBlurShader[0], NULL, GLS_SRCBLEND_ONE | GLS_DSTBLEND_ZERO);
@@ -500,7 +552,11 @@ void RB_BloomDownscale(image_t* sourceImage, FBO_t* destFBO)
 	vec2_t invTexRes = { 1.0f / sourceImage->width, 1.0f / sourceImage->height };
 
 	FBO_Bind(destFBO);
+#ifdef REND2_SP
 	GL_State(GLS_DEPTHTEST_DISABLE);
+#else // !REND2_SP
+	GL_State(GLS_SRCBLEND_ONE | GLS_DSTBLEND_ZERO);
+#endif // REND2_SP
 	GL_SetViewportAndScissor(0, 0, destFBO->width, destFBO->height);
 	qglClearBufferfv(GL_COLOR, 0, colorBlack);
 
@@ -523,7 +579,11 @@ void RB_BloomUpscale(FBO_t* sourceFBO, FBO_t* destFBO)
 	vec2_t invTexRes = { 1.0f / sourceImage->width, 1.0f / sourceImage->height };
 
 	FBO_Bind(destFBO);
+#ifdef REND2_SP
 	GL_State(GLS_DEPTHTEST_DISABLE);
+#else // !REND2_SP
+	GL_State(GLS_SRCBLEND_ONE | GLS_DSTBLEND_ZERO);
+#endif // REND2_SP
 	GL_SetViewportAndScissor(0, 0, destFBO->width, destFBO->height);
 	qglClearBufferfv(GL_COLOR, 0, colorBlack);
 

@@ -106,7 +106,11 @@ RE_AddPolyToScene
 
 =====================
 */
+#ifdef REND2_SP
 void RE_AddPolyToScene(qhandle_t hShader, int numVerts, const polyVert_t* verts, int numPolys)
+#else // !REND2_SP
+void RE_AddPolyToScene(const qhandle_t hShader, const int numVerts, const polyVert_t* verts, const int numPolys)
+#endif // REND2_SP
 {
 	srfPoly_t* poly = nullptr;
 	int			i = 0, j = 0;
@@ -118,11 +122,19 @@ void RE_AddPolyToScene(qhandle_t hShader, int numVerts, const polyVert_t* verts,
 		return;
 	}
 
+#ifdef REND2_SP
 	for (j = 0; j < numPolys; j++) {
 		if ((r_numpolyverts + numVerts) > max_polyverts || r_numpolys >= max_polys) {
 			ri.Printf(
 				PRINT_DEVELOPER,
 				S_COLOR_YELLOW "WARNING: RE_AddPolyToScene: r_max_polys or r_max_polyverts reached\n");
+#else // !REND2_SP
+	for (j = 0; j < numPolys; j++) {
+		if ((r_numpolyverts + numVerts) > max_polyverts || r_numpolys >= max_polys) {
+			ri->Printf(
+				PRINT_DEVELOPER,
+				S_COLOR_YELLOW "WARNING: RE_AddPolyToScene: r_max_polys or r_max_polyverts reached\n");
+#endif // REND2_SP
 			return;
 		}
 
@@ -187,19 +199,36 @@ void RE_AddRefEntityToScene(const refEntity_t* ent) {
 		return;
 	}
 	if (r_numentities >= MAX_REFENTITIES) {
+#ifdef REND2_SP
 		ri.Printf(PRINT_DEVELOPER, "RE_AddRefEntityToScene: Dropping refEntity, reached MAX_REFENTITIES\n");
+#else // !REND2_SP
+		ri->Printf(PRINT_DEVELOPER, "RE_AddRefEntityToScene: Dropping refEntity, reached MAX_REFENTITIES\n");
+#endif // REND2_SP
 		return;
 	}
 	if (Q_isnan(ent->origin[0]) || Q_isnan(ent->origin[1]) || Q_isnan(ent->origin[2])) {
 		static qboolean firstTime = qtrue;
 		if (firstTime) {
 			firstTime = qfalse;
+#ifdef REND2_SP
 			ri.Printf(PRINT_WARNING, "RE_AddRefEntityToScene passed a refEntity which has an origin with a NaN component\n");
+#else // !REND2_SP
+			const model_t* model = R_GetModelByHandle(ent->hModel);
+			ri->Printf(PRINT_WARNING, "RE_AddRefEntityToScene passed a refEntity which has an origin with a NaN component (reType %i, model '%s')\n",
+				ent->reType, model ? model->name : "");
+#endif // REND2_SP
 		}
 		return;
 	}
+#ifdef REND2_SP
 	if ((int)ent->reType < 0 || ent->reType >= RT_MAX_REF_ENTITY_TYPE) {
 		ri.Error(ERR_DROP, "RE_AddRefEntityToScene: bad reType %i", ent->reType);
+#else // !REND2_SP
+
+	if (static_cast<int>(ent->reType) < 0 || ent->reType >= RT_MAX_SP_REF_ENTITY_TYPE || ent->reType == RT_MAX_MP_REF_ENTITY_TYPE || ent->reType >= RT_MAX_REF_ENTITY_TYPE)
+	{
+		ri->Error(ERR_DROP, "RE_AddRefEntityToScene: bad reType %i", ent->reType);
+#endif // REND2_SP
 	}
 
 	backEndData->entities[r_numentities].e = *ent;
@@ -278,7 +307,12 @@ RE_AddLightToScene
 
 =====================
 */
+#ifdef REND2_SP
 void RE_AddLightToScene(const vec3_t org, float intensity, float r, float g, float b) {
+#else // !REND2_SP
+void RE_AddLightToScene(const vec3_t org, const float intensity, const float r, const float g, const float b)
+{
+#endif // REND2_SP
 	RE_AddDynamicLightToScene(org, intensity, r, g, b, qfalse);
 }
 
@@ -288,7 +322,12 @@ RE_AddAdditiveLightToScene
 
 =====================
 */
+#ifdef REND2_SP
 void RE_AddAdditiveLightToScene(const vec3_t org, float intensity, float r, float g, float b) {
+#else // !REND2_SP
+void RE_AddAdditiveLightToScene(const vec3_t org, const float intensity, const float r, const float g, const float b)
+{
+#endif // REND2_SP
 	RE_AddDynamicLightToScene(org, intensity, r, g, b, qtrue);
 }
 
@@ -531,14 +570,26 @@ void RE_RenderScene(const refdef_t* fd)
 		return;
 	}
 
+#ifdef REND2_SP
 	startTime = ri.Milliseconds();
+#else // !REND2_SP
+	startTime = ri->Milliseconds();
+#endif // REND2_SP
 
 	if (backEndData->currentFrame->currentScene >= MAX_SCENES) {
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "Tried to render to many subscenes per frame. Developer: Increase MAX_SCENES");
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "Tried to render to many subscenes per frame. Developer: Increase MAX_SCENES");
+#endif // REND2_SP
 	}
 
 	if (!tr.world && !(fd->rdflags & RDF_NOWORLDMODEL)) {
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "R_RenderScene: NULL worldmodel");
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "R_RenderScene: NULL worldmodel");
+#endif // REND2_SP
 	}
 
 	RE_BeginScene(fd);
@@ -589,7 +640,6 @@ void RE_RenderScene(const refdef_t* fd)
 			"%s_%i",
 			viewParmTypeNames[tr.cachedViewParms[i].viewParmType],
 			i));
-
 		qhandle_t timer = R_BeginTimedBlockCmd(va("Render Pass %i", i));
 		tr.refdef.numDrawSurfs = 0;
 		R_RenderView(&tr.cachedViewParms[i]);
@@ -610,5 +660,9 @@ void RE_RenderScene(const refdef_t* fd)
 	RE_EndScene();
 	R_PushDebugGroup(AL_VIEW, "2D Pass");
 
+#ifdef REND2_SP
 	tr.frontEndMsec += ri.Milliseconds() - startTime;
+#else // !REND2_SP
+	tr.frontEndMsec += ri->Milliseconds() - startTime;
+#endif // REND2_SP
 }

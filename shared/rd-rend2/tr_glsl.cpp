@@ -159,11 +159,19 @@ static void GLSL_PrintProgramInfoLog(GLuint object, qboolean developerOnly)
 
 	if (maxLength <= 0)
 	{
+#ifdef REND2_SP
 		ri.Printf(printLevel, "No compile log.\n");
+#else // !REND2_SP
+		ri->Printf(printLevel, "No compile log.\n");
+#endif // REND2_SP
 		return;
 	}
 
+#ifdef REND2_SP
 	ri.Printf(printLevel, "compile log:\n");
+#else // !REND2_SP
+	ri->Printf(printLevel, "compile log:\n");
+#endif // REND2_SP
 
 	if (maxLength < 1023)
 	{
@@ -171,11 +179,19 @@ static void GLSL_PrintProgramInfoLog(GLuint object, qboolean developerOnly)
 
 		msgPart[maxLength + 1] = '\0';
 
+#ifdef REND2_SP
 		ri.Printf(printLevel, "%s\n", msgPart);
+#else // !REND2_SP
+		ri->Printf(printLevel, "%s\n", msgPart);
+#endif // REND2_SP
 	}
 	else
 	{
+#ifdef REND2_SP
 		char* msg = (char*)R_Malloc(maxLength, TAG_SHADERTEXT);
+#else // !REND2_SP
+		char* msg = (char*)Z_Malloc(maxLength, TAG_SHADERTEXT);
+#endif // REND2_SP
 
 		qglGetProgramInfoLog(object, maxLength, &maxLength, msg);
 
@@ -183,7 +199,11 @@ static void GLSL_PrintProgramInfoLog(GLuint object, qboolean developerOnly)
 		{
 			Q_strncpyz(msgPart, msg + i, sizeof(msgPart));
 
+#ifdef REND2_SP
 			ri.Printf(printLevel, "%s\n", msgPart);
+#else // !REND2_SP
+			ri->Printf(printLevel, "%s\n", msgPart);
+#endif // REND2_SP
 		}
 
 		Z_Free(msg);
@@ -202,11 +222,19 @@ static void GLSL_PrintShaderInfoLog(GLuint object, qboolean developerOnly)
 
 	if (maxLength <= 0)
 	{
+#ifdef REND2_SP
 		ri.Printf(printLevel, "No compile log.\n");
+#else // !REND2_SP
+		ri->Printf(printLevel, "No compile log.\n");
+#endif // REND2_SP
 		return;
 	}
 
+#ifdef REND2_SP
 	ri.Printf(printLevel, "compile log:\n");
+#else // !REND2_SP
+	ri->Printf(printLevel, "compile log:\n");
+#endif // REND2_SP
 
 	if (maxLength < 1023)
 	{
@@ -214,11 +242,19 @@ static void GLSL_PrintShaderInfoLog(GLuint object, qboolean developerOnly)
 
 		msgPart[maxLength + 1] = '\0';
 
+#ifdef REND2_SP
 		ri.Printf(printLevel, "%s\n", msgPart);
+#else // !REND2_SP
+		ri->Printf(printLevel, "%s\n", msgPart);
+#endif // REND2_SP
 	}
 	else
 	{
+#ifdef REND2_SP
 		msg = (char*)R_Malloc(maxLength, TAG_SHADERTEXT);
+#else // !REND2_SP
+		msg = (char*)Z_Malloc(maxLength, TAG_SHADERTEXT);
+#endif // REND2_SP
 
 		qglGetShaderInfoLog(object, maxLength, &maxLength, msg);
 
@@ -226,7 +262,11 @@ static void GLSL_PrintShaderInfoLog(GLuint object, qboolean developerOnly)
 		{
 			Q_strncpyz(msgPart, msg + i, sizeof(msgPart));
 
+#ifdef REND2_SP
 			ri.Printf(printLevel, "%s\n", msgPart);
+#else // !REND2_SP
+			ri->Printf(printLevel, "%s\n", msgPart);
+#endif // REND2_SP
 		}
 
 		Z_Free(msg);
@@ -244,14 +284,22 @@ static void GLSL_PrintShaderSource(GLuint shader)
 		return;
 	}
 
+#ifdef REND2_SP
 	char* msg = (char*)R_Malloc(maxLength, TAG_SHADERTEXT);
+#else // !REND2_SP
+	char* msg = (char*)Z_Malloc(maxLength, TAG_SHADERTEXT);
+#endif // REND2_SP
 	qglGetShaderSource(shader, maxLength, nullptr, msg);
 
 	for (int i = 0; i < maxLength; i += 1023)
 	{
 		char msgPart[1024];
 		Q_strncpyz(msgPart, msg + i, sizeof(msgPart));
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, "%s\n", msgPart);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, "%s\n", msgPart);
+#endif // REND2_SP
 	}
 
 	Z_Free(msg);
@@ -454,7 +502,11 @@ static GLuint GLSL_CompileGPUShader(
 
 		qglDeleteShader(shader);
 
+#ifdef REND2_SP
 		ri.Error(ERR_FATAL, "Couldn't compile shader");
+#else // !REND2_SP
+		ri->Error(ERR_FATAL, "Couldn't compile shader");
+#endif // REND2_SP
 		return 0;
 	}
 
@@ -501,7 +553,11 @@ static size_t GLSL_LoadGPUShaderSource(
 	GLcharARB* buffer = nullptr;
 	if (r_externalGLSL->integer)
 	{
+#ifdef REND2_SP
 		shaderTextLen = ri.FS_ReadFile(filename, (void**)&buffer);
+#else // !REND2_SP
+		shaderTextLen = ri->FS_ReadFile(filename, (void**)&buffer);
+#endif // REND2_SP
 	}
 
 	const char* shaderText = nullptr;
@@ -509,20 +565,36 @@ static size_t GLSL_LoadGPUShaderSource(
 	{
 		if (fallback)
 		{
+#ifdef REND2_SP
 			ri.Printf(PRINT_DEVELOPER, "...loading built-in '%s'\n", filename);
+#else // !REND2_SP
+			ri->Printf(PRINT_DEVELOPER, "...loading built-in '%s'\n", filename);
+#endif // REND2_SP
 			shaderText = fallback;
 			shaderTextLen = strlen(shaderText);
+#ifdef REND2_SP
 			ri.Printf(PRINT_DEVELOPER, "...loading '%s'\n", filename);
+#else // !REND2_SP
+			ri->Printf(PRINT_DEVELOPER, "...loading '%s'\n", filename);
+#endif // REND2_SP
 		}
 		else
 		{
+#ifdef REND2_SP
 			ri.Printf(PRINT_DEVELOPER, "couldn't load '%s'\n", filename);
+#else // !REND2_SP
+			ri->Printf(PRINT_DEVELOPER, "couldn't load '%s'\n", filename);
+#endif // REND2_SP
 			return 0;
 		}
 	}
 	else
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_DEVELOPER, "...loading '%s'\n", filename);
+#else // !REND2_SP
+		ri->Printf(PRINT_DEVELOPER, "...loading '%s'\n", filename);
+#endif // REND2_SP
 		shaderText = buffer;
 	}
 
@@ -535,7 +607,11 @@ static size_t GLSL_LoadGPUShaderSource(
 
 	if (buffer)
 	{
+#ifdef REND2_SP
 		ri.FS_FreeFile(buffer);
+#else // !REND2_SP
+		ri->FS_FreeFile(buffer);
+#endif // REND2_SP
 	}
 
 	return result;
@@ -550,8 +626,13 @@ static void GLSL_LinkProgram(GLuint program)
 	if (linked != GL_TRUE)
 	{
 		GLSL_PrintProgramInfoLog(program, qfalse);
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, "\n");
 		ri.Error(ERR_FATAL, "shaders failed to link");
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, "\n");
+		ri->Error(ERR_FATAL, "shaders failed to link");
+#endif // REND2_SP
 	}
 }
 
@@ -574,7 +655,11 @@ static void GLSL_ShowProgramUniforms(GLuint program)
 	{
 		qglGetActiveUniform(program, i, sizeof(uniformName), NULL, &size, &type, uniformName);
 
+#ifdef REND2_SP
 		ri.Printf(PRINT_DEVELOPER, "active uniform: '%s'\n", uniformName);
+#else // !REND2_SP
+		ri->Printf(PRINT_DEVELOPER, "active uniform: '%s'\n", uniformName);
+#endif // REND2_SP
 	}
 
 	qglUseProgram(0);
@@ -648,7 +733,11 @@ static void GLSL_BindShaderInterface(shaderProgram_t* program)
 	}
 }
 
+#ifdef REND2_SP
 GLenum ToGLShaderType(GPUShaderType type)
+#else // !REND2_SP
+static GLenum ToGLShaderType(GPUShaderType type)
+#endif // REND2_SP
 {
 	switch (type)
 	{
@@ -759,6 +848,7 @@ bool ShaderProgramBuilder::AddShader(const GPUShaderDesc& shaderDesc, const char
 		}
 
 		++attempts;
+#ifdef REND2_SP
 	}
 
 	if (sourceLen == 0)
@@ -768,10 +858,22 @@ bool ShaderProgramBuilder::AddShader(const GPUShaderDesc& shaderDesc, const char
 			"ShaderProgramBuilder::AddShader: Failed to allocate enough memory for "
 			"shader '%s'\n",
 			name);
+#else // !REND2_SP
+	}
+
+	if (sourceLen == 0)
+	{
+		ri->Printf(
+			PRINT_ALL,
+			"ShaderProgramBuilder::AddShader: Failed to allocate enough memory for "
+			"shader '%s'\n",
+			name);
+#endif // REND2_SP
 
 		return false;
 	}
 
+#ifdef REND2_SP
 	const GLuint shader = GLSL_CompileGPUShader(
 		program,
 		shaderSource.c_str(),
@@ -790,6 +892,23 @@ bool ShaderProgramBuilder::AddShader(const GPUShaderDesc& shaderDesc, const char
 	if (glRefConfig.annotateResources) qglObjectLabel(GL_PROGRAM, program, -1, name);
 
 	qglAttachShader(program, shader);
+#else // !REND2_SP
+	const GLuint shader = GLSL_CompileGPUShader(
+		program,
+		shaderSource.c_str(),
+		sourceLen + headerLen,
+		apiShader);
+	if (shader == 0)
+	{
+		ri->Printf(
+			PRINT_ALL,
+			"ShaderProgramBuilder::AddShader: Unable to load \"%s\"\n",
+			name);
+		return false;
+	}
+
+	qglAttachShader(program, shader);
+#endif // REND2_SP
 	shaderNames[numShaderNames++] = shader;
 
 	return true;
@@ -798,7 +917,11 @@ bool ShaderProgramBuilder::AddShader(const GPUShaderDesc& shaderDesc, const char
 bool ShaderProgramBuilder::Build(shaderProgram_t* shaderProgram)
 {
 	const size_t nameBufferSize = strlen(name) + 1;
+#ifdef REND2_SP
 	shaderProgram->name = (char*)R_Malloc(nameBufferSize, TAG_GENERAL);
+#else // !REND2_SP
+	shaderProgram->name = (char*)Z_Malloc(nameBufferSize, TAG_GENERAL);
+#endif // REND2_SP
 	Q_strncpyz(shaderProgram->name, name, nameBufferSize);
 
 	shaderProgram->program = program;
@@ -845,6 +968,7 @@ static bool GLSL_LoadGPUShader(
 	}
 	return builder.Build(program);
 }
+#ifdef REND2_SP
 
 void GLSL_InitUniforms(shaderProgram_t* program)
 {
@@ -852,6 +976,15 @@ void GLSL_InitUniforms(shaderProgram_t* program)
 		UNIFORM_COUNT * sizeof(*program->uniforms), TAG_GENERAL);
 	program->uniformBufferOffsets = (short*)R_Malloc(
 		UNIFORM_COUNT * sizeof(*program->uniformBufferOffsets), TAG_GENERAL);
+#else // !REND2_SP
+
+static void GLSL_InitUniforms(shaderProgram_t* program)
+{
+	program->uniforms = (GLint*)Z_Malloc(
+		UNIFORM_COUNT * sizeof(*program->uniforms), TAG_GENERAL);
+	program->uniformBufferOffsets = (short*)Z_Malloc(
+		UNIFORM_COUNT * sizeof(*program->uniformBufferOffsets), TAG_GENERAL);
+#endif // REND2_SP
 
 	GLint* uniforms = program->uniforms;
 	int size = 0;
@@ -890,9 +1023,14 @@ void GLSL_InitUniforms(shaderProgram_t* program)
 		}
 	}
 
+#ifdef REND2_SP
 	program->uniformBuffer = (char*)R_Malloc(size, TAG_SHADERTEXT, qtrue);
+#else // !REND2_SP
+	program->uniformBuffer = (char*)Z_Malloc(size, TAG_SHADERTEXT, qtrue);
+#endif // REND2_SP
 
 	program->uniformBlocks = 0;
+#ifdef REND2_SP
 	for (int i = 0; i < UNIFORM_BLOCK_COUNT; ++i)
 	{
 		const GLuint blockIndex = qglGetUniformBlockIndex(
@@ -906,6 +1044,21 @@ void GLSL_InitUniforms(shaderProgram_t* program)
 			uniformBlocksInfo[i].name,
 			uniformBlocksInfo[i].size,
 			uniformBlocksInfo[i].slot);
+#else // !REND2_SP
+	for (int i = 0; i < UNIFORM_BLOCK_COUNT; ++i)
+	{
+		const GLuint blockIndex = qglGetUniformBlockIndex(
+			program->program, uniformBlocksInfo[i].name);
+		if (blockIndex == GL_INVALID_INDEX)
+			continue;
+		ri->Printf(
+			PRINT_DEVELOPER,
+			"Binding block %d (name '%s', size %zu bytes) to slot %d\n",
+			blockIndex,
+			uniformBlocksInfo[i].name,
+			uniformBlocksInfo[i].size,
+			uniformBlocksInfo[i].slot);
+#endif // REND2_SP
 		qglUniformBlockBinding(
 			program->program, blockIndex, uniformBlocksInfo[i].slot);
 		program->uniformBlocks |= (1u << i);
@@ -913,7 +1066,11 @@ void GLSL_InitUniforms(shaderProgram_t* program)
 
 	GLint numActiveUniformBlocks = 0;
 	qglGetProgramiv(program->program, GL_ACTIVE_UNIFORM_BLOCKS, &numActiveUniformBlocks);
+#ifdef REND2_SP
 	ri.Printf(PRINT_DEVELOPER, "..num uniform blocks: %d\n", numActiveUniformBlocks);
+#else // !REND2_SP
+	ri->Printf(PRINT_DEVELOPER, "..num uniform blocks: %d\n", numActiveUniformBlocks);
+#endif // REND2_SP
 	for (int i = 0; i < numActiveUniformBlocks; ++i)
 	{
 		char blockName[512];
@@ -928,14 +1085,22 @@ void GLSL_InitUniforms(shaderProgram_t* program)
 		qglGetActiveUniformBlockiv(
 			program->program, i, GL_UNIFORM_BLOCK_DATA_SIZE, &blockSize);
 
+#ifdef REND2_SP
 		ri.Printf(PRINT_DEVELOPER, "..block %d: %s (%d bytes)\n", i, blockName, blockSize);
+#else // !REND2_SP
+		ri->Printf(PRINT_DEVELOPER, "..block %d: %s (%d bytes)\n", i, blockName, blockSize);
+#endif // REND2_SP
 		GLint numMembers = 0;
 		qglGetActiveUniformBlockiv(
 			program->program, i, GL_UNIFORM_BLOCK_ACTIVE_UNIFORMS, &numMembers);
 
 		if (numMembers > 0)
 		{
+#ifdef REND2_SP
 			GLuint memberIndices[128];
+#else // !REND2_SP
+			GLuint memberIndices[128]{};
+#endif // REND2_SP
 			qglGetActiveUniformBlockiv(
 				program->program,
 				i,
@@ -968,27 +1133,56 @@ void GLSL_InitUniforms(shaderProgram_t* program)
 					nullptr,
 					memberName);
 
+#ifdef REND2_SP
 				ri.Printf(PRINT_DEVELOPER, "....uniform '%s'\n", memberName);
 				ri.Printf(PRINT_DEVELOPER, "......offset: %d\n", memberOffsets[j]);
+#else // !REND2_SP
+				ri->Printf(PRINT_DEVELOPER, "....uniform '%s'\n", memberName);
+				ri->Printf(PRINT_DEVELOPER, "......offset: %d\n", memberOffsets[j]);
+#endif // REND2_SP
 				switch (memberTypes[j])
 				{
 				case GL_FLOAT:
+#ifdef REND2_SP
 					ri.Printf(PRINT_DEVELOPER, "......type: float\n");
+#else // !REND2_SP
+					ri->Printf(PRINT_DEVELOPER, "......type: float\n");
+#endif // REND2_SP
 					break;
 				case GL_FLOAT_VEC2:
+#ifdef REND2_SP
 					ri.Printf(PRINT_DEVELOPER, "......type: vec2\n");
+#else // !REND2_SP
+					ri->Printf(PRINT_DEVELOPER, "......type: vec2\n");
+#endif // REND2_SP
 					break;
 				case GL_FLOAT_VEC3:
+#ifdef REND2_SP
 					ri.Printf(PRINT_DEVELOPER, "......type: vec3\n");
+#else // !REND2_SP
+					ri->Printf(PRINT_DEVELOPER, "......type: vec3\n");
+#endif // REND2_SP
 					break;
 				case GL_FLOAT_VEC4:
+#ifdef REND2_SP
 					ri.Printf(PRINT_DEVELOPER, "......type: vec4\n");
+#else // !REND2_SP
+					ri->Printf(PRINT_DEVELOPER, "......type: vec4\n");
+#endif // REND2_SP
 					break;
 				case GL_INT:
+#ifdef REND2_SP
 					ri.Printf(PRINT_DEVELOPER, "......type: int\n");
+#else // !REND2_SP
+					ri->Printf(PRINT_DEVELOPER, "......type: int\n");
+#endif // REND2_SP
 					break;
 				default:
+#ifdef REND2_SP
 					ri.Printf(PRINT_DEVELOPER, "......type: other\n");
+#else // !REND2_SP
+					ri->Printf(PRINT_DEVELOPER, "......type: other\n");
+#endif // REND2_SP
 					break;
 				}
 			}
@@ -996,7 +1190,11 @@ void GLSL_InitUniforms(shaderProgram_t* program)
 	}
 }
 
+#ifdef REND2_SP
 void GLSL_FinishGPUShader(shaderProgram_t* program)
+#else // !REND2_SP
+static void GLSL_FinishGPUShader(shaderProgram_t* program)
+#endif // REND2_SP
 {
 #if defined(_DEBUG)
 	GLSL_ShowProgramUniforms(program->program);
@@ -1095,7 +1293,11 @@ void GLSL_SetUniformInt(shaderProgram_t* program, int uniformNum, GLint value)
 
 	if (uniformsInfo[uniformNum].type != GLSL_INT)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "GLSL_SetUniformInt: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "GLSL_SetUniformInt: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#endif // REND2_SP
 		return;
 	}
 
@@ -1119,7 +1321,11 @@ void GLSL_SetUniformFloat(shaderProgram_t* program, int uniformNum, GLfloat valu
 
 	if (uniformsInfo[uniformNum].type != GLSL_FLOAT)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "GLSL_SetUniformFloat: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "GLSL_SetUniformFloat: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#endif // REND2_SP
 		return;
 	}
 
@@ -1143,7 +1349,11 @@ void GLSL_SetUniformVec2(shaderProgram_t* program, int uniformNum, const vec2_t 
 
 	if (uniformsInfo[uniformNum].type != GLSL_VEC2)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "GLSL_SetUniformVec2: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "GLSL_SetUniformVec2: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#endif // REND2_SP
 		return;
 	}
 
@@ -1168,9 +1378,14 @@ void GLSL_SetUniformVec2N(shaderProgram_t* program, int uniformNum, const float*
 
 	if (uniformsInfo[uniformNum].type != GLSL_VEC2)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "GLSL_SetUniformVec2: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "GLSL_SetUniformVec2: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#endif // REND2_SP
 		return;
 	}
+#ifdef REND2_SP
 
 	if (uniformsInfo[uniformNum].size < numVec2s)
 	{
@@ -1178,6 +1393,15 @@ void GLSL_SetUniformVec2N(shaderProgram_t* program, int uniformNum, const float*
 			uniformNum,
 			uniformsInfo[uniformNum].size,
 			numVec2s);
+#else // !REND2_SP
+
+	if (uniformsInfo[uniformNum].size < numVec2s)
+	{
+		ri->Printf(PRINT_WARNING, "GLSL_SetUniformVec2N: uniform %i only has %d elements! Tried to set %d\n",
+			uniformNum,
+			uniformsInfo[uniformNum].size,
+			numVec2s);
+#endif // REND2_SP
 		return;
 	}
 
@@ -1201,7 +1425,11 @@ void GLSL_SetUniformVec3(shaderProgram_t* program, int uniformNum, const vec3_t 
 
 	if (uniformsInfo[uniformNum].type != GLSL_VEC3)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "GLSL_SetUniformVec3: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "GLSL_SetUniformVec3: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#endif // REND2_SP
 		return;
 	}
 
@@ -1225,7 +1453,11 @@ void GLSL_SetUniformVec4(shaderProgram_t* program, int uniformNum, const vec4_t 
 
 	if (uniformsInfo[uniformNum].type != GLSL_VEC4)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "GLSL_SetUniformVec4: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "GLSL_SetUniformVec4: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#endif // REND2_SP
 		return;
 	}
 
@@ -1249,9 +1481,14 @@ void GLSL_SetUniformFloatN(shaderProgram_t* program, int uniformNum, const float
 
 	if (uniformsInfo[uniformNum].type != GLSL_FLOAT)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "GLSL_SetUniformFloatN: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "GLSL_SetUniformFloatN: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#endif // REND2_SP
 		return;
 	}
+#ifdef REND2_SP
 
 	if (uniformsInfo[uniformNum].size < numFloats)
 	{
@@ -1259,6 +1496,15 @@ void GLSL_SetUniformFloatN(shaderProgram_t* program, int uniformNum, const float
 			uniformNum,
 			uniformsInfo[uniformNum].size,
 			numFloats);
+#else // !REND2_SP
+
+	if (uniformsInfo[uniformNum].size < numFloats)
+	{
+		ri->Printf(PRINT_WARNING, "GLSL_SetUniformFloatN: uniform %i only has %d elements! Tried to set %d\n",
+			uniformNum,
+			uniformsInfo[uniformNum].size,
+			numFloats);
+#endif // REND2_SP
 		return;
 	}
 
@@ -1282,7 +1528,11 @@ void GLSL_SetUniformMatrix4x3(shaderProgram_t* program, int uniformNum, const fl
 
 	if (uniformsInfo[uniformNum].type != GLSL_MAT4x3)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "GLSL_SetUniformMatrix4x3: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "GLSL_SetUniformMatrix4x3: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#endif // REND2_SP
 		return;
 	}
 
@@ -1310,7 +1560,11 @@ void GLSL_SetUniformMatrix4x4(shaderProgram_t* program, int uniformNum, const fl
 
 	if (uniformsInfo[uniformNum].type != GLSL_MAT4x4)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "GLSL_SetUniformMatrix4x4: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "GLSL_SetUniformMatrix4x4: wrong type for uniform %i in program %s\n", uniformNum, program->name);
+#endif // REND2_SP
 		return;
 	}
 
@@ -1328,7 +1582,11 @@ void GLSL_SetUniformMatrix4x4(shaderProgram_t* program, int uniformNum, const fl
 	qglUniformMatrix4fv(uniforms[uniformNum], numElements, GL_FALSE, matrix);
 }
 
+#ifdef REND2_SP
 void GLSL_DeleteGPUShader(shaderProgram_t* program)
+#else // !REND2_SP
+static void GLSL_DeleteGPUShader(shaderProgram_t* program)
+#endif // REND2_SP
 {
 	if (program->program)
 	{
@@ -1341,6 +1599,7 @@ void GLSL_DeleteGPUShader(shaderProgram_t* program)
 
 		Com_Memset(program, 0, sizeof(*program));
 	}
+#ifdef REND2_SP
 }
 
 static bool GLSL_IsValidPermutationForGeneric(int shaderCaps)
@@ -1350,7 +1609,14 @@ static bool GLSL_IsValidPermutationForGeneric(int shaderCaps)
 		(shaderCaps & GENERICDEF_USE_SKELETAL_ANIMATION))
 		return false;
 #endif // REND2_SP
+#else // !REND2_SP
+}
+
+static bool GLSL_IsValidPermutationForGeneric(int shaderCaps)
+{
+#endif // REND2_SP
 	return true;
+#ifdef REND2_SP
 }
 
 static bool GLSL_IsValidPermutationForFog(int shaderCaps)
@@ -1360,10 +1626,17 @@ static bool GLSL_IsValidPermutationForFog(int shaderCaps)
 		(shaderCaps & FOGDEF_USE_SKELETAL_ANIMATION))
 		return false;
 #endif // REND2_SP
+#else // !REND2_SP
+}
+
+static bool GLSL_IsValidPermutationForFog(int shaderCaps)
+{
+#endif // REND2_SP
 	return true;
 }
 
 static bool GLSL_IsValidPermutationForLight(int lightType, int shaderCaps)
+#ifdef REND2_SP
 {
 	if (!lightType && (shaderCaps & LIGHTDEF_USE_PARALLAXMAP))
 		return false;
@@ -1373,10 +1646,20 @@ static bool GLSL_IsValidPermutationForLight(int lightType, int shaderCaps)
 		(shaderCaps & LIGHTDEF_USE_VERTEX_ANIMATION))
 		return false;
 #endif // REND2_SP
+#else // !REND2_SP
+{
+	if (!lightType && (shaderCaps & LIGHTDEF_USE_PARALLAXMAP))
+		return false;
+
+#endif // REND2_SP
 	return true;
 }
 
+#ifdef REND2_SP
 Block* FindBlock(const char* name, Block* blocks, size_t numBlocks)
+#else // !REND2_SP
+static Block* FindBlock(const char* name, Block* blocks, size_t numBlocks)
+#endif // REND2_SP
 {
 	for (size_t i = 0; i < numBlocks; ++i)
 	{
@@ -1425,8 +1708,12 @@ void GLSL_InitSplashScreenShader()
 
 	size_t splashLen = strlen("splash");
 	tr.splashScreenShader.program = program;
+#ifdef REND2_SP
 	tr.splashScreenShader.name = (char*)R_Malloc(splashLen + 1, TAG_GENERAL);
 	GLSL_InitUniforms(&tr.splashScreenShader);
+#else // !REND2_SP
+	tr.splashScreenShader.name = (char*)Z_Malloc(splashLen + 1, TAG_GENERAL);
+#endif // REND2_SP
 	Q_strncpyz(tr.splashScreenShader.name, "splash", splashLen + 1);
 }
 
@@ -1441,13 +1728,21 @@ static const GPUProgramDesc* LoadProgramSource(
 		char programPath[MAX_QPATH];
 		Com_sprintf(programPath, sizeof(programPath), "glsl/%s.glsl", programName);
 
+#ifdef REND2_SP
 		long size = ri.FS_ReadFile(programPath, (void**)&buffer);
+#else // !REND2_SP
+		long size = ri->FS_ReadFile(programPath, (void**)&buffer);
+#endif // REND2_SP
 		if (size)
 		{
 			GPUProgramDesc* externalProgramDesc = ojkAlloc<GPUProgramDesc>(allocator);
 			*externalProgramDesc = ParseProgramSource(allocator, buffer);
 			result = externalProgramDesc;
+#ifdef REND2_SP
 			ri.FS_FreeFile(buffer);
+#else // !REND2_SP
+			ri->FS_FreeFile(buffer);
+#endif // REND2_SP
 		}
 	}
 
@@ -1464,7 +1759,11 @@ static int GLSL_LoadGPUProgramGeneric(
 	char name[64];
 	size_t nameLen = strlen("generic\0");
 
+#ifdef REND2_SP
 	char extradefines[1200];
+#else // !REND2_SP
+	char extradefines[1200]{};
+#endif // REND2_SP
 	const GPUProgramDesc* programDesc =
 		LoadProgramSource("generic", allocator, fallback_genericProgram);
 	for (int i = 0; i < GENERICDEF_COUNT; i++)
@@ -1531,7 +1830,11 @@ static int GLSL_LoadGPUProgramGeneric(
 		if (!GLSL_LoadGPUShader(builder, &tr.genericShader[i], name, attribs, NO_XFB_VARS,
 			extradefines, *programDesc))
 		{
+#ifdef REND2_SP
 			ri.Error(ERR_FATAL, "Could not load generic shader!");
+#else // !REND2_SP
+			ri->Error(ERR_FATAL, "Could not load generic shader!");
+#endif // REND2_SP
 		}
 
 		GLSL_InitUniforms(&tr.genericShader[i]);
@@ -1561,7 +1864,11 @@ static int GLSL_LoadGPUProgramFogPass(
 	char name[64];
 	size_t nameLen = strlen("fogpass\0");
 
+#ifdef REND2_SP
 	char extradefines[1200];
+#else // !REND2_SP
+	char extradefines[1200]{};
+#endif // REND2_SP
 	const GPUProgramDesc* programDesc =
 		LoadProgramSource("fogpass", allocator, fallback_fogpassProgram);
 	for (int i = 0; i < FOGDEF_COUNT; i++)
@@ -1614,7 +1921,11 @@ static int GLSL_LoadGPUProgramFogPass(
 		if (!GLSL_LoadGPUShader(builder, &tr.fogShader[i], name, attribs, NO_XFB_VARS,
 			extradefines, *programDesc))
 		{
+#ifdef REND2_SP
 			ri.Error(ERR_FATAL, "Could not load fogpass shader!");
+#else // !REND2_SP
+			ri->Error(ERR_FATAL, "Could not load fogpass shader!");
+#endif // REND2_SP
 		}
 
 		GLSL_InitUniforms(&tr.fogShader[i]);
@@ -1643,7 +1954,11 @@ static int GLSL_LoadGPUProgramVelocityPass(
 	char name[64];
 	size_t nameLen = strlen("velocity\0");
 
+#ifdef REND2_SP
 	char extradefines[1200];
+#else // !REND2_SP
+	char extradefines[1200]{};
+#endif // REND2_SP
 	const GPUProgramDesc* programDesc =
 		LoadProgramSource("velocity", allocator, fallback_velocityProgram);
 	for (int i = 0; i < VELOCITYDEF_COUNT; i++)
@@ -1702,7 +2017,11 @@ static int GLSL_LoadGPUProgramVelocityPass(
 		if (!GLSL_LoadGPUShader(builder, &tr.velocityShader[i], name, attribs, NO_XFB_VARS,
 			extradefines, *programDesc))
 		{
+#ifdef REND2_SP
 			ri.Error(ERR_FATAL, "Could not load velocity shader!");
+#else // !REND2_SP
+			ri->Error(ERR_FATAL, "Could not load velocity shader!");
+#endif // REND2_SP
 		}
 
 		GLSL_InitUniforms(&tr.velocityShader[i]);
@@ -1731,7 +2050,11 @@ static int GLSL_LoadGPUProgramRefraction(
 	char name[64];
 	size_t nameLen = strlen("refraction\0");
 
+#ifdef REND2_SP
 	char extradefines[1200];
+#else // !REND2_SP
+	char extradefines[1200]{};
+#endif // REND2_SP
 	const GPUProgramDesc* programDesc =
 		LoadProgramSource("refraction", allocator, fallback_refractionProgram);
 	for (int i = 0; i < REFRACTIONDEF_COUNT; i++)
@@ -1758,7 +2081,6 @@ static int GLSL_LoadGPUProgramRefraction(
 			Q_strcat(name, sizeof(name), "_RGBGEN");
 			Q_strcat(extradefines, sizeof(extradefines), "#define USE_RGBAGEN\n");
 		}
-
 #ifdef REND2_SP_MD3
 		if (i & REFRACTIONDEF_USE_VERTEX_ANIMATION)
 		{
@@ -1786,7 +2108,11 @@ static int GLSL_LoadGPUProgramRefraction(
 		if (!GLSL_LoadGPUShader(builder, &tr.refractionShader[i], name, attribs, NO_XFB_VARS,
 			extradefines, *programDesc))
 		{
+#ifdef REND2_SP
 			ri.Error(ERR_FATAL, "Could not load refraction shader!");
+#else // !REND2_SP
+			ri->Error(ERR_FATAL, "Could not load refraction shader!");
+#endif // REND2_SP
 		}
 
 		GLSL_InitUniforms(&tr.refractionShader[i]);
@@ -1815,7 +2141,11 @@ static int GLSL_LoadGPUProgramLightAll(
 	char name[64];
 	size_t nameLen = strlen("lightall\0");
 
+#ifdef REND2_SP
 	char extradefines[1200];
+#else // !REND2_SP
+	char extradefines[1200]{};
+#endif // REND2_SP
 	const GPUProgramDesc* programDesc =
 		LoadProgramSource("lightall", allocator, fallback_lightallProgram);
 	const bool useFastLight =
@@ -1845,7 +2175,6 @@ static int GLSL_LoadGPUProgramLightAll(
 				Q_strcat(name, sizeof(name), "_FAST");
 				Q_strcat(extradefines, sizeof(extradefines), "#define USE_FAST_LIGHT\n");
 			}
-
 			if (r_dlightMode->integer >= 2)
 				Q_strcat(extradefines, sizeof(extradefines), "#define USE_DSHADOWS\n");
 
@@ -1892,7 +2221,6 @@ static int GLSL_LoadGPUProgramLightAll(
 					Q_strcat(name, sizeof(name), "H");
 					Q_strcat(extradefines, sizeof(extradefines), "#define USE_PARALLAXMAP\n");
 				}
-
 				attribs |= ATTR_TANGENT;
 			}
 
@@ -1981,7 +2309,11 @@ static int GLSL_LoadGPUProgramLightAll(
 		if (!GLSL_LoadGPUShader(builder, &tr.lightallShader[i], name, attribs, NO_XFB_VARS,
 			extradefines, *programDesc))
 		{
+#ifdef REND2_SP
 			ri.Error(ERR_FATAL, "Could not load lightall shader!");
+#else // !REND2_SP
+			ri->Error(ERR_FATAL, "Could not load lightall shader!");
+#endif // REND2_SP
 		}
 
 		GLSL_InitUniforms(&tr.lightallShader[i]);
@@ -2030,7 +2362,11 @@ static int GLSL_LoadGPUProgramBasicWithDefinitions(
 		extraDefines,
 		*programDesc))
 	{
+#ifdef REND2_SP
 		ri.Error(ERR_FATAL, "Could not load %s shader!", programName);
+#else // !REND2_SP
+		ri->Error(ERR_FATAL, "Could not load %s shader!", programName);
+#endif // REND2_SP
 	}
 
 	return 1;
@@ -2129,7 +2465,11 @@ static int GLSL_LoadGPUProgramVShadow(
 {
 	Allocator allocator(scratchAlloc.Base(), scratchAlloc.GetSize());
 
+#ifdef REND2_SP
 	char extradefines[1200];
+#else // !REND2_SP
+	char extradefines[1200]{};
+#endif // REND2_SP
 	const GPUProgramDesc* programDesc =
 		LoadProgramSource("shadowvolume", allocator, fallback_shadowvolumeProgram);
 	const uint32_t attribs = ATTR_POSITION | ATTR_BONE_INDEXES | ATTR_BONE_WEIGHTS;
@@ -2140,7 +2480,11 @@ static int GLSL_LoadGPUProgramVShadow(
 	if (!GLSL_LoadGPUShader(builder, &tr.volumeShadowShader, "shadowvolume", attribs, NO_XFB_VARS,
 		extradefines, *programDesc))
 	{
+#ifdef REND2_SP
 		ri.Error(ERR_FATAL, "Could not load shadowvolume shader!");
+#else // !REND2_SP
+		ri->Error(ERR_FATAL, "Could not load shadowvolume shader!");
+#endif // REND2_SP
 	}
 
 	GLSL_InitUniforms(&tr.volumeShadowShader);
@@ -2198,7 +2542,11 @@ static int GLSL_LoadGPUProgramTonemap(
 	Allocator& scratchAlloc)
 {
 	Allocator allocator(scratchAlloc.Base(), scratchAlloc.GetSize());
+#ifdef REND2_SP
 	char extradefines[1200];
+#else // !REND2_SP
+	char extradefines[1200]{};
+#endif // REND2_SP
 	const GPUProgramDesc* programDesc =
 		LoadProgramSource("tonemap", allocator, fallback_tonemapProgram);
 	const uint32_t attribs = ATTR_POSITION | ATTR_TEXCOORD0;
@@ -2218,14 +2566,28 @@ static int GLSL_LoadGPUProgramTonemap(
 	if (!GLSL_LoadGPUShader(builder, &tr.tonemapShader[0], "tonemap", attribs, NO_XFB_VARS,
 		extradefines, *programDesc))
 	{
+#ifdef REND2_SP
 		ri.Error(ERR_FATAL, "Could not load tonemap shader!");
+#else // !REND2_SP
+		ri->Error(ERR_FATAL, "Could not load tonemap shader!");
+#endif // REND2_SP
 	}
 
+#ifdef REND2_SP
 	Q_strcat(extradefines, sizeof(extradefines), "#define USE_LINEAR_LIGHT\n");
 	if (!GLSL_LoadGPUShader(builder, &tr.tonemapShader[1], "tonemap_SRGB", attribs, NO_XFB_VARS,
 		extradefines, *programDesc))
+#else // !REND2_SP
+	Q_strcat(extradefines, sizeof(extradefines), "#define USE_LINEAR_LIGHT\n");
+	if (!GLSL_LoadGPUShader(builder, &tr.tonemapShader[1], "tonemap", attribs, NO_XFB_VARS,
+		extradefines, *programDesc))
+#endif // REND2_SP
 	{
+#ifdef REND2_SP
 		ri.Error(ERR_FATAL, "Could not load tonemap shader!");
+#else // !REND2_SP
+		ri->Error(ERR_FATAL, "Could not load tonemap shader!");
+#endif // REND2_SP
 	}
 
 	for (int i = 0; i < 2; i++)
@@ -2250,7 +2612,11 @@ static int GLSL_LoadGPUProgramCalcLuminanceLevel(
 	int numPrograms = 0;
 	Allocator allocator(scratchAlloc.Base(), scratchAlloc.GetSize());
 
+#ifdef REND2_SP
 	char extradefines[1200];
+#else // !REND2_SP
+	char extradefines[1200]{};
+#endif // REND2_SP
 	const GPUProgramDesc* programDesc =
 		LoadProgramSource("calclevels4x", allocator, fallback_calclevels4xProgram);
 	for (int i = 0; i < 2; i++)
@@ -2264,7 +2630,11 @@ static int GLSL_LoadGPUProgramCalcLuminanceLevel(
 		if (!GLSL_LoadGPUShader(builder, &tr.calclevels4xShader[i], "calclevels4x", attribs,
 			NO_XFB_VARS, extradefines, *programDesc))
 		{
+#ifdef REND2_SP
 			ri.Error(ERR_FATAL, "Could not load calclevels4x shader!");
+#else // !REND2_SP
+			ri->Error(ERR_FATAL, "Could not load calclevels4x shader!");
+#endif // REND2_SP
 		}
 
 		GLSL_InitUniforms(&tr.calclevels4xShader[i]);
@@ -2354,7 +2724,11 @@ static int GLSL_LoadGPUProgramDepthBlur(
 	int numPrograms = 0;
 	Allocator allocator(scratchAlloc.Base(), scratchAlloc.GetSize());
 
+#ifdef REND2_SP
 	char extradefines[1200];
+#else // !REND2_SP
+	char extradefines[1200]{};
+#endif // REND2_SP
 	const GPUProgramDesc* programDesc =
 		LoadProgramSource("depthBlur", allocator, fallback_depthblurProgram);
 	for (int i = 0; i < 2; i++)
@@ -2370,7 +2744,11 @@ static int GLSL_LoadGPUProgramDepthBlur(
 		if (!GLSL_LoadGPUShader(builder, &tr.depthBlurShader[i], "depthBlur", attribs, NO_XFB_VARS,
 			extradefines, *programDesc))
 		{
+#ifdef REND2_SP
 			ri.Error(ERR_FATAL, "Could not load depthBlur shader!");
+#else // !REND2_SP
+			ri->Error(ERR_FATAL, "Could not load depthBlur shader!");
+#endif // REND2_SP
 		}
 
 		GLSL_InitUniforms(&tr.depthBlurShader[i]);
@@ -2394,7 +2772,11 @@ static int GLSL_LoadGPUProgramGaussianBlur(
 {
 	Allocator allocator(scratchAlloc.Base(), scratchAlloc.GetSize());
 
+#ifdef REND2_SP
 	char extradefines[1200];
+#else // !REND2_SP
+	char extradefines[1200]{};
+#endif // REND2_SP
 	const GPUProgramDesc* programDesc =
 		LoadProgramSource("gaussian_blur", allocator, fallback_gaussian_blurProgram);
 	const uint32_t attribs = 0;
@@ -2405,13 +2787,21 @@ static int GLSL_LoadGPUProgramGaussianBlur(
 	if (!GLSL_LoadGPUShader(builder, &tr.gaussianBlurShader[0], "gaussian_blur", attribs,
 		NO_XFB_VARS, extradefines, *programDesc))
 	{
+#ifdef REND2_SP
 		ri.Error(ERR_FATAL, "Could not load gaussian_blur (X-direction) shader!");
+#else // !REND2_SP
+		ri->Error(ERR_FATAL, "Could not load gaussian_blur (X-direction) shader!");
+#endif // REND2_SP
 	}
 
 	if (!GLSL_LoadGPUShader(builder, &tr.gaussianBlurShader[1], "gaussian_blur", attribs,
 		NO_XFB_VARS, nullptr, *programDesc))
 	{
+#ifdef REND2_SP
 		ri.Error(ERR_FATAL, "Could not load gaussian_blur (Y-direction) shader!");
+#else // !REND2_SP
+		ri->Error(ERR_FATAL, "Could not load gaussian_blur (Y-direction) shader!");
+#endif // REND2_SP
 	}
 
 	int numPrograms = 0;
@@ -2466,63 +2856,98 @@ static int GLSL_LoadGPUProgramSurfaceSprites(
 	int numPrograms = 0;
 	Allocator allocator(scratchAlloc.Base(), scratchAlloc.GetSize());
 
+#ifdef REND2_SP
 	char name[64];
 	size_t nameLen = strlen("surface_sprites\0");
 
 	char extradefines[1200];
+#else // !REND2_SP
+	char extradefines[1200]{};
+#endif // REND2_SP
 	const GPUProgramDesc* programDesc =
 		LoadProgramSource("surface_sprites", allocator, fallback_surface_spritesProgram);
 	const uint32_t attribs = ATTR_POSITION | ATTR_POSITION2 | ATTR_NORMAL | ATTR_COLOR;
 	for (int i = 0; i < SSDEF_COUNT; ++i)
 	{
+#ifdef REND2_SP
 		Q_strncpyz(name, "surface_sprites\0", nameLen + 1);
+#endif // REND2_SP
 		extradefines[0] = '\0';
 
 		if ((i & SSDEF_FACE_CAMERA) && (i & SSDEF_FACE_UP))
 			continue;
 
 		if (i & SSDEF_FACE_CAMERA)
+#ifdef REND2_SP
 		{
 			Q_strcat(name, sizeof(name), "_FACE_CAM");
+#endif // REND2_SP
 			Q_strcat(extradefines, sizeof(extradefines),
 				"#define FACE_CAMERA\n");
+#ifdef REND2_SP
 		}
+#endif // REND2_SP
 		else if (i & SSDEF_FACE_UP)
+#ifdef REND2_SP
 		{
 			Q_strcat(name, sizeof(name), "_FACE_UP");
+#endif // REND2_SP
 			Q_strcat(extradefines, sizeof(extradefines),
 				"#define FACE_UP\n");
+#ifdef REND2_SP
 		}
+#endif // REND2_SP
 		else if (i & SSDEF_FLATTENED)
+#ifdef REND2_SP
 		{
 			Q_strcat(name, sizeof(name), "_FLATTENED");
+#endif // REND2_SP
 			Q_strcat(extradefines, sizeof(extradefines),
 				"#define FACE_FLATTENED\n");
+#ifdef REND2_SP
 		}
+#endif // REND2_SP
 		if (i & SSDEF_FX_SPRITE)
+#ifdef REND2_SP
 		{
 			Q_strcat(name, sizeof(name), "_FX");
+#endif // REND2_SP
 			Q_strcat(extradefines, sizeof(extradefines),
 				"#define FX_SPRITE\n");
+#ifdef REND2_SP
 		}
+#endif // REND2_SP
 		if (i & SSDEF_USE_FOG)
+#ifdef REND2_SP
 		{
 			Q_strcat(name, sizeof(name), "_FOG");
+#endif // REND2_SP
 			Q_strcat(extradefines, sizeof(extradefines),
 				"#define USE_FOG\n");
+#ifdef REND2_SP
 			if (r_volumetricFog->integer)
 				Q_strcat(extradefines, sizeof(extradefines), "#define USE_VOLUMETRIC_FOG\n");
 		}
+#endif // REND2_SP
 
+#ifdef REND2_SP
 		/*if ( i & SSDEF_ALPHA_TEST )
 			Q_strcat(extradefines, sizeof(extradefines),
 					"#define USE_ALPHA_TEST\n");*/
+#else // !REND2_SP
+		if (i & SSDEF_ALPHA_TEST)
+			Q_strcat(extradefines, sizeof(extradefines),
+				"#define ALPHA_TEST\n");
+#endif // REND2_SP
 
 		if (i & SSDEF_ADDITIVE)
+#ifdef REND2_SP
 		{
 			Q_strcat(name, sizeof(name), "_ADDITIVE");
+#endif // REND2_SP
 			Q_strcat(extradefines, sizeof(extradefines),
 				"#define ADDITIVE_BLEND\n");
+#ifdef REND2_SP
 		}
 		if (i & SSDEF_VELOCITY)
 		{
@@ -2533,15 +2958,27 @@ static int GLSL_LoadGPUProgramSurfaceSprites(
 		shaderProgram_t* program = tr.spriteShader + i;
 		if (!GLSL_LoadGPUShader(builder, program, name, attribs, NO_XFB_VARS,
 			extradefines, *programDesc))
+#else // !REND2_SP
+
+		shaderProgram_t* program = tr.spriteShader + i;
+		if (!GLSL_LoadGPUShader(builder, program, "surface_sprites", attribs, NO_XFB_VARS,
+			extradefines, *programDesc))
+#endif // REND2_SP
 		{
+#ifdef REND2_SP
 			ri.Error(ERR_FATAL, "Could not load surface sprites shader!");
+#else // !REND2_SP
+			ri->Error(ERR_FATAL, "Could not load surface sprites shader!");
+#endif // REND2_SP
 		}
 
 		GLSL_InitUniforms(program);
+#ifdef REND2_SP
 		qglUseProgram(program->program);
 		GLSL_SetUniformInt(program, UNIFORM_DIFFUSEMAP, TB_DIFFUSEMAP);
 		GLSL_SetUniformInt(program, UNIFORM_VOLUMETRICLIGHTMAP, 2);
 		qglUseProgram(0);
+#endif // REND2_SP
 		GLSL_FinishGPUShader(program);
 		++numPrograms;
 	}
@@ -2587,7 +3024,11 @@ static int GLSL_LoadGPUProgramSMAA(
 	ShaderProgramBuilder& builder,
 	Allocator& scratchAlloc)
 {
+#ifdef REND2_SP
 	char extradefines[1200];
+#else // !REND2_SP
+	char extradefines[1200]{};
+#endif // REND2_SP
 	extradefines[0] = '\0';
 
 	Q_strcat(extradefines, sizeof(extradefines),
@@ -2643,6 +3084,7 @@ static int GLSL_LoadGPUProgramSMAA(
 	}
 
 	{
+#ifdef REND2_SP
 		GLSL_LoadGPUProgramBasicWithDefinitions(
 			builder,
 			scratchAlloc,
@@ -2653,6 +3095,18 @@ static int GLSL_LoadGPUProgramSMAA(
 
 		GLSL_InitUniforms(&tr.smaaEdgeShader);
 
+#else // !REND2_SP
+		GLSL_LoadGPUProgramBasicWithDefinitions(
+			builder,
+			scratchAlloc,
+			&tr.smaaEdgeShader,
+			"smaaEdge",
+			fallback_smaaEdgeProgram,
+			extradefines);
+
+		GLSL_InitUniforms(&tr.smaaEdgeShader);
+
+#endif // REND2_SP
 		qglUseProgram(tr.smaaEdgeShader.program);
 		GLSL_SetUniformInt(&tr.smaaEdgeShader, UNIFORM_SCREENIMAGEMAP, 0);
 		qglUseProgram(0);
@@ -2660,6 +3114,7 @@ static int GLSL_LoadGPUProgramSMAA(
 		GLSL_FinishGPUShader(&tr.smaaEdgeShader);
 	}
 	{
+#ifdef REND2_SP
 		GLSL_LoadGPUProgramBasicWithDefinitions(
 			builder,
 			scratchAlloc,
@@ -2669,6 +3124,17 @@ static int GLSL_LoadGPUProgramSMAA(
 			extradefines);
 
 		GLSL_InitUniforms(&tr.smaaBlendShader);
+#else // !REND2_SP
+		GLSL_LoadGPUProgramBasicWithDefinitions(
+			builder,
+			scratchAlloc,
+			&tr.smaaBlendShader,
+			"smaaBlendWeight",
+			fallback_smaaBlendWeightProgram,
+			extradefines);
+
+		GLSL_InitUniforms(&tr.smaaBlendShader);
+#endif // REND2_SP
 
 		qglUseProgram(tr.smaaBlendShader.program);
 		GLSL_SetUniformInt(&tr.smaaBlendShader, UNIFORM_EDGEMAP, 0);
@@ -2774,11 +3240,19 @@ void GLSL_LoadGPUShaders()
 	};
 #endif
 
+#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "------- GLSL_InitGPUShaders -------\n");
+#else // !REND2_SP
+	ri->Printf(PRINT_ALL, "------- GLSL_InitGPUShaders -------\n");
+#endif // REND2_SP
 
 	R_IssuePendingRenderCommands();
 
+#ifdef REND2_SP
 	int startTime = ri.Milliseconds();
+#else // !REND2_SP
+	int startTime = ri->Milliseconds();
+#endif // REND2_SP
 
 	Allocator allocator(512 * 1024);
 	ShaderProgramBuilder builder;
@@ -2810,17 +3284,28 @@ void GLSL_LoadGPUShaders()
 	numEtcShaders += GLSL_LoadGPUProgramWeather(builder, allocator);
 	if (r_smaa->integer)
 		numEtcShaders += GLSL_LoadGPUProgramSMAA(builder, allocator);
+#ifdef REND2_SP
 
 	ri.Printf(PRINT_ALL, "loaded %i GLSL shaders (%i gen %i light %i etc) in %5.2f seconds\n",
 		numGenShaders + numLightShaders + numEtcShaders, numGenShaders, numLightShaders,
 		numEtcShaders, (ri.Milliseconds() - startTime) / 1000.0);
+#else // !REND2_SP
+
+	ri->Printf(PRINT_ALL, "loaded %i GLSL shaders (%i gen %i light %i etc) in %5.2f seconds\n",
+		numGenShaders + numLightShaders + numEtcShaders, numGenShaders, numLightShaders,
+		numEtcShaders, (ri->Milliseconds() - startTime) / 1000.0);
+#endif // REND2_SP
 }
 
 void GLSL_ShutdownGPUShaders(void)
 {
 	int i = 0;
 
+#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "------- GLSL_ShutdownGPUShaders -------\n");
+#else // !REND2_SP
+	ri->Printf(PRINT_ALL, "------- GLSL_ShutdownGPUShaders -------\n");
+#endif // REND2_SP
 
 	for (int i = 0; i < ATTR_INDEX_MAX; i++)
 		qglDisableVertexAttribArray(i);
@@ -2835,14 +3320,20 @@ void GLSL_ShutdownGPUShaders(void)
 	for (i = 0; i < REFRACTIONDEF_COUNT; i++)
 		GLSL_DeleteGPUShader(&tr.refractionShader[i]);
 
+#ifdef REND2_SP
 	for (i = 0; i < TEXCOLORDEF_COUNT; i++)
 		GLSL_DeleteGPUShader(&tr.textureColorShader[i]);
+#else // !REND2_SP
+	GLSL_DeleteGPUShader(&tr.textureColorShader[TEXCOLORDEF_SCREEN_TRIANGLE]);
+#endif // REND2_SP
 
 	for (i = 0; i < FOGDEF_COUNT; i++)
 		GLSL_DeleteGPUShader(&tr.fogShader[i]);
+#ifdef REND2_SP
 
 	for (i = 0; i < VELOCITYDEF_COUNT; i++)
 		GLSL_DeleteGPUShader(&tr.velocityShader[i]);
+#endif // REND2_SP
 
 	for (i = 0; i < LIGHTDEF_COUNT; i++)
 		GLSL_DeleteGPUShader(&tr.lightallShader[i]);
@@ -2858,17 +3349,25 @@ void GLSL_ShutdownGPUShaders(void)
 	for (i = 0; i < 2; i++)
 		GLSL_DeleteGPUShader(&tr.calclevels4xShader[i]);
 
+#ifdef REND2_SP
 	GLSL_DeleteGPUShader(&tr.highpassShader);
+#endif // REND2_SP
 	GLSL_DeleteGPUShader(&tr.ssaoShader);
 
 	for (i = 0; i < 2; i++)
 		GLSL_DeleteGPUShader(&tr.depthBlurShader[i]);
 
+#ifndef REND2_SP
+	GLSL_DeleteGPUShader(&tr.testcubeShader);
+#endif // !REND2_SP
 	GLSL_DeleteGPUShader(&tr.prefilterEnvMapShader);
 
 	for (i = 0; i < 2; ++i)
 		GLSL_DeleteGPUShader(&tr.gaussianBlurShader[i]);
 
+#ifndef REND2_SP
+	GLSL_DeleteGPUShader(&tr.glowCompositeShader);
+#endif // !REND2_SP
 	GLSL_DeleteGPUShader(&tr.dglowDownsample);
 	GLSL_DeleteGPUShader(&tr.dglowUpsample);
 
@@ -2877,11 +3376,13 @@ void GLSL_ShutdownGPUShaders(void)
 
 	GLSL_DeleteGPUShader(&tr.weatherUpdateShader);
 	GLSL_DeleteGPUShader(&tr.weatherShader);
+#ifdef REND2_SP
 
 	GLSL_DeleteGPUShader(&tr.smaaEdgeShader);
 	GLSL_DeleteGPUShader(&tr.smaaBlendShader);
 	GLSL_DeleteGPUShader(&tr.smaaResolveShader);
 	GLSL_DeleteGPUShader(&tr.smaaTemporalResolveShader);
+#endif // REND2_SP
 
 	glState.currentProgram = 0;
 	qglUseProgram(0);
@@ -2925,7 +3426,11 @@ void GLSL_BindNullProgram(void)
 
 void GLSL_VertexAttribsState(uint32_t stateBits, VertexArraysProperties* vertexArraysOut)
 {
+#ifdef REND2_SP
 	VertexArraysProperties vertexArraysLocal;
+#else // !REND2_SP
+	VertexArraysProperties vertexArraysLocal{};
+#endif // REND2_SP
 	VertexArraysProperties* vertexArrays = vertexArraysOut;
 
 	if (!vertexArrays)

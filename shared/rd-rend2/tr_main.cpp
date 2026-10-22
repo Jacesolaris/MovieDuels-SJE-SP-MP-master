@@ -24,10 +24,14 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_local.h"
 #include "tr_weather.h"
 
+#ifdef REND2_SP
 #include <string.h> // memcpy
-#ifndef REND2_SP
+#else // !REND2_SP
+#include <string.h> // memcpy
+
 #include "ghoul2/g2_local.h"
-#endif
+
+#endif // REND2_SP
 trGlobals_t		tr;
 
 static float	s_flipMatrix[16] = {
@@ -39,7 +43,11 @@ static float	s_flipMatrix[16] = {
 	0, 0, 0, 1
 };
 
+#ifdef REND2_SP
 refimport_t	ri;
+#else // !REND2_SP
+refimport_t* ri = nullptr;
+#endif // REND2_SP
 
 // entities that will have procedurally generated surfaces will just
 // point at this for their sorting surface
@@ -50,7 +58,11 @@ surfaceType_t	entitySurface = SF_ENTITY;
 R_CompareVert
 ================
 */
+#ifdef REND2_SP
 qboolean R_CompareVert(srfVert_t* v1, srfVert_t* v2, qboolean checkST)
+#else // !REND2_SP
+static qboolean R_CompareVert(srfVert_t* v1, srfVert_t* v2, qboolean checkST)
+#endif // REND2_SP
 {
 	int             i = 0;
 
@@ -75,7 +87,11 @@ qboolean R_CompareVert(srfVert_t* v1, srfVert_t* v2, qboolean checkST)
 R_CalcNormalForTriangle
 =============
 */
+#ifdef REND2_SP
 void R_CalcNormalForTriangle(vec3_t normal, const vec3_t v0, const vec3_t v1, const vec3_t v2)
+#else // !REND2_SP
+static void R_CalcNormalForTriangle(vec3_t normal, const vec3_t v0, const vec3_t v1, const vec3_t v2)
+#endif // REND2_SP
 {
 	vec3_t          udir, vdir;
 
@@ -87,6 +103,7 @@ void R_CalcNormalForTriangle(vec3_t normal, const vec3_t v0, const vec3_t v1, co
 	VectorNormalize(normal);
 }
 
+#ifdef REND2_SP
 /*
 =============
 R_CalcTangentsForTriangle
@@ -101,6 +118,22 @@ void R_CalcTangentsForTriangle(vec3_t tangent, vec3_t bitangent,
 	vec3_t          planes[3];
 	vec3_t          u, v;
 
+#else // !REND2_SP
+/*
+=============
+R_CalcTangentsForTriangle
+http://members.rogers.com/deseric/tangentspace.htm
+=============
+*/
+static void R_CalcTangentsForTriangle(vec3_t tangent, vec3_t bitangent,
+	const vec3_t v0, const vec3_t v1, const vec3_t v2,
+	const vec2_t t0, const vec2_t t1, const vec2_t t2)
+{
+	int             i = 0;
+	vec3_t          planes[3]{};
+	vec3_t          u, v;
+
+#endif // REND2_SP
 	for (i = 0; i < 3; i++)
 	{
 		VectorSet(u, v1[i] - v0[i], t1[0] - t0[0], t1[1] - t0[1]);
@@ -131,6 +164,7 @@ void R_CalcTangentsForTriangle(vec3_t tangent, vec3_t bitangent,
 	VectorNormalize(bitangent);
 }
 
+#ifdef REND2_SP
 /*
 =============
 R_CalcTangentSpace
@@ -142,6 +176,19 @@ void R_CalcTangentSpace(vec3_t tangent, vec3_t bitangent, vec3_t normal,
 	vec3_t          cp, u, v;
 	vec3_t          faceNormal;
 
+#else // !REND2_SP
+/*
+=============
+R_CalcTangentSpace
+=============
+*/
+static void R_CalcTangentSpace(vec3_t tangent, vec3_t bitangent, vec3_t normal,
+	const vec3_t v0, const vec3_t v1, const vec3_t v2, const vec2_t t0, const vec2_t t1, const vec2_t t2)
+{
+	vec3_t          cp, u, v;
+	vec3_t          faceNormal;
+
+#endif // REND2_SP
 	VectorSet(u, v1[0] - v0[0], t1[0] - t0[0], t1[1] - t0[1]);
 	VectorSet(v, v2[0] - v0[0], t2[0] - t0[0], t2[1] - t0[1]);
 
@@ -218,9 +265,15 @@ void R_CalcTangentSpace(vec3_t tangent, vec3_t bitangent, vec3_t normal,
 
 	VectorCopy(faceNormal, normal);
 }
+#ifdef REND2_SP
 
 void R_CalcTangentSpaceFast(vec3_t tangent, vec3_t bitangent, vec3_t normal,
 	const vec3_t v0, const vec3_t v1, const vec3_t v2, const vec2_t t0, const vec2_t t1, const vec2_t t2)
+#else // !REND2_SP
+
+static void R_CalcTangentSpaceFast(vec3_t tangent, vec3_t bitangent, vec3_t normal,
+	const vec3_t v0, const vec3_t v1, const vec3_t v2, const vec2_t t0, const vec2_t t1, const vec2_t t2)
+#endif // REND2_SP
 {
 	vec3_t          cp, u, v;
 	vec3_t          faceNormal;
@@ -340,7 +393,11 @@ qboolean R_CalcTangentVectors(srfVert_t* dv[3])
 {
 	int             i = 0;
 	float           bb = 0.0f, s = 0.0f, t = 0.0f;
+#ifdef REND2_SP
 	vec3_t          bary;
+#else // !REND2_SP
+	vec3_t          bary{};
+#endif // REND2_SP
 
 	/* calculate barycentric basis for the triangle */
 	bb = (dv[1]->st[0] - dv[0]->st[0]) * (dv[2]->st[1] - dv[0]->st[1]) - (dv[2]->st[0] - dv[0]->st[0]) * (dv[1]->st[1] - dv[0]->st[1]);
@@ -350,7 +407,11 @@ qboolean R_CalcTangentVectors(srfVert_t* dv[3])
 	/* do each vertex */
 	for (i = 0; i < 3; i++)
 	{
+#ifdef REND2_SP
 		vec3_t bitangent, nxt;
+#else // !REND2_SP
+		vec3_t bitangent{}, nxt;
+#endif // REND2_SP
 
 		// calculate s tangent vector
 		s = dv[i]->st[0] + 10.0f;
@@ -399,7 +460,12 @@ R_CullLocalBox
 Returns CULL_IN, CULL_CLIP, or CULL_OUT
 =================
 */
+#ifdef REND2_SP
 int R_CullLocalBox(vec3_t localBounds[2]) {
+#else // !REND2_SP
+int R_CullLocalBox(const vec3_t bounds[2])
+{
+#endif // REND2_SP
 #if 0
 	int		i, j;
 	vec3_t	transformed[8];
@@ -419,10 +485,17 @@ int R_CullLocalBox(vec3_t localBounds[2]) {
 		v[1] = bounds[(i >> 1) & 1][1];
 		v[2] = bounds[(i >> 2) & 1][2];
 
+#ifdef REND2_SP
 		VectorCopy(tr.ori.origin, transformed[i]);
 		VectorMA(transformed[i], v[0], tr.ori.axis[0], transformed[i]);
 		VectorMA(transformed[i], v[1], tr.ori.axis[1], transformed[i]);
 		VectorMA(transformed[i], v[2], tr.ori.axis[2], transformed[i]);
+#else // !REND2_SP
+		VectorCopy(tr.ori->origin, transformed[i]);
+		VectorMA(transformed[i], v[0], tr.ori->axis[0], transformed[i]);
+		VectorMA(transformed[i], v[1], tr.ori->axis[1], transformed[i]);
+		VectorMA(transformed[i], v[2], tr.ori->axis[2], transformed[i]);
+#endif // REND2_SP
 	}
 
 	// check against frustum planes
@@ -458,8 +531,13 @@ int R_CullLocalBox(vec3_t localBounds[2]) {
 #else
 	int             j = 0;
 	vec3_t          transformed;
+#ifdef REND2_SP
 	vec3_t          v;
 	vec3_t          worldBounds[2];
+#else // !REND2_SP
+	vec3_t          v{};
+	vec3_t          worldBounds[2]{};
+#endif // REND2_SP
 
 	if (r_nocull->integer)
 	{
@@ -471,9 +549,15 @@ int R_CullLocalBox(vec3_t localBounds[2]) {
 
 	for (j = 0; j < 8; j++)
 	{
+#ifdef REND2_SP
 		v[0] = localBounds[j & 1][0];
 		v[1] = localBounds[(j >> 1) & 1][1];
 		v[2] = localBounds[(j >> 2) & 1][2];
+#else // !REND2_SP
+		v[0] = bounds[j & 1][0];
+		v[1] = bounds[(j >> 1) & 1][1];
+		v[2] = bounds[(j >> 2) & 1][2];
+#endif // REND2_SP
 
 		R_LocalPointToWorld(v, transformed);
 
@@ -531,7 +615,11 @@ int R_CullBox(vec3_t worldBounds[2]) {
 /*
 ** R_CullLocalPointAndRadius
 */
+#ifdef REND2_SP
 int R_CullLocalPointAndRadius(const vec3_t pt, float radius)
+#else // !REND2_SP
+int R_CullLocalPointAndRadius(const vec3_t pt, const float radius)
+#endif // REND2_SP
 {
 	vec3_t transformed;
 
@@ -581,7 +669,11 @@ int R_CullPointAndRadiusEx(const vec3_t pt, float radius, const cplane_t* frustu
 /*
 ** R_CullPointAndRadius
 */
+#ifdef REND2_SP
 int R_CullPointAndRadius(const vec3_t pt, float radius)
+#else // !REND2_SP
+int R_CullPointAndRadius(const vec3_t pt, const float radius)
+#endif // REND2_SP
 {
 	return R_CullPointAndRadiusEx(pt, radius, tr.viewParms.frustum, (tr.viewParms.flags & VPF_FARPLANEFRUSTUM) ? 5 : 4);
 }
@@ -628,16 +720,28 @@ R_TransformModelToClip
 
 ==========================
 */
+#ifdef REND2_SP
 void R_TransformModelToClip(const vec3_t src, const float* modelViewMatrix, const float* projectionMatrix,
 	vec4_t eye, vec4_t dst) {
+#else // !REND2_SP
+void R_TransformModelToClip(const vec3_t src, const float* modelMatrix, const float* projectionMatrix, vec4_t eye, vec4_t dst)
+{
+#endif // REND2_SP
 	int i = 0;
 
 	for (i = 0; i < 4; i++) {
 		eye[i] =
+#ifdef REND2_SP
 			src[0] * modelViewMatrix[i + 0 * 4] +
 			src[1] * modelViewMatrix[i + 1 * 4] +
 			src[2] * modelViewMatrix[i + 2 * 4] +
 			1 * modelViewMatrix[i + 3 * 4];
+#else // !REND2_SP
+			src[0] * modelMatrix[i + 0 * 4] +
+			src[1] * modelMatrix[i + 1 * 4] +
+			src[2] * modelMatrix[i + 2 * 4] +
+			1 * modelMatrix[i + 3 * 4];
+#endif // REND2_SP
 	}
 
 	for (i = 0; i < 4; i++) {
@@ -674,7 +778,11 @@ myGlMultMatrix
 
 ==========================
 */
+#ifdef REND2_SP
 void myGlMultMatrix(const float* a, const float* b, float* out) {
+#else // !REND2_SP
+static void myGlMultMatrix(const float* a, const float* b, float* out) {
+#endif // REND2_SP
 	int		i = 0, j = 0;
 
 	for (i = 0; i < 4; i++) {
@@ -766,7 +874,11 @@ Sets up the modelview matrix for a given viewParm
 */
 static void R_RotateForViewer(orientationr_t* ori, viewParms_t* viewParms)
 {
+#ifdef REND2_SP
 	float	viewerMatrix[16];
+#else // !REND2_SP
+	float	viewerMatrix[16]{};
+#endif // REND2_SP
 	vec3_t	origin;
 
 	*ori = {};
@@ -813,16 +925,21 @@ static void R_SetFarClip(viewParms_t* viewParms, const trRefdef_t* refdef)
 	int		i = 0;
 
 	// if not rendering the world (icons, menus, etc)
+#ifdef REND2_SP
 	// set a 2k far clip plane
 	if (refdef != NULL)
 	{
 		if (refdef->rdflags & RDF_NOWORLDMODEL) {
-#ifndef REND2_SP
+#else // !REND2_SP
+	// set a 2k far clip plane
+	if (refdef != NULL)
+	{
+		if (refdef->rdflags & RDF_NOWORLDMODEL) {
 			// override the zfar then
 			if (refdef->rdflags & RDF_AUTOMAP)
 				viewParms->zFar = 32768.0f;
 			else
-#endif
+#endif // REND2_SP
 				viewParms->zFar = 2048.0f;
 			return;
 		}
@@ -833,7 +950,11 @@ static void R_SetFarClip(viewParms_t* viewParms, const trRefdef_t* refdef)
 	//
 	for (i = 0; i < 8; i++)
 	{
+#ifdef REND2_SP
 		vec3_t v;
+#else // !REND2_SP
+		vec3_t v{};
+#endif // REND2_SP
 		float distance = 0.0f;
 
 		if (i & 1)
@@ -885,7 +1006,11 @@ Set up the culling frustum planes for the current view using the results we got 
 the projection matrix.
 =================
 */
+#ifdef REND2_SP
 void R_SetupFrustum(viewParms_t* dest, float xmin, float xmax, float ymax, float zProj, float zFar, float stereoSep)
+#else // !REND2_SP
+static void R_SetupFrustum(viewParms_t* dest, float xmin, float xmax, float ymax, float zProj, float zFar, float stereoSep)
+#endif // REND2_SP
 {
 	vec3_t ofsorigin;
 	float oppleg = 0.0f, adjleg = 0.0f, length = 0.0f;
@@ -1014,7 +1139,11 @@ R_SetupProjectionZ
 Sets the z-component transformation part in the projection matrix
 ===============
 */
+#ifdef REND2_SP
 void R_SetupProjectionZ(viewParms_t* dest)
+#else // !REND2_SP
+static void R_SetupProjectionZ(viewParms_t* dest)
+#endif // REND2_SP
 {
 	float zNear = 0.0f, zFar = 0.0f, depth = 0.0f;
 
@@ -1030,9 +1159,15 @@ void R_SetupProjectionZ(viewParms_t* dest)
 
 	if (dest->isPortal)
 	{
+#ifdef REND2_SP
 		float	plane[4];
 		float	plane2[4];
 		vec4_t q, c;
+#else // !REND2_SP
+		float	plane[4]{};
+		float	plane2[4]{};
+		vec4_t q{}, c{};
+#endif // REND2_SP
 
 		// transform portal plane into camera space
 		plane[0] = dest->portalPlane.normal[0];
@@ -1066,7 +1201,11 @@ void R_SetupProjectionZ(viewParms_t* dest)
 R_SetupProjectionOrtho
 ===============
 */
+#ifdef REND2_SP
 void R_SetupProjectionOrtho(viewParms_t* dest, const vec3_t viewBounds[2])
+#else // !REND2_SP
+static void R_SetupProjectionOrtho(viewParms_t* dest, const vec3_t viewBounds[2])
+#endif // REND2_SP
 {
 	float xmin = 0.0f, xmax = 0.0f, ymin = 0.0f, ymax = 0.0f, znear = 0.0f, zfar = 0.0f;
 	//viewParms_t *dest = &tr.viewParms;
@@ -1141,7 +1280,12 @@ void R_SetupProjectionOrtho(viewParms_t* dest, const vec3_t viewBounds[2])
 R_MirrorPoint
 =================
 */
+#ifdef REND2_SP
 void R_MirrorPoint(vec3_t in, orientation_t* surface, orientation_t* camera, vec3_t out) {
+#else // !REND2_SP
+static void R_MirrorPoint(vec3_t in, const orientation_t* surface, const orientation_t* camera, vec3_t out)
+{
+#endif // REND2_SP
 	int		i = 0;
 	vec3_t	local;
 	vec3_t	transformed;
@@ -1158,7 +1302,12 @@ void R_MirrorPoint(vec3_t in, orientation_t* surface, orientation_t* camera, vec
 	VectorAdd(transformed, camera->origin, out);
 }
 
+#ifdef REND2_SP
 void R_MirrorVector(vec3_t in, orientation_t* surface, orientation_t* camera, vec3_t out) {
+#else // !REND2_SP
+static void R_MirrorVector(vec3_t in, const orientation_t* surface, const orientation_t* camera, vec3_t out)
+{
+#endif // REND2_SP
 	int		i = 0;
 	float	d = 0.0f;
 
@@ -1174,7 +1323,12 @@ void R_MirrorVector(vec3_t in, orientation_t* surface, orientation_t* camera, ve
 R_PlaneForSurface
 =============
 */
+#ifdef REND2_SP
 void R_PlaneForSurface(surfaceType_t* surfType, cplane_t* plane) {
+#else // !REND2_SP
+static void R_PlaneForSurface(surfaceType_t* surfType, cplane_t* plane)
+{
+#endif // REND2_SP
 	srfBspSurface_t* tri = nullptr;
 	srfPoly_t* poly = nullptr;
 	srfVert_t* v1 = nullptr, * v2 = nullptr, * v3 = nullptr;
@@ -1221,11 +1375,20 @@ be moving and rotating.
 Returns qtrue if it should be mirrored
 =================
 */
+#ifdef REND2_SP
 qboolean R_GetPortalOrientations(const msurface_t* surf, int entityNum,
 	orientation_t* surface, orientation_t* camera,
 	vec3_t pvsOrigin, qboolean* mirror) {
+#else // !REND2_SP
+static qboolean R_GetPortalOrientations(const msurface_t* surf, const int entityNum, orientation_t* surface, orientation_t* camera, vec3_t pvsOrigin, qboolean* mirror)
+{
+#endif // REND2_SP
 	int			i = 0;
+#ifdef REND2_SP
 	cplane_t	originalPlane, plane;
+#else // !REND2_SP
+	cplane_t	originalPlane, plane{};
+#endif // REND2_SP
 	trRefEntity_t* e = nullptr;
 	float		d = 0.0f;
 	vec3_t		transformed;
@@ -1341,10 +1504,18 @@ qboolean R_GetPortalOrientations(const msurface_t* surf, int entityNum,
 	return qfalse;
 }
 
+#ifdef REND2_SP
 static qboolean IsMirror(const msurface_t* surface, int entityNum)
+#else // !REND2_SP
+static qboolean IsMirror(const msurface_t* surface, const int entityNum)
+#endif // REND2_SP
 {
 	int			i = 0;
+#ifdef REND2_SP
 	cplane_t	originalPlane, plane;
+#else // !REND2_SP
+	cplane_t	originalPlane, plane{};
+#endif // REND2_SP
 	trRefEntity_t* e = nullptr;
 	float		d = 0.0f;
 
@@ -1508,7 +1679,11 @@ R_MirrorViewBySurface
 Returns qtrue if another view has been rendered
 ========================
 */
+#ifdef REND2_SP
 qboolean R_MirrorViewBySurface(msurface_t* surface, int entityNum) {
+#else // !REND2_SP
+static qboolean R_MirrorViewBySurface(msurface_t* surface, int entityNum) {
+#endif // REND2_SP
 	vec4_t			clipDest[128];
 	int				numVertices = 0;
 	viewParms_t		newParms;
@@ -1516,8 +1691,14 @@ qboolean R_MirrorViewBySurface(msurface_t* surface, int entityNum) {
 	orientation_t	surfaceOri, camera;
 
 	// don't recursively mirror
+#ifdef REND2_SP
 	if (tr.viewParms.isPortal) {
 		ri.Printf(PRINT_DEVELOPER, "WARNING: recursive mirror/portal found\n");
+#else // !REND2_SP
+	if (tr.viewParms.isPortal)
+	{
+		ri->Printf(PRINT_DEVELOPER, S_COLOR_RED "WARNING: recursive mirror/portal found\n");
+#endif // REND2_SP
 		return qfalse;
 	}
 
@@ -1644,6 +1825,7 @@ qboolean R_MirrorViewBySurface(msurface_t* surface, int entityNum) {
 	return qtrue;
 }
 
+#ifdef REND2_SP
 /*
 =================
 R_SpriteFogNum
@@ -1663,23 +1845,6 @@ int R_SpriteFogNum(trRefEntity_t* ent) {
 
 	VectorCopy(ent->e.origin, localOrigin);
 	frameRadius = ent->e.radius;
-#ifndef REND2_SP
-	for (i = 1; i < tr.world->numfogs; i++) {
-		fog = &tr.world->fogs[i];
-		for (j = 0; j < 3; j++) {
-			if (localOrigin[j] - frameRadius >= fog->bounds[1][j]) {
-				break;
-			}
-			if (localOrigin[j] + frameRadius <= fog->bounds[0][j]) {
-				break;
-			}
-		}
-		if (j == 3) {
-			return i;
-		}
-	}
-	return 0;
-#else
 	int partialFog = 0;
 	for (i = 1; i < tr.world->numfogs; i++) {
 		fog = &tr.world->fogs[i];
@@ -1711,8 +1876,42 @@ int R_SpriteFogNum(trRefEntity_t* ent) {
 		}
 	}
 	return partialFog;
-#endif
 }
+#else // !REND2_SP
+/*
+=================
+R_SpriteFogNum
+
+See if a sprite is inside a fog volume
+=================
+*/
+static int R_SpriteFogNum(const trRefEntity_t* ent)
+{
+	int				i = 0, j = 0;
+	fog_t* fog = nullptr;
+
+	if (tr.refdef.rdflags & RDF_NOWORLDMODEL) {
+		return 0;
+	}
+
+	for (i = 1; i < tr.world->numfogs; i++) {
+		fog = &tr.world->fogs[i];
+		for (j = 0; j < 3; j++) {
+			if (ent->e.origin[j] - ent->e.radius >= fog->bounds[1][j]) {
+				break;
+			}
+			if (ent->e.origin[j] + ent->e.radius <= fog->bounds[0][j]) {
+				break;
+			}
+		}
+		if (j == 3) {
+			return i;
+		}
+	}
+
+	return 0;
+}
+#endif // REND2_SP
 
 /*
 ==========================================================================================
@@ -1727,10 +1926,18 @@ DRAWSURF SORTING
 R_Radix
 ===============
 */
+#ifdef REND2_SP
 static QINLINE void R_Radix(int byte, int size, drawSurf_t* source, drawSurf_t* dest)
+#else // !REND2_SP
+static QINLINE void R_Radix(const int byte, const int size, drawSurf_t* source, drawSurf_t* dest)
+#endif // REND2_SP
 {
 	int           count[256] = { 0 };
+#ifdef REND2_SP
 	int           index[256];
+#else // !REND2_SP
+	int           index[256]{};
+#endif // REND2_SP
 	int           i = 0;
 	unsigned char* sortKey = NULL;
 	unsigned char* end = NULL;
@@ -1777,10 +1984,12 @@ static void R_RadixSort(drawSurf_t* source, int size)
 
 bool R_IsPostRenderEntity(const trRefEntity_t* refEntity)
 {
+#ifdef REND2_SP
 	return (refEntity->e.renderfx & RF_DISTORTION) ||
-#ifndef REND2_SP
-	(refEntity->e.renderfx & RF_FORCEPOST) ||
-#endif
+#else // !REND2_SP
+	return (refEntity->e.renderfx & RF_DISTORTION) ||
+		(refEntity->e.renderfx & RF_FORCEPOST) ||
+#endif // REND2_SP
 		(refEntity->e.renderfx & RF_FORCE_ENT_ALPHA);
 }
 
@@ -1793,7 +2002,11 @@ void R_DecomposeSort(uint32_t sort, int* entityNum, shader_t** shader, int* cube
 {
 	*shader = tr.sortedShaders[(sort >> QSORT_SHADERNUM_SHIFT) & QSORT_SHADERNUM_MASK];
 	*postRender = (sort >> QSORT_POSTRENDER_SHIFT) & QSORT_POSTRENDER_MASK;
+#ifdef REND2_SP
 	*entityNum = (sort >> QSORT_ENTITYNUM_SHIFT) & QSORT_ENTITYNUM_MASK;
+#else // !REND2_SP
+	*entityNum = (sort >> QSORT_ENTITYNUM_SHIFT) & QSORT_entity_num_MASK;
+#endif // REND2_SP
 	*cubemap = (sort >> QSORT_CUBEMAP_SHIFT) & QSORT_CUBEMAP_MASK;
 }
 
@@ -1804,7 +2017,11 @@ uint32_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex,
 	key |= (sortedShaderIndex & QSORT_SHADERNUM_MASK) << QSORT_SHADERNUM_SHIFT;
 	key |= (cubemapIndex & QSORT_CUBEMAP_MASK) << QSORT_CUBEMAP_SHIFT;
 	key |= (postRender & QSORT_POSTRENDER_MASK) << QSORT_POSTRENDER_SHIFT;
+#ifdef REND2_SP
 	key |= (entityNum & QSORT_ENTITYNUM_MASK) << QSORT_ENTITYNUM_SHIFT;
+#else // !REND2_SP
+	key |= (entityNum & QSORT_entity_num_MASK) << QSORT_ENTITYNUM_SHIFT;
+#endif // REND2_SP
 
 	return key;
 }
@@ -1825,10 +2042,12 @@ void R_AddDrawSurf(surfaceType_t* surface, int entityNum, const shader_t* shader
 		fogIndex = 0;
 	}
 
+#ifdef REND2_SP
 	else if (tr.refdef.doLAGoggles)
 	{
 		fogIndex = tr.world->numfogs;
 	}
+#endif // REND2_SP
 	if ((drawShader->surfaceFlags & SURF_FORCESIGHT) && !(tr.refdef.rdflags & RDF_ForceSightOn))
 	{	//if shader is only seen with ForceSight and we don't have ForceSight on, then don't draw
 		return;
@@ -1988,13 +2207,34 @@ static void R_AddEntitySurface(const trRefdef_t* refdef, trRefEntity_t* ent, int
 						0 /* cubeMap */);
 				break;
 			default:
+#ifdef REND2_SP
 				ri.Error(ERR_DROP, "R_AddEntitySurfaces: Bad modeltype");
+#else // !REND2_SP
+				Com_Error(ERR_DROP, "R_AddEntitySurfaces: Bad modeltype");
+#endif // REND2_SP
 				break;
 			}
 		}
 		break;
+#ifndef REND2_SP
+	case RT_ENT_CHAIN:
+		shader = R_GetShaderByHandle(ent->e.customShader);
+		R_AddDrawSurf(
+			&entitySurface,
+			entityNum,
+			shader,
+			R_SpriteFogNum(ent),
+			false,
+			R_IsPostRenderEntity(ent),
+			0 /* cubeMap */);
+		break;
+#endif // !REND2_SP
 	default:
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "R_AddEntitySurfaces: Bad reType");
+#else // !REND2_SP
+		Com_Error(ERR_DROP, "R_AddEntitySurfaces: Bad reType");
+#endif // REND2_SP
 	}
 }
 
@@ -2071,7 +2311,11 @@ void R_GenerateDrawSurfs(viewParms_t* viewParms, trRefdef_t* refdef) {
 R_DebugPolygon
 ================
 */
+#ifdef REND2_SP
 void R_DebugPolygon(const int color, const int numPoints, const float* points)
+#else // !REND2_SP
+static void R_DebugPolygon(const int color, const int numPoints, const float* points)
+#endif // REND2_SP
 {
 	// FIXME: implement this
 #if 0
@@ -2108,7 +2352,11 @@ R_DebugGraphics
 Visualization aid for movement clipping debugging
 ====================
 */
+#ifdef REND2_SP
 void R_DebugGraphics(void)
+#else // !REND2_SP
+static void R_DebugGraphics(void)
+#endif // REND2_SP
 {
 	if (!r_debugSurface->integer)
 	{
@@ -2120,7 +2368,11 @@ void R_DebugGraphics(void)
 
 	GL_Bind(tr.whiteImage);
 	GL_Cull(CT_FRONT_SIDED);
+#ifdef REND2_SP
 	ri.CM_DrawDebugSurface(R_DebugPolygon);
+#else // !REND2_SP
+	ri->CM_DrawDebugSurface(R_DebugPolygon);
+#endif // REND2_SP
 }
 
 /*
@@ -2131,7 +2383,12 @@ A view may be either the actual camera view,
 or a mirror / remote location
 ================
 */
+#ifdef REND2_SP
 void R_RenderView(viewParms_t* parms) {
+#else // !REND2_SP
+void R_RenderView(const viewParms_t* parms)
+{
+#endif // REND2_SP
 	if (parms->viewportWidth <= 0 || parms->viewportHeight <= 0) {
 		return;
 	}
@@ -2298,8 +2555,13 @@ void R_SetupPshadowMaps(trRefdef_t* refdef)
 		if ((ent->e.renderfx & (RF_FIRST_PERSON | RF_NOSHADOW | RF_DEPTHHACK)))
 			continue;
 
+#ifdef REND2_SP
 		if ((ent->e.renderfx & RF_THIRD_PERSON))
 			continue;
+#else // !REND2_SP
+		//if((ent->e.renderfx & RF_THIRD_PERSON))
+			//continue;
+#endif // REND2_SP
 
 		if (ent->e.reType == RT_MODEL)
 		{
@@ -2360,7 +2622,11 @@ void R_SetupPshadowMaps(trRefdef_t* refdef)
 			memset(&shadow, 0, sizeof(shadow));
 
 			shadow.numEntities = 1;
+#ifdef REND2_SP
 			shadow.entityNums[0] = i;
+#else // !REND2_SP
+			shadow.entity_nums[0] = i;
+#endif // REND2_SP
 			shadow.viewRadius = radius;
 			shadow.lightRadius = r_pshadowDist->value;
 			VectorCopy(ent->e.lightingOrigin, shadow.viewOrigin);
@@ -2524,7 +2790,11 @@ void R_RenderCubemapSide(int cubemapIndex, int cubemapSide, bool bounce)
 	R_NewFrameSync();
 }
 
+#ifdef REND2_SP
 void R_SetupViewParms(const trRefdef_t* refdef)
+#else // !REND2_SP
+static void R_SetupViewParms(const trRefdef_t* refdef)
+#endif // REND2_SP
 {
 	tr.viewCount++;
 	Com_Memset(&tr.viewParms, 0, sizeof(viewParms_t));
@@ -2568,7 +2838,11 @@ void R_SetupViewParms(const trRefdef_t* refdef)
 	R_SetupProjectionZ(&tr.viewParms);
 }
 
+#ifdef REND2_SP
 qboolean R_AddPortalView(const trRefdef_t* refdef)
+#else // !REND2_SP
+static qboolean R_AddPortalView(const trRefdef_t* refdef)
+#endif // REND2_SP
 {
 	if (!tr.world || refdef->rdflags & RDF_NOWORLDMODEL)
 		return qfalse;
@@ -2816,7 +3090,11 @@ void R_GatherFrameViews(trRefdef_t* refdef)
 				tr.viewParms.fovY = 90;
 
 				tr.viewParms.targetFbo = tr.pshadowFbos[i];
+#ifdef REND2_SP
 				tr.viewParms.targetFboLayer = shadow->entityNums[0];
+#else // !REND2_SP
+				tr.viewParms.targetFboLayer = shadow->entity_nums[0];
+#endif // REND2_SP
 
 				tr.viewParms.flags = (viewParmFlags_t)(VPF_DEPTHSHADOW | VPF_NOVIEWMODEL);
 				tr.viewParms.viewParmType = VPT_PLAYER_SHADOWS;
@@ -2905,11 +3183,19 @@ void R_GatherFrameViews(trRefdef_t* refdef)
 		// sun shadowmaps
 		if (r_sunlightMode->integer && r_depthPrepass->value && (r_forceSun->integer || tr.sunShadows))
 		{
+#ifdef REND2_SP
 			vec3_t lightViewAxis[3];
+#else // !REND2_SP
+			vec3_t lightViewAxis[3]{};
+#endif // REND2_SP
 			vec3_t lightOrigin;
 			float splitZNear = 0.0f, splitZFar = 0.0f, splitBias = 0.0f;
 			float viewZNear = 0.0f, viewZFar = 0.0f;
+#ifdef REND2_SP
 			vec3_t lightviewBounds[2];
+#else // !REND2_SP
+			vec3_t lightviewBounds[2]{};
+#endif // REND2_SP
 
 			viewZNear = r_shadowCascadeZNear->value;
 			viewZFar = r_shadowCascadeZFar->value;

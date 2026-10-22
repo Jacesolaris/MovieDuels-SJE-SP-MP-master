@@ -25,7 +25,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_cache.h"
 #include <qcommon/sstring.h>
 #include <qcommon/matcomp.h>
+#ifdef REND2_SP
 #include <qcommon/md_animsets.h>
+#endif // REND2_SP
 
 #define	LL(x) x=LittleLong(x)
 
@@ -87,7 +89,11 @@ static qhandle_t R_RegisterMD3(const char* name, model_t* mod)
 			loaded = R_LoadMDXM(mod, buf, name, bAlreadyCached);
 			break;
 		default:
+#ifdef REND2_SP
 			ri.Printf(PRINT_WARNING, "R_RegisterMD3: unknown ident for %s\n", name);
+#else // !REND2_SP
+			ri->Printf(PRINT_WARNING, "R_RegisterMD3: unknown ident for %s\n", name);
+#endif // REND2_SP
 			break;
 		}
 
@@ -112,9 +118,16 @@ static qhandle_t R_RegisterMD3(const char* name, model_t* mod)
 
 		return mod->index;
 	}
+#ifdef REND2_SP
 
 	// models are tried as .md3, .glm and .gla in turn, so most of these are expected: only with developer 1
 	ri.Printf(PRINT_DEVELOPER, "R_RegisterMD3: couldn't load %s\n", name);
+#else // !REND2_SP
+
+#ifdef _DEBUG
+	//ri->Printf(PRINT_WARNING, "R_RegisterMD3: couldn't load %s\n", name);
+#endif
+#endif // REND2_SP
 
 	mod->type = MOD_BAD;
 	return 0;
@@ -135,7 +148,11 @@ static qhandle_t R_RegisterMDR(const char* name, model_t* mod)
 	qboolean loaded = qfalse;
 	int filesize = 0;
 
+#ifdef REND2_SP
 	filesize = ri.FS_ReadFile(name, (void**)&buf.v);
+#else // !REND2_SP
+	filesize = ri->FS_ReadFile(name, (void**)&buf.v);
+#endif // REND2_SP
 	if (!buf.u)
 	{
 		mod->type = MOD_BAD;
@@ -146,11 +163,19 @@ static qhandle_t R_RegisterMDR(const char* name, model_t* mod)
 	if (ident == MDR_IDENT)
 		loaded = R_LoadMDR(mod, buf.u, filesize, name);
 
+#ifdef REND2_SP
 	ri.FS_FreeFile(buf.v);
+#else // !REND2_SP
+	ri->FS_FreeFile(buf.v);
+#endif // REND2_SP
 
 	if (!loaded)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_RegisterMDR: couldn't load mdr file %s\n", name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "R_RegisterMDR: couldn't load mdr file %s\n", name);
+#endif // REND2_SP
 		mod->type = MOD_BAD;
 		return 0;
 	}
@@ -172,7 +197,11 @@ static qhandle_t R_RegisterIQM(const char* name, model_t* mod)
 	qboolean loaded = qfalse;
 	int filesize = 0;
 
+#ifdef REND2_SP
 	filesize = ri.FS_ReadFile(name, (void**)&buf.v);
+#else // !REND2_SP
+	filesize = ri->FS_ReadFile(name, (void**)&buf.v);
+#endif // REND2_SP
 	if (!buf.u)
 	{
 		mod->type = MOD_BAD;
@@ -181,11 +210,19 @@ static qhandle_t R_RegisterIQM(const char* name, model_t* mod)
 
 	loaded = R_LoadIQM(mod, buf.u, filesize, name);
 
+#ifdef REND2_SP
 	ri.FS_FreeFile(buf.v);
+#else // !REND2_SP
+	ri->FS_FreeFile(buf.v);
+#endif // REND2_SP
 
 	if (!loaded)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_RegisterIQM: couldn't load iqm file %s\n", name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "R_RegisterIQM: couldn't load iqm file %s\n", name);
+#endif // REND2_SP
 		mod->type = MOD_BAD;
 		return 0;
 	}
@@ -301,15 +338,25 @@ qhandle_t RE_RegisterModel(const char* name)
 	const char* ext = nullptr;
 	char		altName[MAX_QPATH];
 
+#ifdef REND2_SP
 	if (!name || !name[0])
 	{
 		ri.Printf(PRINT_WARNING, "RE_RegisterModel: NULL name\n");
+#else // !REND2_SP
+	if (!name || !name[0]) {
+		ri->Printf(PRINT_ALL, "RE_RegisterModel: NULL name\n");
+#endif // REND2_SP
 		return 0;
 	}
 
+#ifdef REND2_SP
 	if (strlen(name) >= MAX_QPATH)
 	{
 		ri.Printf(PRINT_DEVELOPER, "Rend2 Model name exceeds MAX_QPATH\n");
+#else // !REND2_SP
+	if (strlen(name) >= MAX_QPATH) {
+		ri->Printf(PRINT_ALL, "Model name exceeds MAX_QPATH\n");
+#endif // REND2_SP
 		return 0;
 	}
 
@@ -333,9 +380,14 @@ qhandle_t RE_RegisterModel(const char* name)
 	}
 
 	// allocate a new model_t
+#ifdef REND2_SP
 	if ((mod = R_AllocModel()) == nullptr)
 	{
 		ri.Printf(PRINT_WARNING, "RE_RegisterModel: R_AllocModel() failed for '%s'\n", name);
+#else // !REND2_SP
+	if ((mod = R_AllocModel()) == NULL) {
+		ri->Printf(PRINT_WARNING, "RE_RegisterModel: R_AllocModel() failed for '%s'\n", name);
+#endif // REND2_SP
 		return 0;
 	}
 
@@ -402,9 +454,15 @@ qhandle_t RE_RegisterModel(const char* name)
 		if (hModel)
 		{
 			if (orgNameFailed)
+#ifdef REND2_SP
 			{
 				ri.Printf(PRINT_DEVELOPER, "WARNING: %s not present, using %s instead\n",
 					name, altName);
+#else // !REND2_SP
+			{
+				ri->Printf(PRINT_DEVELOPER, "WARNING: %s not present, using %s instead\n",
+					name, altName);
+#endif // REND2_SP
 			}
 
 			break;
@@ -432,7 +490,11 @@ static qboolean R_LoadMDXA_Server(model_t* mod, void* buffer, const char* mod_na
 	int					version = 0;
 	int					size = 0;
 
+#ifdef REND2_SP
 	pinmodel = static_cast<mdxaHeader_t*>(buffer);
+#else // !REND2_SP
+	pinmodel = (mdxaHeader_t*)buffer;
+#endif // REND2_SP
 	//
 	// read some fields from the binary, but only LittleLong() them when we know this wasn't an already-cached model...
 	//
@@ -488,13 +550,182 @@ static qboolean R_LoadMDXA_Server(model_t* mod, void* buffer, const char* mod_na
 	return qtrue;
 }
 
+#ifndef REND2_SP
+static const char* humanoid_prefixes[] =
+{
+	"models/players/_humanoid",
+	"models/players/JK2anims",
+	"models/players/_humanoid_ani",
+	"models/players/_humanoid_bdroid",
+	"models/players/_humanoid_ben",
+	"models/players/_humanoid_cal",
+	"models/players/_humanoid_clo",
+	"models/players/_humanoid_deka",
+	"models/players/_humanoid_df2",
+	"models/players/_humanoid_dooku",
+	"models/players/_humanoid_galen",
+	"models/players/_humanoid_gon",
+	"models/players/_humanoid_grievous",
+	"models/players/_humanoid_jabba",
+	"models/players/_humanoid_jango",
+	"models/players/_humanoid_kotor",
+	"models/players/_humanoid_luke",
+	"models/players/_humanoid_mace",
+	"models/players/_humanoid_maul",
+	"models/players/_humanoid_md",
+	"models/players/_humanoid_melee",
+	"models/players/_humanoid_obi",
+	"models/players/_humanoid_obi3",
+	"models/players/_humanoid_pal",
+	"models/players/_humanoid_reb",
+	"models/players/_humanoid_ren",
+	"models/players/_humanoid_rey",
+	"models/players/_humanoid_sbd",
+	"models/players/_humanoid_vader",
+	"models/players/_humanoid_yoda",
+	"models/players/darktrooper_tv",
+	"models/players/hazardtrooper/hazardtrooper",
+	"models/players/rockettrooper/rockettrooper",
+	"models/players/protocol/protocol",
+	"models/players/assassin_droid/model",
+	"models/players/saber_droid/model",
+	"models/players/wampa/wampa"
+};
+
+static qboolean R_IsHumanoidPath(const char* animName)
+{
+	if (!animName || !animName[0])
+		return qfalse;
+
+	for (int i = 0; i < ARRAY_LEN(humanoid_prefixes); i++)
+	{
+		if (strstr(animName, humanoid_prefixes[i]))
+			return qtrue;
+	}
+	return qfalse;
+}
+
+/*
+=================
+MovieDuels: which animation set (GLA) a mesh loads - shared by R_LoadMDXM (tr_ghoul2.cpp) and ServerLoadMDXM.
+
+g_animationStyleActive (set by the server's game module, sent to clients in the systeminfo) decides, as SP's
+md_animsets.h does with g_ActivateAnimationStyle:
+ - 1 (Master, solo games only): every humanoid-family mesh uses the master models/players/_humanoid set, unless its
+   bone count does not fit the master skeleton (super battle droid 43, droideka 59...): those keep their own GLA.
+ - 0 (Classic, the default and always in server games): every mesh uses the GLA its model.glm names, with that folder's
+   animation.cfg. A humanoid-family mesh whose folder has no animation.cfg (or whose GLA is missing) still uses the master.
+The cached glm buffer keeps the GLA actually loaded in mdxm->animName (G2API_GetGLAName: the game and cgame pick the
+animation.cfg folder from it), so the glm's own name is remembered here to decide again after the style changed.
+=================
+*/
+#define MD_ANIMSTYLE_ACTIVE_CVAR	"g_animationStyleActive"
+#define MD_MASTER_HUMANOID_GLA		"models/players/_humanoid/_humanoid"
+#define MD_MAX_MESH_ANIMNAMES		2048
+
+typedef struct mdMeshAnimName_s
+{
+	char mesh[MAX_QPATH];
+	char animName[MAX_QPATH];
+} mdMeshAnimName_t;
+
+static mdMeshAnimName_t mdMeshAnimNames[MD_MAX_MESH_ANIMNAMES];
+static int mdNumMeshAnimNames = 0;
+
+// The GLA the glm file names. fresh: the header was just read from the file (not a cached, possibly rewritten copy).
+static const char* R_MD_MeshOwnAnimName(const char* meshName, const char* headerAnimName, const qboolean fresh)
+{
+	for (int i = 0; i < mdNumMeshAnimNames; i++)
+	{
+		if (!Q_stricmp(mdMeshAnimNames[i].mesh, meshName))
+		{
+			if (fresh)
+			{
+				Q_strncpyz(mdMeshAnimNames[i].animName, headerAnimName, sizeof mdMeshAnimNames[i].animName);
+			}
+			return mdMeshAnimNames[i].animName;
+		}
+	}
+	if (mdNumMeshAnimNames < MD_MAX_MESH_ANIMNAMES)
+	{
+		mdMeshAnimName_t* entry = &mdMeshAnimNames[mdNumMeshAnimNames++];
+		Q_strncpyz(entry->mesh, meshName, sizeof entry->mesh);
+		Q_strncpyz(entry->animName, headerAnimName, sizeof entry->animName);
+		return entry->animName;
+	}
+	return headerAnimName;
+}
+
+// does the GLA's folder have an animation.cfg (pk3s included)?
+static qboolean R_MD_GLAFolderHasAnimCfg(const char* gla)
+{
+	char path[MAX_QPATH];
+
+	Q_strncpyz(path, gla, sizeof path);
+	char* slash = strrchr(path, '/');
+	if (!slash || (size_t)(slash - path) + sizeof "/animation.cfg" > sizeof path)
+	{
+		return qfalse;
+	}
+	strcpy(slash, "/animation.cfg");
+	return ri->FS_ReadFile(path, NULL) > 0 ? qtrue : qfalse;
+}
+
+qhandle_t R_MD_ChooseAnimGLA(const char* meshName, const mdxmHeader_t* mdxm, const qboolean fresh, char* usedName, const int usedNameSize)
+{
+	const char* ownName = R_MD_MeshOwnAnimName(meshName, mdxm->animName, fresh);
+	qhandle_t animIndex = 0;
+
+	Q_strncpyz(usedName, ownName, usedNameSize);
+
+	if (!R_IsHumanoidPath(ownName))
+	{
+		// non-humanoid or custom skeleton: the model's own GLA
+		return RE_RegisterModel(va("%s.gla", ownName));
+	}
+
+	// Classic: the model's dedicated humanoid set (models/players/_humanoid_yoda/...), when its folder has the animation.cfg
+	if (ri->Cvar_VariableIntegerValue(MD_ANIMSTYLE_ACTIVE_CVAR) != 1 &&
+		Q_stricmpn(ownName, "models/players/_humanoid/", (int)strlen("models/players/_humanoid/")) &&
+		R_MD_GLAFolderHasAnimCfg(ownName))
+	{
+		animIndex = RE_RegisterModel(va("%s.gla", ownName));
+		if (animIndex)
+		{
+			return animIndex;
+		}
+	}
+
+	animIndex = RE_RegisterModel(va("%s.gla", MD_MASTER_HUMANOID_GLA));
+	if (!animIndex)
+	{
+		Com_Error(ERR_DROP, "R_LoadMDXM: required MP humanoid GLA missing: %s.gla", MD_MASTER_HUMANOID_GLA);
+	}
+
+	// A mesh with another bone count than the master humanoid skeleton (super battle droid, droideka, protocol...) was
+	// built for its own skeleton: on the master its bones would be wrong (or index past the bone cache and
+	// corrupt memory. Keep its own GLA in that case (old 72-bone models are remapped by the caller).
+	const model_t* humanoidGLA = R_GetModelByHandle(animIndex);
+	if (mdxm->numBones != 72 && humanoidGLA && humanoidGLA->type == MOD_MDXA && humanoidGLA->data.gla &&
+		mdxm->numBones != humanoidGLA->data.gla->numBones) // another skeleton (sbd 43, deka 59, protocol 54...): its own GLA, as SP
+	{
+		return RE_RegisterModel(va("%s.gla", ownName));
+	}
+
+	Q_strncpyz(usedName, MD_MASTER_HUMANOID_GLA, usedNameSize);
+	return animIndex;
+}
+
+#endif // !REND2_SP
 /*
 =================
 R_LoadMDXM_Server - load a Ghoul 2 Mesh file
 =================
 */
 extern int OldToNewRemapTable[72];
+#ifdef REND2_SP
 extern int NewToOldRemapTable[53];
+#endif // REND2_SP
 
 static qboolean R_LoadMDXM_Server(model_t* mod, void* buffer, const char* mod_name, qboolean& bAlreadyCached)
 {
@@ -554,6 +785,7 @@ static qboolean R_LoadMDXM_Server(model_t* mod, void* buffer, const char* mod_na
 
 	// first up, go load in the animation file we need that has the skeletal animation info for this model
 	// (MovieDuels: with g_ActivateAnimationStyle 1 the humanoid sets use the master _humanoid set, md_animsets.h)
+#ifdef REND2_SP
 	const char* anim_set = MD_AnimSetGLA(mdxm->animName, ri.Cvar_VariableIntegerValue(MD_ANIMSTYLE_ACTIVE_CVAR) == 1);
 	mdxm->animIndex = RE_RegisterServerModel(va("%s.gla", anim_set));
 	if (anim_set != mdxm->animName && mdxm->animIndex)
@@ -562,17 +794,35 @@ static qboolean R_LoadMDXM_Server(model_t* mod, void* buffer, const char* mod_na
 		if (master_model && master_model->data.gla
 			&& !MD_SkeletonFitsMaster(mdxm->numBones, master_model->data.gla->numBones, mdxm->animName))
 		{
+#endif // REND2_SP
 			// the master skeleton does not fit this mesh: keep its own set
+#ifdef REND2_SP
 			mdxm->animIndex = RE_RegisterServerModel(va("%s.gla", mdxm->animName));
 		}
 	}
+#else // !REND2_SP
+	// _humanoid/_humanoid.gla; Classic (default, server games) keeps the GLA the glm names (fallback: master).
+	// --------------------------------------------------------------------
+	// MovieDuels: the master or the model's own set, by g_animationStyleActive (R_MD_ChooseAnimGLA)
+	char animNameToUse[MAX_QPATH];
+	const qhandle_t animIndex = R_MD_ChooseAnimGLA(mod_name, mdxm, (qboolean)!bAlreadyFound, animNameToUse, sizeof animNameToUse);
+
+	mdxm->animIndex = animIndex;
+
+#endif // REND2_SP
 	if (!mdxm->animIndex)
 	{
 		return qfalse;
 	}
+#ifndef REND2_SP
+
+	// Keep animName in sync with what we actually loaded
+	Q_strncpyz(mdxm->animName, animNameToUse, sizeof(mdxm->animName));
+#endif // !REND2_SP
 
 	mod->numLods = mdxm->numLODs - 1;	//copy this up to the model for ease of use - it wil get inced after this.
 
+#ifdef REND2_SP
 	if (bAlreadyFound)
 	{
 		return qtrue;	// All done. Stop, go no further, do not LittleLong(), do not pass Go...
@@ -591,6 +841,18 @@ static qboolean R_LoadMDXM_Server(model_t* mod, void* buffer, const char* mod_na
 		isANewModelFile = true;
 	}
 #endif
+#else // !REND2_SP
+	if (bAlreadyFound)
+	{
+		return qtrue;	// All done. Stop, go no further, do not LittleLong(), do not pass Go...
+	}
+
+	bool isAnOldModelFile = false;
+	if (mdxm->numBones == 72 && strstr(mdxm->animName, "_humanoid"))
+	{
+		isAnOldModelFile = true;
+	}
+#endif // REND2_SP
 
 	surfInfo = reinterpret_cast<mdxmSurfHierarchy_t*>(reinterpret_cast<byte*>(mdxm) + mdxm->ofsSurfHierarchy);
 	for (i = 0; i < mdxm->numSurfaces; i++)
@@ -628,6 +890,7 @@ static qboolean R_LoadMDXM_Server(model_t* mod, void* buffer, const char* mod_na
 			LL(surf->numVerts);
 			LL(surf->ofsVerts);
 			LL(surf->ofsEnd);
+#ifdef REND2_SP
 			LL(surf->ofsHeader);
 			LL(surf->numBoneReferences);
 			LL(surf->ofsBoneReferences);
@@ -679,6 +942,41 @@ static qboolean R_LoadMDXM_Server(model_t* mod, void* buffer, const char* mod_na
 				}
 			}
 #endif
+#else // !REND2_SP
+			LL(surf->ofsHeader);
+			LL(surf->numBoneReferences);
+			LL(surf->ofsBoneReferences);
+
+			if (surf->numVerts > SHADER_MAX_VERTEXES) {
+				return qfalse;
+			}
+			if (surf->numTriangles * 3 > SHADER_MAX_INDEXES) {
+				return qfalse;
+			}
+
+			// change to surface identifier
+			surf->ident = SF_MDX;
+
+			// register the shaders
+
+			if (isAnOldModelFile)
+			{
+				auto boneRef = reinterpret_cast<int*>(reinterpret_cast<byte*>(surf) + surf->ofsBoneReferences);
+				for (j = 0; j < surf->numBoneReferences; j++)
+				{
+					assert(boneRef[j] >= 0 && boneRef[j] < 72);
+					if (boneRef[j] >= 0 && boneRef[j] < 72)
+					{
+						boneRef[j] = OldToNewRemapTable[boneRef[j]];
+					}
+					else
+					{
+						boneRef[j] = 0;
+					}
+				}
+			}
+
+#endif // REND2_SP
 			// find the next surface
 			surf = reinterpret_cast<mdxmSurface_t*>(reinterpret_cast<byte*>(surf) + surf->ofsEnd);
 		}
@@ -802,9 +1100,17 @@ qhandle_t RE_RegisterServerModel(const char* name) {
 	if (!r_noServerGhoul2)
 	{ //keep it from choking when it gets to these checks in the g2 code. Registering all r_ cvars for the server would be a Bad Thing though.
 #ifndef REND2_SP
+#ifdef REND2_SP
 		r_noServerGhoul2 = ri.Cvar_Get("r_noserverghoul2", "0", 0, "");
+#else // !REND2_SP
+		r_noServerGhoul2 = ri->Cvar_Get("r_noserverghoul2", "0", 0, "");
+#endif // REND2_SP
 #else
+#ifdef REND2_SP
 		r_noServerGhoul2 = ri.Cvar_Get("r_noghoul2", "0", 0);
+#else // !REND2_SP
+		r_noServerGhoul2 = ri->Cvar_Get("r_noghoul2", "0", 0);
+#endif // REND2_SP
 #endif
 	}
 
@@ -830,7 +1136,11 @@ qhandle_t RE_RegisterServerModel(const char* name) {
 
 	// allocate a new model_t
 	if ((mod = R_AllocModel()) == NULL) {
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "RE_RegisterModel: R_AllocModel() failed for '%s'\n", name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "RE_RegisterModel: R_AllocModel() failed for '%s'\n", name);
+#endif // REND2_SP
 		return 0;
 	}
 
@@ -914,7 +1224,11 @@ static qboolean R_LoadMD3(model_t* mod, int lod, void* buffer, const char* modNa
 	version = LittleLong(md3Model->version);
 	if (version != MD3_VERSION)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_LoadMD3: %s has wrong version (%i should be %i)\n", modName, version, MD3_VERSION);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "R_LoadMD3: %s has wrong version (%i should be %i)\n", modName, version, MD3_VERSION);
+#endif // REND2_SP
 		return qfalse;
 	}
 
@@ -925,7 +1239,6 @@ static qboolean R_LoadMD3(model_t* mod, int lod, void* buffer, const char* modNa
 	qboolean bAlreadyFound = qfalse;
 	md3Model = (md3Header_t*)CModelCache->Allocate(size, buffer, modName, &bAlreadyFound, TAG_MODEL_MD3);
 	mdvModel = mod->data.mdv[lod] = (mdvModel_t*)Hunk_Alloc(sizeof(*mdvModel), h_low);
-
 	//  Com_Memcpy(mod->md3[lod], buffer, LittleLong(md3Model->ofsEnd));
 	if (!bAlreadyFound)
 	{	// HACK
@@ -946,7 +1259,11 @@ static qboolean R_LoadMD3(model_t* mod, int lod, void* buffer, const char* modNa
 
 	if (md3Model->numFrames < 1)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_LoadMD3: %s has no frames\n", modName);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "R_LoadMD3: %s has no frames\n", modName);
+#endif // REND2_SP
 		return qfalse;
 	}
 
@@ -968,7 +1285,11 @@ static qboolean R_LoadMD3(model_t* mod, int lod, void* buffer, const char* modNa
 
 	// swap all the tags
 	mdvModel->numTags = md3Model->numTags;
+#ifdef REND2_SP
 	mdvModel->tags = tag = (mdvTag_t*)Hunk_Alloc(sizeof(*tag) * (md3Model->numTags * md3Model->numFrames), h_low);
+#else // !REND2_SP
+	mdvModel->tags = tag = (mdvTag_t*)Hunk_Alloc(sizeof(*tag) * (static_cast<unsigned long long>(md3Model->numTags) * md3Model->numFrames), h_low);
+#endif // REND2_SP
 
 	md3Tag = (md3Tag_t*)((byte*)md3Model + md3Model->ofsTags);
 	for (i = 0; i < md3Model->numTags * md3Model->numFrames; i++, tag++, md3Tag++)
@@ -1009,18 +1330,34 @@ static qboolean R_LoadMD3(model_t* mod, int lod, void* buffer, const char* modNa
 		LL(md3Surf->ofsXyzNormals);
 		LL(md3Surf->ofsEnd);
 
+#ifdef REND2_SP
 		if (md3Surf->numVerts >= SHADER_MAX_VERTEXES)
 		{
 			ri.Printf(PRINT_WARNING, "R_LoadMD3: %s has more than %i verts on %s (%i).\n",
 				modName, SHADER_MAX_VERTEXES - 1, md3Surf->name[0] ? md3Surf->name : "a surface",
 				md3Surf->numVerts);
+#else // !REND2_SP
+		if (md3Surf->numVerts >= SHADER_MAX_VERTEXES)
+		{
+			ri->Printf(PRINT_WARNING, "R_LoadMD3: %s has more than %i verts on %s (%i).\n",
+				modName, SHADER_MAX_VERTEXES - 1, md3Surf->name[0] ? md3Surf->name : "a surface",
+				md3Surf->numVerts);
+#endif // REND2_SP
 			return qfalse;
 		}
+#ifdef REND2_SP
 		if (md3Surf->numTriangles * 3 >= SHADER_MAX_INDEXES)
 		{
 			ri.Printf(PRINT_WARNING, "R_LoadMD3: %s has more than %i triangles on %s (%i).\n",
 				modName, (SHADER_MAX_INDEXES / 3) - 1, md3Surf->name[0] ? md3Surf->name : "a surface",
 				md3Surf->numTriangles);
+#else // !REND2_SP
+		if (md3Surf->numTriangles * 3 >= SHADER_MAX_INDEXES)
+		{
+			ri->Printf(PRINT_WARNING, "R_LoadMD3: %s has more than %i triangles on %s (%i).\n",
+				modName, (SHADER_MAX_INDEXES / 3) - 1, md3Surf->name[0] ? md3Surf->name : "a surface",
+				md3Surf->numTriangles);
+#endif // REND2_SP
 			return qfalse;
 		}
 
@@ -1078,7 +1415,11 @@ static qboolean R_LoadMD3(model_t* mod, int lod, void* buffer, const char* modNa
 
 		// swap all the XyzNormals
 		surf->numVerts = md3Surf->numVerts;
+#ifdef REND2_SP
 		surf->verts = v = (mdvVertex_t*)Hunk_Alloc(sizeof(*v) * (md3Surf->numVerts * md3Surf->numFrames), h_low);
+#else // !REND2_SP
+		surf->verts = v = (mdvVertex_t*)Hunk_Alloc(sizeof(*v) * (static_cast<unsigned long long>(md3Surf->numVerts) * md3Surf->numFrames), h_low);
+#endif // REND2_SP
 
 		md3xyz = (md3XyzNormal_t*)((byte*)md3Surf + md3Surf->ofsXyzNormals);
 		for (j = 0; j < md3Surf->numVerts * md3Surf->numFrames; j++, md3xyz++, v++)
@@ -1139,11 +1480,20 @@ static qboolean R_LoadMD3(model_t* mod, int lod, void* buffer, const char* modNa
 		int dataSize = 0;
 		int ofsPosition = 0, ofsNormals = 0, ofsTexcoords = 0, ofsTangents = 0, ofsColor = 0, ofsLMCoords = 0, ofsLightDir = 0;
 		int stride = 0;
+#ifdef REND2_SP
 		int numVerts = 0;
 		int numIndexes = 0;
+#else // !REND2_SP
+		uint32_t numVerts = 0;
+		uint32_t numIndexes = 0;
+#endif // REND2_SP
 
 		// +1 to add total vertex count
+#ifdef REND2_SP
 		int* baseVertexes = (int*)Hunk_AllocateTempMemory(sizeof(int) * (mdvModel->numSurfaces + 1));
+#else // !REND2_SP
+		int* baseVertexes = (int*)Hunk_AllocateTempMemory(sizeof(int) * (static_cast<unsigned long long>(mdvModel->numSurfaces) + 1));
+#endif // REND2_SP
 		int* indexOffsets = (int*)Hunk_AllocateTempMemory(sizeof(int) * mdvModel->numSurfaces);
 
 		// Calculate the required size of the vertex buffer.
@@ -1332,12 +1682,20 @@ static qboolean R_LoadMDR(model_t* mod, void* buffer, int filesize, const char* 
 	int					size = 0;
 	shader_t* sh = nullptr;
 
+#ifdef REND2_SP
 	pinmodel = static_cast<mdrHeader_t*>(buffer);
+#else // !REND2_SP
+	pinmodel = (mdrHeader_t*)buffer;
+#endif // REND2_SP
 
 	pinmodel->version = LittleLong(pinmodel->version);
 	if (pinmodel->version != MDR_VERSION)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_LoadMDR: %s has wrong version (%i should be %i)\n", mod_name, pinmodel->version, MDR_VERSION);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "R_LoadMDR: %s has wrong version (%i should be %i)\n", mod_name, pinmodel->version, MDR_VERSION);
+#endif // REND2_SP
 		return qfalse;
 	}
 
@@ -1345,7 +1703,11 @@ static qboolean R_LoadMDR(model_t* mod, void* buffer, int filesize, const char* 
 
 	if (size > filesize)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_LoadMDR: Header of %s is broken. Wrong filesize declared!\n", mod_name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "R_LoadMDR: Header of %s is broken. Wrong filesize declared!\n", mod_name);
+#endif // REND2_SP
 		return qfalse;
 	}
 
@@ -1369,7 +1731,11 @@ static qboolean R_LoadMDR(model_t* mod, void* buffer, int filesize, const char* 
 	if (pinmodel->numBones < 0 ||
 		sizeof(*mdr) + pinmodel->numFrames * (sizeof(*frame) + (static_cast<unsigned long long>(pinmodel->numBones) - 1) * sizeof(*frame->bones)) >(unsigned)size)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_LoadMDR: %s has broken structure.\n", mod_name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "R_LoadMDR: %s has broken structure.\n", mod_name);
+#endif // REND2_SP
 		return qfalse;
 	}
 
@@ -1391,7 +1757,11 @@ static qboolean R_LoadMDR(model_t* mod, void* buffer, int filesize, const char* 
 
 	if (mdr->numFrames < 1)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_LoadMDR: %s has no frames\n", mod_name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "R_LoadMDR: %s has no frames\n", mod_name);
+#endif // REND2_SP
 		return qfalse;
 	}
 
@@ -1483,7 +1853,11 @@ static qboolean R_LoadMDR(model_t* mod, void* buffer, int filesize, const char* 
 		// simple bounds check
 		if ((byte*)(lod + 1) > (byte*)mdr + size)
 		{
+#ifdef REND2_SP
 			ri.Printf(PRINT_WARNING, "R_LoadMDR: %s has broken structure.\n", mod_name);
+#else // !REND2_SP
+			ri->Printf(PRINT_WARNING, "R_LoadMDR: %s has broken structure.\n", mod_name);
+#endif // REND2_SP
 			return qfalse;
 		}
 
@@ -1499,7 +1873,11 @@ static qboolean R_LoadMDR(model_t* mod, void* buffer, int filesize, const char* 
 			// simple bounds check
 			if ((byte*)(surf + 1) > (byte*)mdr + size)
 			{
+#ifdef REND2_SP
 				ri.Printf(PRINT_WARNING, "R_LoadMDR: %s has broken structure.\n", mod_name);
+#else // !REND2_SP
+				ri->Printf(PRINT_WARNING, "R_LoadMDR: %s has broken structure.\n", mod_name);
+#endif // REND2_SP
 				return qfalse;
 			}
 
@@ -1516,18 +1894,34 @@ static qboolean R_LoadMDR(model_t* mod, void* buffer, int filesize, const char* 
 			// numBoneReferences and BoneReferences generally seem to be unused
 
 			// now do the checks that may fail.
+#ifdef REND2_SP
 			if (surf->numVerts >= SHADER_MAX_VERTEXES)
 			{
 				ri.Printf(PRINT_WARNING, "R_LoadMDR: %s has more than %i verts on %s (%i).\n",
 					mod_name, SHADER_MAX_VERTEXES - 1, surf->name[0] ? surf->name : "a surface",
 					surf->numVerts);
+#else // !REND2_SP
+			if (surf->numVerts >= SHADER_MAX_VERTEXES)
+			{
+				ri->Printf(PRINT_WARNING, "R_LoadMDR: %s has more than %i verts on %s (%i).\n",
+					mod_name, SHADER_MAX_VERTEXES - 1, surf->name[0] ? surf->name : "a surface",
+					surf->numVerts);
+#endif // REND2_SP
 				return qfalse;
 			}
+#ifdef REND2_SP
 			if (surf->numTriangles * 3 >= SHADER_MAX_INDEXES)
 			{
 				ri.Printf(PRINT_WARNING, "R_LoadMDR: %s has more than %i triangles on %s (%i).\n",
 					mod_name, (SHADER_MAX_INDEXES / 3) - 1, surf->name[0] ? surf->name : "a surface",
 					surf->numTriangles);
+#else // !REND2_SP
+			if (surf->numTriangles * 3 >= SHADER_MAX_INDEXES)
+			{
+				ri->Printf(PRINT_WARNING, "R_LoadMDR: %s has more than %i triangles on %s (%i).\n",
+					mod_name, (SHADER_MAX_INDEXES / 3) - 1, surf->name[0] ? surf->name : "a surface",
+					surf->numTriangles);
+#endif // REND2_SP
 				return qfalse;
 			}
 			// lowercase the surface name so skin compares are faster
@@ -1554,7 +1948,11 @@ static qboolean R_LoadMDR(model_t* mod, void* buffer, int filesize, const char* 
 				// simple bounds check
 				if (curv->numWeights < 0 || (byte*)(v + 1) + (static_cast<unsigned long long>(curv->numWeights) - 1) * sizeof(*weight) >(byte*) mdr + size)
 				{
+#ifdef REND2_SP
 					ri.Printf(PRINT_WARNING, "R_LoadMDR: %s has broken structure.\n", mod_name);
+#else // !REND2_SP
+					ri->Printf(PRINT_WARNING, "R_LoadMDR: %s has broken structure.\n", mod_name);
+#endif // REND2_SP
 					return qfalse;
 				}
 
@@ -1595,7 +1993,11 @@ static qboolean R_LoadMDR(model_t* mod, void* buffer, int filesize, const char* 
 			// simple bounds check
 			if (surf->numTriangles < 0 || (byte*)(tri + surf->numTriangles) >(byte*) mdr + size)
 			{
+#ifdef REND2_SP
 				ri.Printf(PRINT_WARNING, "R_LoadMDR: %s has broken structure.\n", mod_name);
+#else // !REND2_SP
+				ri->Printf(PRINT_WARNING, "R_LoadMDR: %s has broken structure.\n", mod_name);
+#endif // REND2_SP
 				return qfalse;
 			}
 
@@ -1633,7 +2035,11 @@ static qboolean R_LoadMDR(model_t* mod, void* buffer, int filesize, const char* 
 	// simple bounds check
 	if (mdr->numTags < 0 || (byte*)(tag + mdr->numTags) >(byte*) mdr + size)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_LoadMDR: %s has broken structure.\n", mod_name);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "R_LoadMDR: %s has broken structure.\n", mod_name);
+#endif // REND2_SP
 		return qfalse;
 	}
 
@@ -1691,9 +2097,11 @@ void R_SVModelInit()
 	R_InitImagesPool();
 	R_InitImages();
 	R_InitShaders(qfalse);
-#endif
 
 	R_ModelInit();
+#else // !REND2_SP
+	R_Init();
+#endif // REND2_SP
 }
 
 /*
@@ -1743,10 +2151,18 @@ void R_Modellist_f(void) {
 				lods++;
 			}
 		}
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, "%8i : (%i) %s\n", mod->dataSize, lods, mod->name);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, "%8i : (%i) %s\n", mod->dataSize, lods, mod->name);
+#endif // REND2_SP
 		total += mod->dataSize;
 	}
+#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "%8i : Total models\n", total);
+#else // !REND2_SP
+	ri->Printf(PRINT_ALL, "%8i : Total models\n", total);
+#endif // REND2_SP
 
 #if	0		// not working right with new hunk
 	if (tr.world) {
@@ -1856,7 +2272,11 @@ static void R_GetAnimTag(mdrHeader_t* mod, int framenum, const char* tagName, md
 R_LerpTag
 ================
 */
+#ifdef REND2_SP
 int R_LerpTag(orientation_t* tag, const qhandle_t handle, const int startFrame, const int endFrame, const float frac, const char* tagName)
+#else // !REND2_SP
+int R_LerpTag(orientation_t* tag, qhandle_t handle, int startFrame, int endFrame, float frac, const char* tagName)
+#endif // REND2_SP
 {
 	mdvTag_t* start = nullptr, * end = nullptr;
 	mdvTag_t	start_space{}, end_space{};
@@ -1865,7 +2285,13 @@ int R_LerpTag(orientation_t* tag, const qhandle_t handle, const int startFrame, 
 	model_t* model = nullptr;
 
 	model = R_GetModelByHandle(handle);
+#ifdef REND2_SP
 	if (!model->data.mdv[0])
+#else // !REND2_SP
+	// model->data is a union: for ghoul2 / mdr / iqm / brush models mdv[0] is not NULL,
+	// so check the type before reading it as an md3 (like rd-vanilla, which has a separate md3 field)
+	if (model->type != MOD_MESH || !model->data.mdv[0])
+#endif // REND2_SP
 	{
 		if (model->type == MOD_MDR)
 		{

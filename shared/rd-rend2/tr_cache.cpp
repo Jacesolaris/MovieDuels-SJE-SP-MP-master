@@ -78,7 +78,11 @@ qboolean CModelCacheManager::LoadFile(const char* pFileName, void** ppFileBuffer
 	if (!strcmp(sDEFAULT_GLA_NAME ".gla", path))
 	{
 		// return fake params as though it was found on disk...
+#ifdef REND2_SP
 		void* pvFakeGLAFile = R_Malloc(sizeof(FakeGLAFile), TAG_FILESYS, qfalse);
+#else // !REND2_SP
+		void* pvFakeGLAFile = Z_Malloc(sizeof(FakeGLAFile), TAG_FILESYS, qfalse);
+#endif // REND2_SP
 
 		memcpy(pvFakeGLAFile, &FakeGLAFile[0], sizeof(FakeGLAFile));
 		*ppFileBuffer = pvFakeGLAFile;
@@ -86,20 +90,32 @@ qboolean CModelCacheManager::LoadFile(const char* pFileName, void** ppFileBuffer
 		return qtrue;
 	}
 
+#ifdef REND2_SP
 	int len = ri.FS_ReadFile(path, ppFileBuffer);
+#else // !REND2_SP
+	int len = ri->FS_ReadFile(path, ppFileBuffer);
+#endif // REND2_SP
 	if (len == -1 || *ppFileBuffer == NULL)
 	{
 		return qfalse;
 	}
 
+#ifdef REND2_SP
 	ri.Printf(PRINT_DEVELOPER, "C_LoadFile(): Loaded %s from disk\n", pFileName);
+#else // !REND2_SP
+	ri->Printf(PRINT_DEVELOPER, "C_LoadFile(): Loaded %s from disk\n", pFileName);
+#endif // REND2_SP
 
 	return qtrue;
 }
 
 void* CModelCacheManager::Allocate(int iSize, void* pvDiskBuffer, const char* psModelFileName, qboolean* bAlreadyFound, memtag_t eTag)
 {
+#ifdef REND2_SP
 	int		iChecksum = 1;
+#else // !REND2_SP
+	int		iChecksum = 0;
+#endif // REND2_SP
 	char	sModelName[MAX_QPATH];
 
 	/* Standard NULL checking. */
@@ -120,20 +136,26 @@ void* CModelCacheManager::Allocate(int iSize, void* pvDiskBuffer, const char* ps
 		if (pvDiskBuffer)
 			Z_MorphMallocTag(pvDiskBuffer, eTag);
 		else
+#ifdef REND2_SP
 			pvDiskBuffer = R_Malloc(iSize, eTag, qfalse);
+#else // !REND2_SP
+			pvDiskBuffer = Z_Malloc(iSize, eTag, qfalse);
+#endif // REND2_SP
 
 		files.emplace_back();
 		pFile = &files.back();
 		pFile->pDiskImage = pvDiskBuffer;
 		pFile->iAllocSize = iSize;
+#ifdef REND2_SP
 		Q_strncpyz(pFile->path, sModelName, sizeof(pFile->path));
-#ifndef REND2_SP
-		if (ri.FS_FileIsInPAK(sModelName, &iChecksum))
-			pFile->iPAKChecksum = iChecksum;  /* Otherwise, it will be -1. */
-#else
 		if (ri.FS_FileIsInPAK(sModelName))
 			pFile->iPAKChecksum = iChecksum;  /* Otherwise, it will be -1. */
-#endif
+#else // !REND2_SP
+		Q_strncpyz(pFile->path, sModelName, sizeof(pFile->path));
+
+		if (ri->FS_FileIsInPAK(sModelName, &iChecksum))
+			pFile->iPAKChecksum = iChecksum;  /* Otherwise, it will be -1. */
+#endif // REND2_SP
 
 		* bAlreadyFound = qfalse;
 	}
@@ -173,24 +195,34 @@ void CModelCacheManager::DeleteAll(void)
  */
 void CModelCacheManager::DumpNonPure(void)
 {
+#ifdef REND2_SP
 	ri.Printf(PRINT_DEVELOPER, "CCacheManager::DumpNonPure():\n");
+#else // !REND2_SP
+	ri->Printf(PRINT_DEVELOPER, "CCacheManager::DumpNonPure():\n");
+#endif // REND2_SP
 
 	for (auto it = files.begin(); it != files.end(); /* empty */)
 	{
+#ifdef REND2_SP
 		int iChecksum{};
-#ifndef REND2_SP
-		int iInPak = ri.FS_FileIsInPAK(it->path, &iChecksum);
-#else
 		int iInPak = ri.FS_FileIsInPAK(it->path);
-#endif
+#else // !REND2_SP
+		int iChecksum = 0;
+		int iInPak = ri->FS_FileIsInPAK(it->path, &iChecksum);
+#endif // REND2_SP
 
 		if (iInPak == -1 || iChecksum != it->iPAKChecksum)
 		{
 			/* Erase the file because it doesn't match the checksum */
+#ifdef REND2_SP
 			ri.Printf(PRINT_DEVELOPER, "Dumping none pure model \"%s\"", it->path);
+#else // !REND2_SP
+			ri->Printf(PRINT_DEVELOPER, "Dumping none pure model \"%s\"", it->path);
+#endif // REND2_SP
 
 			if (it->pDiskImage)
 				Z_Free(it->pDiskImage);
+#ifdef REND2_SP
 
 			auto assetIt = FindAsset(it->path);
 			if (assetIt != assets.end())
@@ -198,6 +230,7 @@ void CModelCacheManager::DumpNonPure(void)
 				assets.erase(assetIt);
 				ClearHandleMemo();
 			}
+#endif // REND2_SP
 
 			it = files.erase(it);
 		}
@@ -207,7 +240,11 @@ void CModelCacheManager::DumpNonPure(void)
 		}
 	}
 
+#ifdef REND2_SP
 	ri.Printf(PRINT_DEVELOPER, "CCacheManager::DumpNonPure(): Ok\n");
+#else // !REND2_SP
+	ri->Printf(PRINT_DEVELOPER, "CCacheManager::DumpNonPure(): Ok\n");
+#endif // REND2_SP
 }
 
 CModelCacheManager::AssetCache::iterator CModelCacheManager::FindAsset(const char* path)
@@ -265,7 +302,11 @@ void CModelCacheManager::InsertModelHandle(const char* fileName, qhandle_t handl
 	char path[MAX_QPATH];
 	NormalizePath(path, fileName, sizeof(path));
 
+#ifdef REND2_SP
 	Asset asset;
+#else // !REND2_SP
+	Asset asset{};
+#endif // REND2_SP
 	asset.handle = handle;
 	Q_strncpyz(asset.path, path, sizeof(asset.path));
 	assets.emplace_back(asset);
@@ -275,7 +316,11 @@ qboolean CModelCacheManager::LevelLoadEnd(qboolean deleteUnusedByLevel)
 {
 	qboolean bAtLeastOneModelFreed = qfalse;
 
+#ifdef REND2_SP
 	ri.Printf(PRINT_DEVELOPER, S_COLOR_GREEN "CModelCacheManager::LevelLoadEnd():\n");
+#else // !REND2_SP
+	ri->Printf(PRINT_DEVELOPER, S_COLOR_GREEN "CModelCacheManager::LevelLoadEnd():\n");
+#endif // REND2_SP
 
 	for (auto it = files.begin(); it != files.end(); /* empty */)
 	{
@@ -288,11 +333,16 @@ qboolean CModelCacheManager::LevelLoadEnd(qboolean deleteUnusedByLevel)
 
 		if (bDeleteThis)
 		{
+#ifdef REND2_SP
 			ri.Printf(PRINT_DEVELOPER, S_COLOR_GREEN "Dumping \"%s\"", it->path);
+#else // !REND2_SP
+			ri->Printf(PRINT_DEVELOPER, S_COLOR_GREEN "Dumping \"%s\"", it->path);
+#endif // REND2_SP
 			if (it->pDiskImage)
 			{
 				Z_Free(it->pDiskImage);
 				bAtLeastOneModelFreed = qtrue;	// FIXME: is this correct? shouldn't it be in the next lower scope?
+#ifdef REND2_SP
 			}
 
 			auto assetIt = FindAsset(it->path);
@@ -300,6 +350,7 @@ qboolean CModelCacheManager::LevelLoadEnd(qboolean deleteUnusedByLevel)
 			{
 				assets.erase(assetIt);
 				ClearHandleMemo();
+#endif // REND2_SP
 			}
 
 			it = files.erase(it);
@@ -310,7 +361,11 @@ qboolean CModelCacheManager::LevelLoadEnd(qboolean deleteUnusedByLevel)
 		}
 	}
 
+#ifdef REND2_SP
 	ri.Printf(PRINT_DEVELOPER, S_COLOR_GREEN "CModelCacheManager::LevelLoadEnd(): Ok\n");
+#else // !REND2_SP
+	ri->Printf(PRINT_DEVELOPER, S_COLOR_GREEN "CModelCacheManager::LevelLoadEnd(): Ok\n");
+#endif // REND2_SP
 
 	return bAtLeastOneModelFreed;
 }

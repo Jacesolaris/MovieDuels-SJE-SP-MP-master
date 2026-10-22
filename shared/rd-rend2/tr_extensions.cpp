@@ -23,7 +23,11 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_local.h"
 
+#ifdef REND2_SP
 #define GL_GetProcAddress ri.GL_GetProcAddress
+#else // !REND2_SP
+#define GL_GetProcAddress ri->GL_GetProcAddress
+#endif // REND2_SP
 
 // Stencil commands
 PFNGLSTENCILOPSEPARATEPROC qglStencilOpSeparate;
@@ -478,7 +482,11 @@ void GLimp_InitCoreFunctions()
 		int unused = sscanf(version, "%d.%d", &glRefConfig.glslMajorVersion, &glRefConfig.glslMinorVersion);
 		(void)unused;
 
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, "...using GLSL version %s\n", version);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, "...using GLSL version %s\n", version);
+#endif // REND2_SP
 	}
 
 	// Framebuffer and renderbuffers
@@ -557,16 +565,28 @@ void GLimp_InitExtensions()
 		{
 			Com_Printf("...ignoring GL_EXT_texture_filter_anisotropic\n");
 		}
+#ifdef REND2_SP
 		ri.Cvar_SetValue("r_ext_texture_filter_anisotropic_avail", glConfig.maxTextureFilterAnisotropy);
+#else // !REND2_SP
+		ri->Cvar_SetValue("r_ext_texture_filter_anisotropic_avail", glConfig.maxTextureFilterAnisotropy);
+#endif // REND2_SP
 		if (r_ext_texture_filter_anisotropic->value > glConfig.maxTextureFilterAnisotropy)
 		{
+#ifdef REND2_SP
 			ri.Cvar_SetValue("r_ext_texture_filter_anisotropic_avail", glConfig.maxTextureFilterAnisotropy);
+#else // !REND2_SP
+			ri->Cvar_SetValue("r_ext_texture_filter_anisotropic_avail", glConfig.maxTextureFilterAnisotropy);
+#endif // REND2_SP
 		}
 	}
 	else
 	{
 		Com_Printf("...GL_EXT_texture_filter_anisotropic not found\n");
+#ifdef REND2_SP
 		ri.Cvar_Set("r_ext_texture_filter_anisotropic_avail", "0");
+#else // !REND2_SP
+		ri->Cvar_Set("r_ext_texture_filter_anisotropic_avail", "0");
+#endif // REND2_SP
 	}
 
 	// Memory info
@@ -589,11 +609,19 @@ void GLimp_InitExtensions()
 		if (r_ext_compressed_textures->integer)
 			glRefConfig.textureCompression |= TCR_LATC;
 
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, result[r_ext_compressed_textures->integer ? 1 : 0], extension);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, result[r_ext_compressed_textures->integer ? 1 : 0], extension);
+#endif // REND2_SP
 	}
 	else
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, result[2], extension);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, result[2], extension);
+#endif // REND2_SP
 	}
 
 	// GL_ARB_texture_compression_bptc
@@ -603,11 +631,19 @@ void GLimp_InitExtensions()
 		if (r_ext_compressed_textures->integer >= 2)
 			glRefConfig.textureCompression |= TCR_BPTC;
 
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, result[(r_ext_compressed_textures->integer >= 2) ? 1 : 0], extension);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, result[(r_ext_compressed_textures->integer >= 2) ? 1 : 0], extension);
+#endif // REND2_SP
 	}
 	else
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, result[2], extension);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, result[2], extension);
+#endif // REND2_SP
 	}
 
 	// GL_ARB_texture_storage
@@ -623,11 +659,19 @@ void GLimp_InitExtensions()
 
 		glRefConfig.immutableTextures = loaded;
 
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, result[loaded], extension);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, result[loaded], extension);
+#endif // REND2_SP
 	}
 	else
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, result[2], extension);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, result[2], extension);
+#endif // REND2_SP
 	}
 
 	// GL_ARB_buffer_storage
@@ -647,11 +691,19 @@ void GLimp_InitExtensions()
 		}
 
 		glRefConfig.immutableBuffers = loaded;
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, result[loaded], extension);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, result[loaded], extension);
+#endif // REND2_SP
 	}
 	else
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, result[2], extension);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, result[2], extension);
+#endif // REND2_SP
 	}
 
 	// GL_ARB_debug_output
@@ -673,7 +725,11 @@ void GLimp_InitExtensions()
 		}
 
 		glRefConfig.debugContext = loaded;
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, result[loaded], extension);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, result[loaded], extension);
+#endif // REND2_SP
 	}
 
 	// GL_ARB_timer_query
@@ -688,7 +744,11 @@ void GLimp_InitExtensions()
 
 		glRefConfig.timerQuery = loaded;
 
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, result[loaded], extension);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, result[loaded], extension);
+#endif // REND2_SP
 	}
 
 	extension = "GL_KHR_debug";
@@ -703,7 +763,11 @@ void GLimp_InitExtensions()
 
 		glRefConfig.annotateResources = loaded;
 
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, result[loaded], extension);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, result[loaded], extension);
+#endif // REND2_SP
 	}
 
 	// use float lightmaps?

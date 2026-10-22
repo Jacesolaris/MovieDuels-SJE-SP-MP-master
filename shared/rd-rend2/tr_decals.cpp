@@ -22,7 +22,11 @@ enum
 
 #define		DECAL_FADE_TIME		1000
 
+#ifdef REND2_SP
 decalPoly_t* RE_AllocDecal(int type);
+#else // !REND2_SP
+decalPoly_t* RE_AllocDecal(const int type);
+#endif // REND2_SP
 
 static decalPoly_t	re_decalPolys[DECALPOLY_TYPE_MAX][MAX_DECAL_POLYS];
 
@@ -46,14 +50,25 @@ void R_InitDecals(void) {
 	RE_ClearDecals();
 }
 
+#ifdef REND2_SP
 void RE_FreeDecal(int type, int index) {
+#else // !REND2_SP
+static void RE_FreeDecal(const int type, const int index)
+{
+#endif // REND2_SP
 	if (!re_decalPolys[type][index].time)
 		return;
 
+#ifdef REND2_SP
 	if (type == DECALPOLY_TYPE_NORMAL) {
 		decalPoly_t* fade = nullptr;
 
 		fade = RE_AllocDecal(DECALPOLY_TYPE_FADE);
+#else // !REND2_SP
+	if (type == DECALPOLY_TYPE_NORMAL)
+	{
+		decalPoly_t* fade = RE_AllocDecal(DECALPOLY_TYPE_FADE);
+#endif // REND2_SP
 
 		memcpy(fade, &re_decalPolys[type][index], sizeof(decalPoly_t));
 
@@ -73,7 +88,11 @@ RE_AllocDecal
 Will allways succeed, even if it requires freeing an old active mark
 ===================
 */
+#ifdef REND2_SP
 decalPoly_t* RE_AllocDecal(int type) {
+#else // !REND2_SP
+decalPoly_t* RE_AllocDecal(const int type) {
+#endif // REND2_SP
 	decalPoly_t* le = nullptr;
 
 	// See if the cvar changed
@@ -134,16 +153,33 @@ passed to the renderer.
 #define	MAX_DECAL_FRAGMENTS	128
 #define	MAX_DECAL_POINTS		384
 
+#ifdef REND2_SP
 void RE_AddDecalToScene(qhandle_t decalShader, const vec3_t origin, const vec3_t dir, float orientation, float red, float green, float blue, float alpha, qboolean alphaFade, float radius, qboolean temporary)
+#else // !REND2_SP
+void RE_AddDecalToScene(const qhandle_t decalShader, const vec3_t origin, const vec3_t dir, const float orientation, const float red, const float green, const float blue, const float alpha, qboolean alphaFade, const float radius, const qboolean temporary)
+#endif // REND2_SP
 {
+#ifdef REND2_SP
 	matrix3_t		axis;
+#else // !REND2_SP
+	matrix3_t		axis{};
+#endif // REND2_SP
 	float			texCoordScale = 0.0f;
+#ifdef REND2_SP
 	vec3_t			originalPoints[4];
 	byte			colors[4];
+#else // !REND2_SP
+	vec3_t			originalPoints[4]{};
+	byte			colors[4]{};
+#endif // REND2_SP
 	int				i = 0, j = 0;
 	int				numFragments = 0;
 	markFragment_t	markFragments[MAX_DECAL_FRAGMENTS], * mf = nullptr;
+#ifdef REND2_SP
 	vec3_t			markPoints[MAX_DECAL_POINTS];
+#else // !REND2_SP
+	vec3_t			markPoints[MAX_DECAL_POINTS]{};
+#endif // REND2_SP
 	vec3_t			projection;
 
 	assert(decalShader);
@@ -185,7 +221,11 @@ void RE_AddDecalToScene(qhandle_t decalShader, const vec3_t origin, const vec3_t
 	for (i = 0, mf = markFragments; i < numFragments; i++, mf++)
 	{
 		polyVert_t* v = nullptr;
+#ifdef REND2_SP
 		polyVert_t	verts[MAX_VERTS_ON_DECAL_POLY];
+#else // !REND2_SP
+		polyVert_t	verts[MAX_VERTS_ON_DECAL_POLY]{};
+#endif // REND2_SP
 		decalPoly_t* decal = nullptr;
 
 		// we have an upper limit on the complexity of polygons
@@ -213,7 +253,11 @@ void RE_AddDecalToScene(qhandle_t decalShader, const vec3_t origin, const vec3_t
 		// if it is a temporary (shadow) mark, add it immediately and forget about it
 		if (temporary)
 		{
+#ifdef REND2_SP
 			RE_AddPolyToScene(decalShader, mf->numPoints, verts);
+#else // !REND2_SP
+			RE_AddPolyToScene(decalShader, mf->numPoints, verts, 1);
+#endif // REND2_SP
 			continue;
 		}
 
@@ -279,7 +323,11 @@ void R_AddDecals(void)
 							p->verts[j].modulate[3] = fade;
 						}
 
+#ifdef REND2_SP
 						RE_AddPolyToScene(p->shader, p->poly.numVerts, p->verts);
+#else // !REND2_SP
+						RE_AddPolyToScene(p->shader, p->poly.numVerts, p->verts, 1);
+#endif // REND2_SP
 					}
 					else
 					{
@@ -288,7 +336,11 @@ void R_AddDecals(void)
 				}
 				else
 				{
+#ifdef REND2_SP
 					RE_AddPolyToScene(p->shader, p->poly.numVerts, p->verts);
+#else // !REND2_SP
+					RE_AddPolyToScene(p->shader, p->poly.numVerts, p->verts, 1);
+#endif // REND2_SP
 				}
 			}
 

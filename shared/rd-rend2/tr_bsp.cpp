@@ -48,7 +48,11 @@ static	byte* fileBase;
 
 //===============================================================================
 
+#ifdef REND2_SP
 static void HSVtoRGB(float h, const float s, const float v, float rgb[3])
+#else // !REND2_SP
+static void HSVtoRGB(float h, float s, float v, float rgb[3])
+#endif // REND2_SP
 {
 	int i = 0;
 	float f = 0.0f;
@@ -186,14 +190,20 @@ R_LoadLightmaps
 
 static	void R_LoadLightmaps(world_t* worldData, lump_t* l, lump_t* surfs)
 {
+#ifdef REND2_SP
 	byte* buf = nullptr, * buf_p = nullptr;
+#else // !REND2_SP
+	byte* buf = NULL, * buf_p = NULL;
+#endif // REND2_SP
 	dsurface_t* surf = nullptr;
 	int			len = 0;
 	byte* image = nullptr;
 	int			imageSize = 0;
 	int			i = 0, j = 0, numLightmaps = 0, textureInternalFormat = 0;
 	float maxIntensity = 0;
+#ifdef REND2_SP
 	double sumIntensity = 0;
+#endif // REND2_SP
 	int numColorComponents = 3;
 
 	bool hdr_capable = glRefConfig.floatLightmap && r_hdr->integer;
@@ -205,9 +215,15 @@ static	void R_LoadLightmaps(world_t* worldData, lump_t* l, lump_t* surfs)
 	len = l->filelen;
 	// test for external lightmaps
 	if (!len) {
+#ifdef REND2_SP
 		for (i = 0, surf = (dsurface_t*)(fileBase + surfs->fileofs);
 			i < surfs->filelen / sizeof(dsurface_t);
 			i++, surf++) {
+#else // !REND2_SP
+		for (i = 0, surf = (dsurface_t*)(fileBase + surfs->fileofs);
+			(unsigned)i < surfs->filelen / sizeof(dsurface_t);
+			i++, surf++) {
+#endif // REND2_SP
 			for (int j = 0; j < MAXLIGHTMAPS; j++)
 			{
 				numLightmaps = MAX(numLightmaps, LittleLong(surf->lightmapNum[j]) + 1);
@@ -254,9 +270,15 @@ static	void R_LoadLightmaps(world_t* worldData, lump_t* l, lump_t* surfs)
 		tr.worldDeluxeMapping = qtrue;
 		tr.worldInternalDeluxeMapping = qtrue;
 		// Check that none of the deluxe maps are referenced by any of the map surfaces.
+#ifdef REND2_SP
 		for (i = 0, surf = (dsurface_t*)(fileBase + surfs->fileofs);
 			tr.worldDeluxeMapping && i < surfs->filelen / sizeof(dsurface_t);
 			i++, surf++) {
+#else // !REND2_SP
+		for (i = 0, surf = (dsurface_t*)(fileBase + surfs->fileofs);
+			tr.worldDeluxeMapping && (unsigned)i < surfs->filelen / sizeof(dsurface_t);
+			i++, surf++) {
+#endif // REND2_SP
 			for (int j = 0; j < MAXLIGHTMAPS; j++)
 			{
 				int lightmapNum = LittleLong(surf->lightmapNum[j]);
@@ -383,7 +405,11 @@ static	void R_LoadLightmaps(world_t* worldData, lump_t* l, lump_t* surfs)
 				int newImageSize = lightmapWidth * lightmapHeight * 4 * 2;
 				if (tr.worldInternalLightmapping && (lightmapWidth != tr.lightmapSize || lightmapHeight != tr.lightmapSize))
 				{
+#ifdef REND2_SP
 					ri.Printf(PRINT_ALL, "Error loading %s: non %dx%d lightmaps\n", filename, tr.lightmapSize, tr.lightmapSize);
+#else // !REND2_SP
+					ri->Printf(PRINT_ALL, "Error loading %s: non %dx%d lightmaps\n", filename, tr.lightmapSize, tr.lightmapSize);
+#endif // REND2_SP
 					Z_Free(externalLightmap);
 					externalLightmap = NULL;
 					continue;
@@ -499,8 +525,10 @@ static	void R_LoadLightmaps(world_t* worldData, lump_t* l, lump_t* surfs)
 							image[j * 4 + 1] = out[1] * 255;
 							image[j * 4 + 2] = out[2] * 255;
 							image[j * 4 + 3] = 255;
+#ifdef REND2_SP
 
 							sumIntensity += intensity;
+#endif // REND2_SP
 						}
 						else
 						{
@@ -598,7 +626,11 @@ static	void R_LoadLightmaps(world_t* worldData, lump_t* l, lump_t* surfs)
 
 			if (tr.worldInternalLightmapping && (lightmapWidth != tr.lightmapSize || lightmapHeight != tr.lightmapSize))
 			{
+#ifdef REND2_SP
 				ri.Printf(PRINT_ALL, "Error loading %s: non %dx%d deluxemaps\n", filename, tr.lightmapSize, tr.lightmapSize);
+#else // !REND2_SP
+				ri->Printf(PRINT_ALL, "Error loading %s: non %dx%d deluxemaps\n", filename, tr.lightmapSize, tr.lightmapSize);
+#endif // REND2_SP
 				Z_Free(externalLightmap);
 				externalLightmap = NULL;
 				continue;
@@ -676,7 +708,11 @@ static	void R_LoadLightmaps(world_t* worldData, lump_t* l, lump_t* surfs)
 	}
 
 	if (r_lightmap->integer == 2) {
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, "Brightest lightmap value: %d\n", (int)(maxIntensity * 255));
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, "Brightest lightmap value: %d\n", (int)(maxIntensity * 255));
+#endif // REND2_SP
 	}
 
 	Z_Free(image);
@@ -781,7 +817,11 @@ static void R_LoadVisibility(world_t* worldData, lump_t* l)
 		byte* dest = nullptr;
 
 		dest = (byte*)Hunk_Alloc(len - 8, h_low);
+#ifdef REND2_SP
 		Com_Memcpy(dest, buf + 8, len - 8);
+#else // !REND2_SP
+		Com_Memcpy(dest, buf + 8, static_cast<size_t>(len) - 8);
+#endif // REND2_SP
 		worldData->vis = dest;
 	}
 }
@@ -799,8 +839,14 @@ static shader_t* ShaderForShaderNum(const world_t* worldData, int shaderNum, con
 	const byte* styles = lightmapStyles;
 
 	int _shaderNum = LittleLong(shaderNum);
+#ifdef REND2_SP
 	if (_shaderNum < 0 || _shaderNum >= worldData->numShaders) {
 		ri.Error(ERR_DROP, "ShaderForShaderNum: bad num %i", _shaderNum);
+#else // !REND2_SP
+	if (_shaderNum < 0 || _shaderNum >= worldData->numShaders)
+	{
+		ri->Error(ERR_DROP, "ShaderForShaderNum: bad num %i", _shaderNum);
+#endif // REND2_SP
 	}
 	dsh = &worldData->shaders[_shaderNum];
 
@@ -817,7 +863,30 @@ static shader_t* ShaderForShaderNum(const world_t* worldData, int shaderNum, con
 		lightmapNums = lightmapsFullBright;
 	}
 
+#ifdef REND2_SP
 	shader = R_FindShader(dsh->shader, lightmapNums, styles, qtrue);
+#else // !REND2_SP
+	// Lightmap stages index styleColors[MAX_LIGHT_STYLES] with the style, so a map with a bad style
+	// byte (64..253) read past the table. Treat such styles as the normal style.
+	byte safeStyles[MAXLIGHTMAPS];
+	for (int i = 0; i < MAXLIGHTMAPS; i++)
+	{
+		safeStyles[i] = styles[i];
+		if (safeStyles[i] >= MAX_LIGHT_STYLES && safeStyles[i] < LS_UNUSED)
+		{
+			static qboolean warned = qfalse;
+			if (!warned)
+			{
+				ri->Printf(PRINT_WARNING, "ShaderForShaderNum: light style %i out of range (max %i), using the normal style\n",
+					safeStyles[i], MAX_LIGHT_STYLES - 1);
+				warned = qtrue;
+			}
+			safeStyles[i] = LS_NORMAL;
+		}
+	}
+
+	shader = R_FindShader(dsh->shader, lightmapNums, safeStyles, qtrue);
+#endif // REND2_SP
 
 	// if the shader had errors, just use default shader
 	if (shader->defaultShader) {
@@ -949,9 +1018,17 @@ static void ParseFace(const world_t* worldData, dsurface_t* ds, drawVert_t* vert
 		{
 			tri[j] = LittleLong(indexes[i + j]);
 
+#ifdef REND2_SP
 			if (tri[j] >= numVerts)
+#else // !REND2_SP
+			if (tri[j] >= (unsigned)numVerts)
+#endif // REND2_SP
 			{
+#ifdef REND2_SP
 				ri.Error(ERR_DROP, "Bad index in face surface");
+#else // !REND2_SP
+				ri->Error(ERR_DROP, "Bad index in face surface");
+#endif // REND2_SP
 			}
 		}
 
@@ -964,7 +1041,11 @@ static void ParseFace(const world_t* worldData, dsurface_t* ds, drawVert_t* vert
 
 	if (badTriangles)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "Face has bad triangles, originally shader %s %d tris %d verts, now %d tris\n", surf->shader->name, numIndexes / 3, numVerts, numIndexes / 3 - badTriangles);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "Face has bad triangles, originally shader %s %d tris %d verts, now %d tris\n", surf->shader->name, numIndexes / 3, numVerts, numIndexes / 3 - badTriangles);
+#endif // REND2_SP
 		cv->numIndexes -= badTriangles * 3;
 	}
 
@@ -990,16 +1071,50 @@ static void ParseMesh(const world_t* worldData, dsurface_t* ds, drawVert_t* vert
 	srfBspSurface_t* grid = nullptr;
 	int				i = 0, j = 0;
 	int				width = 0, height = 0, numPoints = 0;
+#ifdef REND2_SP
 	// static: ~160 KB, off the stack (C6262); map load only, never re-entered
 	static srfVert_t points[MAX_PATCH_SIZE * MAX_PATCH_SIZE];
+#endif // REND2_SP
 	vec3_t			bounds[2]{};
 	vec3_t			tmpVec;
 	static surfaceType_t	skipData = SF_SKIP;
 	int realLightmapNum[MAXLIGHTMAPS]{};
+#ifdef REND2_SP
 	memset(points, 0, sizeof(points)); // was = {}
+#else // !REND2_SP
+
+	// ----------------------------------------------------------------------
+	// Large patch vertex buffer moved off stack → static heap allocation
+	// ----------------------------------------------------------------------
+	static srfVert_t* points = nullptr;
+
+	if (points == nullptr)
+	{
+		points = static_cast<srfVert_t*>(
+			Z_Malloc(MAX_PATCH_SIZE * MAX_PATCH_SIZE * sizeof(srfVert_t),
+				TAG_TEMP_WORKSPACE,
+				qfalse,
+				4));
+		if (points == nullptr)
+		{
+			Com_Printf("ParseMesh: failed to allocate patch vertex buffer\n");
+			surf->data = &skipData;
+			return;
+		}
+	}
+
+	// ----------------------------------------------------------------------
+	// Resolve real lightmap indices
+#endif // REND2_SP
 
 	for (j = 0; j < MAXLIGHTMAPS; j++)
+#ifndef REND2_SP
+	{
+#endif // !REND2_SP
 		realLightmapNum[j] = FatLightmap(LittleLong(ds->lightmapNum[j]));
+#ifndef REND2_SP
+	}
+#endif // !REND2_SP
 
 	surf->numSurfaceSprites = 0;
 	surf->surfaceSprites = nullptr;
@@ -1028,11 +1143,24 @@ static void ParseMesh(const world_t* worldData, dsurface_t* ds, drawVert_t* vert
 	height = LittleLong(ds->patchHeight);
 
 	if (width < 0 || width > MAX_PATCH_SIZE || height < 0 || height > MAX_PATCH_SIZE)
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "ParseMesh: bad size");
+#else // !REND2_SP
+	{
+		ri->Error(ERR_DROP, "ParseMesh: bad size");
+	}
+#endif // REND2_SP
 
 	verts += LittleLong(ds->firstVert);
 	if (tangentSpace)
+#ifndef REND2_SP
+	{
+#endif // !REND2_SP
 		tangentSpace += LittleLong(ds->firstVert);
+#ifndef REND2_SP
+	}
+
+#endif // !REND2_SP
 	numPoints = width * height;
 	for (i = 0; i < numPoints; i++)
 	{
@@ -1047,8 +1175,15 @@ static void ParseMesh(const world_t* worldData, dsurface_t* ds, drawVert_t* vert
 		if (tangentSpace)
 		{
 			for (j = 0; j < 4; j++)
+#ifndef REND2_SP
+			{
+#endif // !REND2_SP
 				points[i].tangent[j] = LittleFloat(tangentSpace[i].tangentAndSign[j]);
 		}
+#ifndef REND2_SP
+		}
+
+#endif // !REND2_SP
 
 		for (j = 0; j < 2; j++)
 		{
@@ -1087,7 +1222,14 @@ static void ParseMesh(const world_t* worldData, dsurface_t* ds, drawVert_t* vert
 			}
 			color[3] = verts[i].color[j][3] / 255.0f;
 
+#ifdef REND2_SP
 			R_ColorShiftLightingFloats(color, points[i].vertexColors[j], scale, hdrVertColors == NULL);
+#else // !REND2_SP
+			R_ColorShiftLightingFloats(color,
+				points[i].vertexColors[j],
+				scale,
+				(hdrVertColors == nullptr) ? qtrue : qfalse);
+#endif // REND2_SP
 		}
 	}
 
@@ -1231,9 +1373,17 @@ static void ParseTriSurf(const world_t* worldData, dsurface_t* ds, drawVert_t* v
 		{
 			tri[j] = LittleLong(indexes[i + j]);
 
+#ifdef REND2_SP
 			if (tri[j] >= numVerts)
+#else // !REND2_SP
+			if (tri[j] >= (unsigned)numVerts)
+#endif // REND2_SP
 			{
+#ifdef REND2_SP
 				ri.Error(ERR_DROP, "Bad index in face surface");
+#else // !REND2_SP
+				ri->Error(ERR_DROP, "Bad index in face surface");
+#endif // REND2_SP
 			}
 		}
 
@@ -1246,7 +1396,11 @@ static void ParseTriSurf(const world_t* worldData, dsurface_t* ds, drawVert_t* v
 
 	if (badTriangles)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "Trisurf has bad triangles, originally shader %s %d tris %d verts, now %d tris\n", surf->shader->name, numIndexes / 3, numVerts, numIndexes / 3 - badTriangles);
+#else // !REND2_SP
+		ri->Printf(PRINT_WARNING, "Trisurf has bad triangles, originally shader %s %d tris %d verts, now %d tris\n", surf->shader->name, numIndexes / 3, numVerts, numIndexes / 3 - badTriangles);
+#endif // REND2_SP
 		cv->numIndexes -= badTriangles * 3;
 	}
 }
@@ -1946,7 +2100,11 @@ static void R_StitchAllPatches(world_t* worldData)
 			numstitches += R_TryStitchingPatch(worldData, i);
 		}
 	} while (stitched);
+#ifdef REND2_SP
 	//ri.Printf(PRINT_ALL, "stitched %d LoD cracks\n", numstitches);
+#else // !REND2_SP
+	ri->Printf(PRINT_ALL, "stitched %d LoD cracks\n", numstitches);
+#endif // REND2_SP
 }
 
 /*
@@ -1971,10 +2129,18 @@ static void R_MovePatchSurfacesToHunk(world_t* worldData)
 		Com_Memcpy(hunkgrid, grid, size);
 
 		hunkgrid->widthLodError = (float*)Hunk_Alloc(grid->width * 4, h_low);
+#ifdef REND2_SP
 		Com_Memcpy(hunkgrid->widthLodError, grid->widthLodError, grid->width * 4);
+#else // !REND2_SP
+		Com_Memcpy(hunkgrid->widthLodError, grid->widthLodError, static_cast<size_t>(grid->width) * 4);
+#endif // REND2_SP
 
 		hunkgrid->heightLodError = (float*)Hunk_Alloc(grid->height * 4, h_low);
+#ifdef REND2_SP
 		Com_Memcpy(hunkgrid->heightLodError, grid->heightLodError, grid->height * 4);
+#else // !REND2_SP
+		Com_Memcpy(hunkgrid->heightLodError, grid->heightLodError, static_cast<size_t>(grid->height) * 4);
+#endif // REND2_SP
 
 		hunkgrid->numIndexes = grid->numIndexes;
 		hunkgrid->indexes = (glIndex_t*)Hunk_Alloc(grid->numIndexes * sizeof(glIndex_t), h_low);
@@ -2042,7 +2208,11 @@ static void R_CreateWorldVBOs(world_t* worldData)
 	int             numIndexes = 0;
 	glIndex_t* indexes = nullptr;
 
+#ifdef REND2_SP
 	int             numSortedSurfaces = 0, numSurfaces = 0;
+#else // !REND2_SP
+	int             numSortedSurfaces = 0;
+#endif // REND2_SP
 	msurface_t* surface = nullptr, ** firstSurf = nullptr, ** lastSurf = nullptr, ** currSurf = nullptr;
 	msurface_t** surfacesSorted = nullptr;
 
@@ -2054,7 +2224,11 @@ static void R_CreateWorldVBOs(world_t* worldData)
 
 	int             startTime = 0, endTime = 0;
 
+#ifdef REND2_SP
 	startTime = ri.Milliseconds();
+#else // !REND2_SP
+	startTime = ri->Milliseconds();
+#endif // REND2_SP
 
 	// count surfaces
 	numSortedSurfaces = 0;
@@ -2153,17 +2327,25 @@ static void R_CreateWorldVBOs(world_t* worldData)
 		// count verts/indexes/surfaces
 		numVerts = 0;
 		numIndexes = 0;
+#ifdef REND2_SP
 		numSurfaces = 0;
+#endif // REND2_SP
 		for (currSurf = firstSurf; currSurf < lastSurf; currSurf++)
 		{
 			srfBspSurface_t* bspSurf = (srfBspSurface_t*)(*currSurf)->data;
 
 			numVerts += bspSurf->numVerts;
 			numIndexes += bspSurf->numIndexes;
+#ifdef REND2_SP
 			numSurfaces++;
+#endif // REND2_SP
 		}
 
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, "...calculating world VBO %d ( %i verts %i tris )\n", k, numVerts, numIndexes / 3);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, "...calculating world VBO %d ( %i verts %i tris )\n", k, numVerts, numIndexes / 3);
+#endif // REND2_SP
 
 		// create arrays
 		verts = (packedVertex_t*)Hunk_AllocateTempMemory(numVerts * sizeof(packedVertex_t));
@@ -2175,17 +2357,31 @@ static void R_CreateWorldVBOs(world_t* worldData)
 		for (currSurf = firstSurf; currSurf < lastSurf; currSurf++)
 		{
 			srfBspSurface_t* bspSurf = (srfBspSurface_t*)(*currSurf)->data;
+#ifdef REND2_SP
 			glIndex_t* surf_index = nullptr;
+#else // !REND2_SP
+			glIndex_t* surfIndex = nullptr;
+#endif // REND2_SP
 
 			bspSurf->firstIndex = numIndexes;
 			bspSurf->minIndex = numVerts + bspSurf->indexes[0];
 			bspSurf->maxIndex = numVerts + bspSurf->indexes[0];
 
+#ifdef REND2_SP
 			for (i = 0, surf_index = bspSurf->indexes; i < bspSurf->numIndexes; i++, surf_index++)
+#else // !REND2_SP
+			for (i = 0, surfIndex = bspSurf->indexes; i < bspSurf->numIndexes; i++, surfIndex++)
+#endif // REND2_SP
 			{
+#ifdef REND2_SP
 				indexes[numIndexes++] = numVerts + *surf_index;
 				bspSurf->minIndex = MIN(bspSurf->minIndex, numVerts + *surf_index);
 				bspSurf->maxIndex = MAX(bspSurf->maxIndex, numVerts + *surf_index);
+#else // !REND2_SP
+				indexes[numIndexes++] = numVerts + *surfIndex;
+				bspSurf->minIndex = MIN(bspSurf->minIndex, numVerts + *surfIndex);
+				bspSurf->maxIndex = MAX(bspSurf->maxIndex, numVerts + *surfIndex);
+#endif // REND2_SP
 			}
 
 			bspSurf->firstVert = numVerts;
@@ -2196,7 +2392,6 @@ static void R_CreateWorldVBOs(world_t* worldData)
 
 				VectorCopy(bspSurf->verts[i].xyz, vert.position);
 				vert.normal = R_VboPackNormal(bspSurf->verts[i].normal);
-
 				vert.tangent = 0u;
 
 				VectorCopy2(bspSurf->verts[i].st, vert.texcoords[0]);
@@ -2272,8 +2467,13 @@ static void R_CreateWorldVBOs(world_t* worldData)
 
 	Z_Free(surfacesSorted);
 
+#ifdef REND2_SP
 	endTime = ri.Milliseconds();
 	ri.Printf(PRINT_ALL, "world VBOs calculation time = %5.2f seconds\n", (endTime - startTime) / 1000.0);
+#else // !REND2_SP
+	endTime = ri->Milliseconds();
+	ri->Printf(PRINT_ALL, "world VBOs calculation time = %5.2f seconds\n", (endTime - startTime) / 1000.0);
+#endif // REND2_SP
 }
 
 /*
@@ -2297,16 +2497,28 @@ static	void R_LoadSurfaces(world_t* worldData, lump_t* surfs, lump_t* verts, lum
 	numFlares = 0;
 
 	if (surfs->filelen % sizeof(*in))
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#endif // REND2_SP
 	count = surfs->filelen / sizeof(*in);
 
 	dv = (drawVert_t*)(fileBase + verts->fileofs);
 	if (verts->filelen % sizeof(*dv))
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#endif // REND2_SP
 
 	indexes = (int*)(fileBase + indexLump->fileofs);
 	if (indexLump->filelen % sizeof(*indexes))
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#endif // REND2_SP
 
 	out = (msurface_t*)Hunk_Alloc(count * sizeof(*out), h_low);
 
@@ -2325,13 +2537,22 @@ static	void R_LoadSurfaces(world_t* worldData, lump_t* surfs, lump_t* verts, lum
 		Com_sprintf(filename, sizeof(filename), "maps/%s/vertlight.raw", worldData->baseName);
 		//ri.Printf(PRINT_ALL, "looking for %s\n", filename);
 
+#ifdef REND2_SP
 		size = ri.FS_ReadFile(filename, (void**)&hdrVertColors);
+#else // !REND2_SP
+		size = ri->FS_ReadFile(filename, (void**)&hdrVertColors);
+#endif // REND2_SP
 
 		if (hdrVertColors)
 		{
 			//ri.Printf(PRINT_ALL, "Found!\n");
+#ifdef REND2_SP
 			if (size != sizeof(float) * 3 * verts->filelen / sizeof(*dv))
 				ri.Error(ERR_DROP, "Bad size for %s (%i, expected %i)!", filename, size, (int)((sizeof(float)) * 3 * verts->filelen / sizeof(*dv)));
+#else // !REND2_SP
+			if ((unsigned)size != sizeof(float) * 3 * verts->filelen / sizeof(*dv))
+				ri->Error(ERR_DROP, "Bad size for %s (%i, expected %i)!", filename, size, (int)((sizeof(float)) * 3 * verts->filelen / sizeof(*dv)));
+#endif // REND2_SP
 		}
 	}
 
@@ -2339,14 +2560,27 @@ static	void R_LoadSurfaces(world_t* worldData, lump_t* surfs, lump_t* verts, lum
 	packedTangentSpace_t* tangentSpace = NULL;
 	char filename[MAX_QPATH];
 	Com_sprintf(filename, sizeof(filename), "maps/%s.tspace", worldData->baseName);
+#ifdef REND2_SP
 	int size = ri.FS_ReadFile(filename, (void**)&tangentSpace);
+#else // !REND2_SP
+	int size = ri->FS_ReadFile(filename, (void**)&tangentSpace);
+#endif // REND2_SP
 
 	if (tangentSpace)
 	{
+#ifdef REND2_SP
 		assert(size == (verts->filelen / sizeof(*dv)) * sizeof(float) * 4);
+#else // !REND2_SP
+		assert((size_t)size == (verts->filelen / sizeof(*dv)) * sizeof(float) * 4);
+#endif // REND2_SP
 
+#ifdef REND2_SP
 		if (size != sizeof(tangentSpace[0]) * verts->filelen / sizeof(*dv))
 			ri.Error(ERR_DROP, "Bad size for %s (%i, expected %i)!", filename, size, (int)(sizeof(float) * 4 * verts->filelen / sizeof(*dv)));
+#else // !REND2_SP
+		if ((unsigned)size != sizeof(tangentSpace[0]) * verts->filelen / sizeof(*dv))
+			ri->Error(ERR_DROP, "Bad size for %s (%i, expected %i)!", filename, size, (int)(sizeof(float) * 4 * verts->filelen / sizeof(*dv)));
+#endif // REND2_SP
 	}
 
 	// Two passes, allocate surfaces first, then load them full of data
@@ -2412,13 +2646,21 @@ static	void R_LoadSurfaces(world_t* worldData, lump_t* surfs, lump_t* verts, lum
 			numFlares++;
 			break;
 		default:
+#ifdef REND2_SP
 			ri.Error(ERR_DROP, "Bad surfaceType");
+#else // !REND2_SP
+			ri->Error(ERR_DROP, "Bad surfaceType");
+#endif // REND2_SP
 		}
 	}
 
 	if (hdrVertColors)
 	{
+#ifdef REND2_SP
 		ri.FS_FreeFile(hdrVertColors);
+#else // !REND2_SP
+		ri->FS_FreeFile(hdrVertColors);
+#endif // REND2_SP
 	}
 
 	if (r_patchStitching->integer) {
@@ -2430,9 +2672,15 @@ static	void R_LoadSurfaces(world_t* worldData, lump_t* surfs, lump_t* verts, lum
 	if (r_patchStitching->integer) {
 		R_MovePatchSurfacesToHunk(worldData);
 	}
+#ifdef REND2_SP
 
 	ri.Printf(PRINT_ALL, "...loaded %d faces, %i meshes, %i trisurfs, %i flares\n",
 		numFaces, numMeshes, numTriSurfs, numFlares);
+#else // !REND2_SP
+
+	ri->Printf(PRINT_ALL, "...loaded %d faces, %i meshes, %i trisurfs, %i flares\n",
+		numFaces, numMeshes, numTriSurfs, numFlares);
+#endif // REND2_SP
 }
 
 /*
@@ -2440,13 +2688,26 @@ static	void R_LoadSurfaces(world_t* worldData, lump_t* surfs, lump_t* verts, lum
 R_LoadSubmodels
 =================
 */
+#ifdef REND2_SP
 static void R_LoadSubmodels(world_t* worldData, int worldIndex, lump_t* l) {
 	dmodel_t* in = nullptr;
 	bmodel_t* out = nullptr;
 	int			i = 0, j = 0, count = 0;
+#else // !REND2_SP
+static void R_LoadSubmodels(world_t* worldData, int worldIndex, lump_t* l)
+{
+#endif // REND2_SP
 
+#ifdef REND2_SP
 	in = (dmodel_t*)(fileBase + l->fileofs);
+#else // !REND2_SP
+	// Validate lump size
+	// ----------------------------------------------------------------------
+	dmodel_t* in = reinterpret_cast<dmodel_t*>(fileBase + l->fileofs);
+
+#endif // REND2_SP
 	if (l->filelen % sizeof(*in))
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
 	count = l->filelen / sizeof(*in);
 
@@ -2460,9 +2721,44 @@ static void R_LoadSubmodels(world_t* worldData, int worldIndex, lump_t* l) {
 
 		if (model == NULL) {
 			ri.Error(ERR_DROP, "R_LoadSubmodels: R_AllocModel() failed");
+#else // !REND2_SP
+	{
+		ri->Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#endif // REND2_SP
 			return; // not reached: ri.Error never returns (function pointer, so it cannot be noreturn)
 		}
 
+#ifndef REND2_SP
+	const int count = l->filelen / sizeof(*in);
+
+	worldData->numBModels = count;
+	worldData->bmodels = reinterpret_cast<bmodel_t*>(
+		Hunk_Alloc(count * sizeof(bmodel_t), h_low));
+
+	bmodel_t* out = worldData->bmodels;
+
+	// ----------------------------------------------------------------------
+	// Process each submodel
+	// ----------------------------------------------------------------------
+	for (int i = 0; i < count; i++, in++, out++)
+	{
+		// Allocate model handle
+		model_t* model = R_AllocModel();
+
+		if (model == nullptr)
+		{
+			Com_Printf("R_LoadSubmodels WARNING: R_AllocModel() returned NULL\n");
+			// Skip this submodel safely
+			out->worldIndex = worldIndex;
+			out->firstSurface = 0;
+			out->numSurfaces = 0;
+			continue;
+		}
+
+		// ------------------------------------------------------------------
+		// Model setup
+		// ------------------------------------------------------------------
+#endif // !REND2_SP
 		model->type = MOD_BRUSH;
 		model->data.bmodel = out;
 		if (worldIndex >= 0)
@@ -2474,7 +2770,15 @@ static void R_LoadSubmodels(world_t* worldData, int worldIndex, lump_t* l) {
 			Com_sprintf(model->name, sizeof(model->name), "*%d", i);
 		}
 
+#ifdef REND2_SP
 		for (j = 0; j < 3; j++) {
+#else // !REND2_SP
+		// ------------------------------------------------------------------
+		// Bounds
+		// ------------------------------------------------------------------
+		for (int j = 0; j < 3; j++)
+		{
+#endif // REND2_SP
 			out->bounds[0][j] = LittleFloat(in->mins[j]);
 			out->bounds[1][j] = LittleFloat(in->maxs[j]);
 		}
@@ -2524,12 +2828,20 @@ static	void R_LoadNodesAndLeafs(world_t* worldData, lump_t* nodeLump, lump_t* le
 	in = (dnode_t*)(fileBase + nodeLump->fileofs);
 	if (nodeLump->filelen % sizeof(dnode_t) ||
 		leafLump->filelen % sizeof(dleaf_t)) {
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#endif // REND2_SP
 	}
 	numNodes = nodeLump->filelen / sizeof(dnode_t);
 	numLeafs = leafLump->filelen / sizeof(dleaf_t);
 
+#ifdef REND2_SP
 	out = (mnode_t*)Hunk_Alloc((numNodes + numLeafs) * sizeof(*out), h_low);
+#else // !REND2_SP
+	out = (mnode_t*)Hunk_Alloc((static_cast<unsigned long long>(numNodes) + numLeafs) * sizeof(*out), h_low);
+#endif // REND2_SP
 
 	worldData->nodes = out;
 	worldData->numnodes = numNodes + numLeafs;
@@ -2597,7 +2909,11 @@ static	void R_LoadShaders(world_t* worldData, lump_t* l) {
 
 	in = (dshader_t*)(fileBase + l->fileofs);
 	if (l->filelen % sizeof(*in))
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#endif // REND2_SP
 	count = l->filelen / sizeof(*in);
 	out = (dshader_t*)Hunk_Alloc(count * sizeof(*out), h_low);
 
@@ -2625,7 +2941,11 @@ static	void R_LoadMarksurfaces(world_t* worldData, lump_t* l)
 
 	in = (int*)(fileBase + l->fileofs);
 	if (l->filelen % sizeof(*in))
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#endif // REND2_SP
 	count = l->filelen / sizeof(*in);
 	out = (int*)Hunk_Alloc(count * sizeof(*out), h_low);
 
@@ -2653,12 +2973,25 @@ static	void R_LoadPlanes(world_t* worldData, lump_t* l) {
 
 	in = (dplane_t*)(fileBase + l->fileofs);
 	if (l->filelen % sizeof(*in))
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#endif // REND2_SP
 	count = l->filelen / sizeof(*in);
+#ifdef REND2_SP
 	out = (cplane_t*)Hunk_Alloc(count * 2 * sizeof(*out), h_low);
+#else // !REND2_SP
+
+	out = (cplane_t*)Hunk_Alloc(static_cast<unsigned long long>(count) * 2 * sizeof(*out), h_low);
+#endif // REND2_SP
 
 	worldData->planes = out;
+#ifdef REND2_SP
 	worldData->numPlanes = count;
+#else // !REND2_SP
+	worldData->numplanes = count;
+#endif // REND2_SP
 
 	for (i = 0; i < count; i++, in++, out++) {
 		bits = 0;
@@ -2696,7 +3029,11 @@ static	void R_LoadFogs(world_t* worldData, lump_t* l, lump_t* brushesLump, lump_
 
 	fogs = (dfog_t*)(fileBase + l->fileofs);
 	if (l->filelen % sizeof(*fogs)) {
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#endif // REND2_SP
 	}
 	count = l->filelen / sizeof(*fogs);
 
@@ -2713,13 +3050,21 @@ static	void R_LoadFogs(world_t* worldData, lump_t* l, lump_t* brushesLump, lump_
 
 	brushes = (dbrush_t*)(fileBase + brushesLump->fileofs);
 	if (brushesLump->filelen % sizeof(*brushes)) {
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#endif // REND2_SP
 	}
 	brushesCount = brushesLump->filelen / sizeof(*brushes);
 
 	sides = (dbrushside_t*)(fileBase + sidesLump->fileofs);
 	if (sidesLump->filelen % sizeof(*sides)) {
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#endif // REND2_SP
 	}
 	sidesCount = sidesLump->filelen / sizeof(*sides);
 
@@ -2737,15 +3082,25 @@ static	void R_LoadFogs(world_t* worldData, lump_t* l, lump_t* brushesLump, lump_
 		}
 		else
 		{
+#ifdef REND2_SP
 			if ((unsigned)out->originalBrushNumber >= brushesCount) {
 				ri.Error(ERR_DROP, "fog brushNumber out of range");
+#else // !REND2_SP
+			if ((unsigned)out->originalBrushNumber >= (unsigned)brushesCount) {
+				ri->Error(ERR_DROP, "fog brushNumber out of range");
+#endif // REND2_SP
 			}
 			brush = brushes + out->originalBrushNumber;
 
 			firstSide = LittleLong(brush->firstSide);
 
+#ifdef REND2_SP
 			if ((unsigned)firstSide > sidesCount - 6) {
 				ri.Error(ERR_DROP, "fog brush sideNumber out of range");
+#else // !REND2_SP
+			if ((unsigned)firstSide > (unsigned)sidesCount - 6) {
+				ri->Error(ERR_DROP, "fog brush sideNumber out of range");
+#endif // REND2_SP
 			}
 
 			// brushes are always sorted with the axial sides first
@@ -2779,7 +3134,11 @@ static	void R_LoadFogs(world_t* worldData, lump_t* l, lump_t* brushesLump, lump_
 
 		if (shader->defaultShader == qtrue || shader->fogParms.depthForOpaque == 0)
 		{
+#ifdef REND2_SP
 			ri.Printf(PRINT_WARNING, "Couldn't find proper shader for bsp fog %i %s\n", i, fogs->shader);
+#else // !REND2_SP
+			ri->Printf(PRINT_WARNING, "Couldn't find proper shader for bsp fog %i %s\n", i, fogs->shader);
+#endif // REND2_SP
 			shader->fogParms.depthForOpaque = 65535.f;
 		}
 
@@ -2862,13 +3221,25 @@ static void R_LoadLightGrid(world_t* worldData, lump_t* l)
 		Com_sprintf(filename, sizeof(filename), "maps/%s/lightgrid.raw", worldData->baseName);
 		//ri.Printf(PRINT_ALL, "looking for %s\n", filename);
 
+#ifdef REND2_SP
 		size = ri.FS_ReadFile(filename, (void**)&hdrLightGrid);
+#else // !REND2_SP
+		size = ri->FS_ReadFile(filename, (void**)&hdrLightGrid);
+#endif // REND2_SP
 
 		if (hdrLightGrid)
 		{
+#ifdef REND2_SP
 			if (size != sizeof(float) * 6 * worldData->lightGridBounds[0] * worldData->lightGridBounds[1] * worldData->lightGridBounds[2])
+#else // !REND2_SP
+			if ((unsigned)size != sizeof(float) * 6 * worldData->lightGridBounds[0] * worldData->lightGridBounds[1] * worldData->lightGridBounds[2])
+#endif // REND2_SP
 			{
+#ifdef REND2_SP
 				ri.Error(ERR_DROP, "Bad size for %s (%i, expected %i)!", filename, size, (int)(sizeof(float)) * 6 * worldData->lightGridBounds[0] * worldData->lightGridBounds[1] * worldData->lightGridBounds[2]);
+#else // !REND2_SP
+				ri->Error(ERR_DROP, "Bad size for %s (%i, expected %i)!", filename, size, (int)(sizeof(float)) * 6 * worldData->lightGridBounds[0] * worldData->lightGridBounds[1] * worldData->lightGridBounds[2]);
+#endif // REND2_SP
 			}
 
 			worldData->hdrLightGrid = (float*)Hunk_Alloc(size, h_low);
@@ -2885,7 +3256,11 @@ static void R_LoadLightGrid(world_t* worldData, lump_t* l)
 		}
 
 		if (hdrLightGrid)
+#ifdef REND2_SP
 			ri.FS_FreeFile(hdrLightGrid);
+#else // !REND2_SP
+			ri->FS_FreeFile(hdrLightGrid);
+#endif // REND2_SP
 	}
 }
 
@@ -2917,24 +3292,51 @@ R_LoadEntities
 static void R_LoadEntities(world_t* worldData, lump_t* l)
 {
 	const char* p = nullptr;
+#ifdef REND2_SP
 	char* token = nullptr, * s = nullptr;
+#else // !REND2_SP
+	char* token = nullptr;
+	char* s = nullptr;
+#endif // REND2_SP
 	char vertexRemapShaderText[] = "vertexremapshader";
 	char remapShaderText[] = "remapshader";
 	char keyname[MAX_TOKEN_CHARS];
 	char value[MAX_TOKEN_CHARS];
+#ifdef REND2_SP
 	world_t* w = nullptr;
+#else // !REND2_SP
+	world_t* w = worldData;
+#endif // REND2_SP
 
+#ifdef REND2_SP
 	w = worldData;
+#else // !REND2_SP
+	// ----------------------------------------------------------------------
+	// Default grid size and distance cull
+	// ----------------------------------------------------------------------
+#endif // REND2_SP
 	w->lightGridSize[0] = 64;
 	w->lightGridSize[1] = 64;
 	w->lightGridSize[2] = 128;
 
+#ifdef REND2_SP
 	tr.distanceCull = 12000;//DEFAULT_DISTANCE_CULL;
 
 	p = (char*)(fileBase + l->fileofs);
+#else // !REND2_SP
+	tr.distanceCull = 12000.0f;
+#endif // REND2_SP
 
 	// store for reference by the cgame
+#ifdef REND2_SP
 	w->entityString = (char*)Hunk_Alloc(l->filelen + 1, h_low);
+#else // !REND2_SP
+	// Copy entity string
+	// ----------------------------------------------------------------------
+	p = reinterpret_cast<char*>(fileBase + l->fileofs);
+
+	w->entityString = static_cast<char*>(Hunk_Alloc(l->filelen + 1, h_low));
+#endif // REND2_SP
 	strcpy(w->entityString, p);
 	w->entityParsePoint = w->entityString;
 
@@ -2947,7 +3349,14 @@ static void R_LoadEntities(world_t* worldData, lump_t* l)
 	}
 
 	// only parse the world spawn
+#ifdef REND2_SP
 	while (1) {
+#else // !REND2_SP
+	// Parse only the worldspawn entity
+	// ----------------------------------------------------------------------
+	while (qtrue)
+	{
+#endif // REND2_SP
 		// parse key
 		token = COM_ParseExt(&p, qtrue);
 
@@ -2968,8 +3377,16 @@ static void R_LoadEntities(world_t* worldData, lump_t* l)
 		s = vertexRemapShaderText;
 		if (!Q_strncmp(keyname, s, strlen(s))) {
 			s = strchr(value, ';');
+#ifdef REND2_SP
 			if (!s) {
 				ri.Printf(PRINT_WARNING, "WARNING: no semi colon in vertexshaderremap '%s'\n", value);
+#else // !REND2_SP
+			if (!s)
+			{
+				ri->Printf(PRINT_WARNING,
+					"WARNING: no semicolon in vertexshaderremap '%s'\n",
+					value);
+#endif // REND2_SP
 				break;
 			}
 			*s++ = 0;
@@ -2982,12 +3399,21 @@ static void R_LoadEntities(world_t* worldData, lump_t* l)
 		s = remapShaderText;
 		if (!Q_strncmp(keyname, s, strlen(s))) {
 			s = strchr(value, ';');
+#ifdef REND2_SP
 			if (!s) {
 				ri.Printf(PRINT_WARNING, "WARNING: no semi colon in shaderremap '%s'\n", value);
+#else // !REND2_SP
+			if (!s)
+			{
+				ri->Printf(PRINT_WARNING,
+					"WARNING: no semicolon in shaderremap '%s'\n",
+					value);
+#endif // REND2_SP
 				break;
 			}
 			*s++ = 0;
 			R_RemapShader(value, s, "0");
+#ifdef REND2_SP
 			continue;
 		}
 		if (!Q_stricmp(keyname, "distanceCull")) {
@@ -2999,20 +3425,97 @@ static void R_LoadEntities(world_t* worldData, lump_t* l)
 		if (!Q_stricmp(keyname, "gridsize")) {
 			int unused = sscanf(value, "%f %f %f", &w->lightGridSize[0], &w->lightGridSize[1], &w->lightGridSize[2]);
 			(void)unused;
+#endif // REND2_SP
 			continue;
 		}
 
 		// check for auto exposure
+#ifdef REND2_SP
 		if (!Q_stricmp(keyname, "autoExposureMinMax")) {
 			int unused = sscanf(value, "%f %f", &tr.autoExposureMinMax[0], &tr.autoExposureMinMax[1]);
 			(void)unused;
+#else // !REND2_SP
+		// distanceCull
+		// ------------------------------------------------------------------
+		if (!Q_stricmp(keyname, "distanceCull"))
+		{
+			float tmp = 0.0f;
+			if (sscanf(value, "%f", &tmp) == 1)
+			{
+				tr.distanceCull = tmp;
+			}
+			else
+			{
+				ri->Printf(PRINT_WARNING,
+					"WARNING: bad distanceCull value '%s'\n", value);
+			}
+#endif // REND2_SP
 			continue;
 		}
 
 		// check for volumetric fog scale
+#ifdef REND2_SP
 		if (!Q_stricmp(keyname, "volumetricFogScale")) {
 			int unused = sscanf(value, "%f", &tr.volumetricFogScale);
 			(void)unused;
+#else // !REND2_SP
+		// gridsize
+		// ------------------------------------------------------------------
+		if (!Q_stricmp(keyname, "gridsize"))
+		{
+			float x = 0.0f, y = 0.0f, z = 0.0f;
+			// the light grid divides by these, so they must be positive
+			if (sscanf(value, "%f %f %f", &x, &y, &z) == 3 && x > 0.0f && y > 0.0f && z > 0.0f)
+			{
+				w->lightGridSize[0] = x;
+				w->lightGridSize[1] = y;
+				w->lightGridSize[2] = z;
+			}
+			else
+			{
+				ri->Printf(PRINT_WARNING,
+					"WARNING: bad gridsize value '%s'\n", value);
+			}
+			continue;
+		}
+
+		// ------------------------------------------------------------------
+		// autoExposureMinMax
+		// ------------------------------------------------------------------
+		if (!Q_stricmp(keyname, "autoExposureMinMax"))
+		{
+			float mn = 0.0f, mx = 0.0f;
+			if (sscanf(value, "%f %f", &mn, &mx) == 2)
+			{
+				tr.autoExposureMinMax[0] = mn;
+				tr.autoExposureMinMax[1] = mx;
+			}
+			else
+			{
+				ri->Printf(PRINT_WARNING,
+					"WARNING: bad autoExposureMinMax value '%s'\n",
+					value);
+			}
+			continue;
+		}
+
+		// ------------------------------------------------------------------
+		// volumetricFogScale
+		// ------------------------------------------------------------------
+		if (!Q_stricmp(keyname, "volumetricFogScale"))
+		{
+			float fogScale = 0.0f;
+			if (sscanf(value, "%f", &fogScale) == 1)
+			{
+				tr.volumetricFogScale = fogScale;
+			}
+			else
+			{
+				ri->Printf(PRINT_WARNING,
+					"WARNING: bad volumetricFogScale value '%s'\n",
+					value);
+			}
+#endif // REND2_SP
 			continue;
 		}
 	}
@@ -3066,7 +3569,11 @@ static qboolean R_ParseSpawnVars(char* spawnVarChars, int maxSpawnVarChars, int*
 		return qfalse;
 	}
 	if (com_token[0] != '{') {
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, "R_ParseSpawnVars: found %s when expecting {\n", com_token);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, "R_ParseSpawnVars: found %s when expecting {\n", com_token);
+#endif // REND2_SP
 		return qfalse;
 	}
 
@@ -3076,7 +3583,11 @@ static qboolean R_ParseSpawnVars(char* spawnVarChars, int maxSpawnVarChars, int*
 
 		// parse key
 		if (!R_GetEntityToken(keyname, sizeof(keyname))) {
+#ifdef REND2_SP
 			ri.Printf(PRINT_ALL, "R_ParseSpawnVars: EOF without closing brace\n");
+#else // !REND2_SP
+			ri->Printf(PRINT_ALL, "R_ParseSpawnVars: EOF without closing brace\n");
+#endif // REND2_SP
 			return qfalse;
 		}
 
@@ -3086,17 +3597,29 @@ static qboolean R_ParseSpawnVars(char* spawnVarChars, int maxSpawnVarChars, int*
 
 		// parse value
 		if (!R_GetEntityToken(com_token, sizeof(com_token))) {
+#ifdef REND2_SP
 			ri.Printf(PRINT_ALL, "R_ParseSpawnVars: EOF without closing brace\n");
+#else // !REND2_SP
+			ri->Printf(PRINT_ALL, "R_ParseSpawnVars: EOF without closing brace\n");
+#endif // REND2_SP
 			return qfalse;
 		}
 
 		if (com_token[0] == '}') {
+#ifdef REND2_SP
 			ri.Printf(PRINT_ALL, "R_ParseSpawnVars: closing brace without data\n");
+#else // !REND2_SP
+			ri->Printf(PRINT_ALL, "R_ParseSpawnVars: closing brace without data\n");
+#endif // REND2_SP
 			return qfalse;
 		}
 
 		if (*numSpawnVars == MAX_SPAWN_VARS) {
+#ifdef REND2_SP
 			ri.Printf(PRINT_ALL, "R_ParseSpawnVars: MAX_SPAWN_VARS\n");
+#else // !REND2_SP
+			ri->Printf(PRINT_ALL, "R_ParseSpawnVars: MAX_SPAWN_VARS\n");
+#endif // REND2_SP
 			return qfalse;
 		}
 
@@ -3105,7 +3628,11 @@ static qboolean R_ParseSpawnVars(char* spawnVarChars, int maxSpawnVarChars, int*
 
 		if (numSpawnVarChars + keyLength + tokenLength > maxSpawnVarChars)
 		{
+#ifdef REND2_SP
 			ri.Printf(PRINT_ALL, "R_ParseSpawnVars: MAX_SPAWN_VAR_CHARS\n");
+#else // !REND2_SP
+			ri->Printf(PRINT_ALL, "R_ParseSpawnVars: MAX_SPAWN_VAR_CHARS\n");
+#endif // REND2_SP
 			return qfalse;
 		}
 
@@ -3138,32 +3665,55 @@ static void R_LoadEnvironmentJson(const char* baseName)
 
 	Com_sprintf(filename, sizeof(filename), "cubemaps/%s/env.json", baseName);
 
+#ifdef REND2_SP
 	filelen = ri.FS_ReadFile(filename, &buffer.v);
+#else // !REND2_SP
+	filelen = ri->FS_ReadFile(filename, &buffer.v);
+#endif // REND2_SP
 	if (!buffer.c)
 		return;
 	bufferEnd = buffer.c + filelen;
 
+#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "Loaded Enviroment JSON: %s\n", filename);
+#else // !REND2_SP
+	ri->Printf(PRINT_ALL, "Loaded Enviroment JSON: %s\n", filename);
+#endif // REND2_SP
 
 	if (JSON_ValueGetType(buffer.c, bufferEnd) != JSONTYPE_OBJECT)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, "Bad %s: does not start with a object\n", filename);
 		ri.FS_FreeFile(buffer.v);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, "Bad %s: does not start with a object\n", filename);
+		ri->FS_FreeFile(buffer.v);
+#endif // REND2_SP
 		return;
 	}
 	//-----------------------------CUBEMAPS------------------------------------
 	environmentArrayJson = JSON_ObjectGetNamedValue(buffer.c, bufferEnd, "Cubemaps");
 	if (!environmentArrayJson)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, "Bad %s: no Cubemaps\n", filename);
 		ri.FS_FreeFile(buffer.v);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, "Bad %s: no Cubemaps\n", filename);
+		ri->FS_FreeFile(buffer.v);
+#endif // REND2_SP
 		return;
 	}
 
 	if (JSON_ValueGetType(environmentArrayJson, bufferEnd) != JSONTYPE_ARRAY)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, "Bad %s: Cubemaps not an array\n", filename);
 		ri.FS_FreeFile(buffer.v);
+#else // !REND2_SP
+		ri->Printf(PRINT_ALL, "Bad %s: Cubemaps not an array\n", filename);
+		ri->FS_FreeFile(buffer.v);
+#endif // REND2_SP
 		return;
 	}
 
@@ -3193,7 +3743,11 @@ static void R_LoadEnvironmentJson(const char* baseName)
 			cubemap->parallaxRadius = JSON_ValueGetFloat(keyValueJson, bufferEnd);
 	}
 
+#ifdef REND2_SP
 	ri.FS_FreeFile(buffer.v);
+#else // !REND2_SP
+	ri->FS_FreeFile(buffer.v);
+#endif // REND2_SP
 }
 
 static void R_LoadCubemapEntities(const char* cubemapEntityName)
@@ -3204,57 +3758,162 @@ static void R_LoadCubemapEntities(const char* cubemapEntityName)
 	int numCubemaps = 0;
 
 	// count cubemaps
+#ifdef REND2_SP
 	numCubemaps = 0;
 	while (R_ParseSpawnVars(spawnVarChars, sizeof(spawnVarChars), &numSpawnVars, spawnVars))
+#else // !REND2_SP
+	// First pass: count cubemap entities
+	// ----------------------------------------------------------------------
+	while (R_ParseSpawnVars(spawnVarChars, sizeof(spawnVarChars),
+		&numSpawnVars, spawnVars))
+#endif // REND2_SP
 	{
+#ifdef REND2_SP
 		int i = 0;
 
 		for (i = 0; i < numSpawnVars; i++)
+#else // !REND2_SP
+		for (int i = 0; i < numSpawnVars; i++)
+#endif // REND2_SP
 		{
+#ifdef REND2_SP
 			if (!Q_stricmp(spawnVars[i][0], "classname") && !Q_stricmp(spawnVars[i][1], cubemapEntityName))
+#else // !REND2_SP
+			if (!Q_stricmp(spawnVars[i][0], "classname") &&
+				!Q_stricmp(spawnVars[i][1], cubemapEntityName))
+			{
+#endif // REND2_SP
 				numCubemaps++;
 		}
 	}
+#ifndef REND2_SP
+	}
+#endif // !REND2_SP
 
+#ifdef REND2_SP
 	if (!numCubemaps)
+#else // !REND2_SP
+	if (numCubemaps == 0)
+	{
+#endif // REND2_SP
 		return;
+#ifndef REND2_SP
+	}
+#endif // !REND2_SP
 
 	tr.numCubemaps = numCubemaps;
+#ifdef REND2_SP
 	tr.cubemaps = (cubemap_t*)Hunk_Alloc(tr.numCubemaps * sizeof(*tr.cubemaps), h_low);
+#else // !REND2_SP
+	tr.cubemaps = static_cast<cubemap_t*>(
+		Hunk_Alloc(tr.numCubemaps * sizeof(*tr.cubemaps), h_low));
+
+	// ----------------------------------------------------------------------
+	// Second pass: parse cubemap entities
+#endif // REND2_SP
 
 	numCubemaps = 0;
 	while (R_ParseSpawnVars(spawnVarChars, sizeof(spawnVarChars), &numSpawnVars, spawnVars))
 	{
+#ifdef REND2_SP
 		int i = 0;
+#endif // REND2_SP
 		char name[MAX_QPATH]{};
 		qboolean isCubemap = qfalse;
 		qboolean originSet = qfalse;
 		vec3_t origin{};
 		float parallaxRadius = 1000.0f;
 
+#ifdef REND2_SP
 		name[0] = '\0';
 		for (i = 0; i < numSpawnVars; i++)
+#else // !REND2_SP
+		for (int i = 0; i < numSpawnVars; i++)
+#endif // REND2_SP
 		{
+#ifdef REND2_SP
 			if (!Q_stricmp(spawnVars[i][0], "classname") && !Q_stricmp(spawnVars[i][1], cubemapEntityName))
+#else // !REND2_SP
+			// classname
+			if (!Q_stricmp(spawnVars[i][0], "classname") &&
+				!Q_stricmp(spawnVars[i][1], cubemapEntityName))
+			{
+#endif // REND2_SP
 				isCubemap = qtrue;
+#ifndef REND2_SP
+			}
+
+#endif // !REND2_SP
 
 			if (!Q_stricmp(spawnVars[i][0], "name"))
+#ifndef REND2_SP
+			{
+#endif // !REND2_SP
 				Q_strncpyz(name, spawnVars[i][1], MAX_QPATH);
+#ifndef REND2_SP
+			}
+
+#endif // !REND2_SP
 
 			if (!Q_stricmp(spawnVars[i][0], "origin"))
 			{
+#ifdef REND2_SP
 				int unused = sscanf(spawnVars[i][1], "%f %f %f", &origin[0], &origin[1], &origin[2]);
 				(void)unused;
+#else // !REND2_SP
+				float x = 0.0f, y = 0.0f, z = 0.0f;
+				int parsed = sscanf(spawnVars[i][1], "%f %f %f", &x, &y, &z);
+
+				if (parsed == 3)
+				{
+					origin[0] = x;
+					origin[1] = y;
+					origin[2] = z;
+#endif // REND2_SP
 				originSet = qtrue;
 			}
+#ifdef REND2_SP
 			else if (!Q_stricmp(spawnVars[i][0], "radius"))
+#else // !REND2_SP
+				else
+#endif // REND2_SP
 			{
+#ifdef REND2_SP
 				int unused = sscanf(spawnVars[i][1], "%f", &parallaxRadius);
 				(void)unused;
+#else // !REND2_SP
+					Com_Printf("WARNING: bad cubemap origin '%s'\n",
+						spawnVars[i][1]);
+#endif // REND2_SP
 			}
 		}
 
+#ifdef REND2_SP
 		if (isCubemap && originSet)
+#else // !REND2_SP
+			// radius
+			else if (!Q_stricmp(spawnVars[i][0], "radius"))
+			{
+				float r = 0.0f;
+				int parsed = sscanf(spawnVars[i][1], "%f", &r);
+
+				if (parsed == 1)
+				{
+					parallaxRadius = r;
+				}
+				else
+				{
+					Com_Printf("WARNING: bad cubemap radius '%s'\n",
+						spawnVars[i][1]);
+				}
+			}
+		}
+
+		// ------------------------------------------------------------------
+		// Store cubemap if valid
+		// ------------------------------------------------------------------
+		if (isCubemap == qtrue && originSet == qtrue)
+#endif // REND2_SP
 		{
 			cubemap_t* cubemap = &tr.cubemaps[numCubemaps];
 			Q_strncpyz(cubemap->name, name, MAX_QPATH);
@@ -3304,12 +3963,14 @@ static void R_RenderAllCubemaps()
 	R_IssuePendingRenderCommands();
 	R_InitNextFrame();
 
+#ifdef REND2_SP
 	GLenum cubemapFormat = GL_RGBA8;
 	if (r_hdr->integer)
 	{
 		cubemapFormat = GL_RGBA16F;
 	}
 
+#endif // REND2_SP
 	for (int k = 0; k <= r_cubeMappingBounces->integer; k++)
 	{
 		bool bounce = k != 0;
@@ -3332,19 +3993,33 @@ static void R_LoadWeatherZones(world_t* worldData, lump_t* brushesLump, lump_t* 
 {
 	dbrush_t* brushes = nullptr;
 	dbrushside_t* sides = nullptr;
+#ifdef REND2_SP
 	int			brushesCount = 0, sidesCount = 0;
+#else // !REND2_SP
+	int			brushesCount = 0;
+#endif // REND2_SP
 
 	brushes = (dbrush_t*)(fileBase + brushesLump->fileofs);
 	if (brushesLump->filelen % sizeof(*brushes)) {
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#endif // REND2_SP
 	}
 	brushesCount = brushesLump->filelen / sizeof(*brushes);
 
 	sides = (dbrushside_t*)(fileBase + sidesLump->fileofs);
 	if (sidesLump->filelen % sizeof(*sides)) {
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData->name);
+#endif // REND2_SP
 	}
+#ifdef REND2_SP
 	sidesCount = sidesLump->filelen / sizeof(*sides);
+#endif // REND2_SP
 
 	tr.weatherSystem->weatherBrushType = WEATHER_BRUSHES_NONE;
 
@@ -3402,7 +4077,11 @@ static void R_MergeLeafSurfaces(world_t* worldData)
 
 	int startTime = 0, endTime = 0;
 
+#ifdef REND2_SP
 	startTime = ri.Milliseconds();
+#else // !REND2_SP
+	startTime = ri->Milliseconds();
+#endif // REND2_SP
 
 	numWorldSurfaces = worldData->numWorldSurfaces;
 
@@ -3572,7 +4251,11 @@ static void R_MergeLeafSurfaces(world_t* worldData)
 	{
 		msurface_t* surf1 = nullptr;
 
+#ifdef REND2_SP
 		vec3_t bounds[2];
+#else // !REND2_SP
+		vec3_t bounds[2]{};
+#endif // REND2_SP
 
 		int numSurfsToMerge = 0;
 		int numIndexes = 0;
@@ -3703,10 +4386,17 @@ static void R_MergeLeafSurfaces(world_t* worldData)
 		mergedSurf++;
 	}
 
+#ifdef REND2_SP
 	endTime = ri.Milliseconds();
 
 	ri.Printf(PRINT_ALL, "Processed %d surfaces into %d merged, %d unmerged in %5.2f seconds\n",
 		numWorldSurfaces, numMergedSurfaces, numUnmergedSurfaces, (endTime - startTime) / 1000.0f);
+#else // !REND2_SP
+	endTime = ri->Milliseconds();
+
+	ri->Printf(PRINT_ALL, "Processed %d surfaces into %d merged, %d unmerged in %5.2f seconds\n",
+		numWorldSurfaces, numMergedSurfaces, numUnmergedSurfaces, (endTime - startTime) / 1000.0f);
+#endif // REND2_SP
 
 	// reset viewcounts
 	for (i = 0; i < numWorldSurfaces; i++)
@@ -4159,18 +4849,25 @@ static void R_GenerateSurfaceSprites(const world_t* world, int worldIndex)
 
 				if (j > 0 && (stage->stateBits & GLS_DEPTHFUNC_EQUAL))
 				{
+#ifdef REND2_SP
 					ri.Printf(PRINT_WARNING, "depthFunc equal is not supported on surface sprites in rend2. Skipping stage\n");
+#else // !REND2_SP
+					ri->Printf(PRINT_WARNING, "depthFunc equal is not supported on surface sprites in rend2. Skipping stage\n");
+#endif // REND2_SP
 					continue;
 				}
 
 				srfSprites_t* sprite = surf->surfaceSprites + surfaceSpriteNum;
 				int numCurrentSurfaceSprites = R_CountSurfaceSprites(bspSurf, stage->ss->density, stage);
+#ifdef REND2_SP
 				if ((sprites_data.size() + numCurrentSurfaceSprites * 4) > 65535)
+#else // !REND2_SP
+				if ((sprites_data.size() + static_cast<unsigned long long>(numCurrentSurfaceSprites) * 4) > 65535)
+#endif // REND2_SP
 				{
 					VBO_t* vbo = R_CreateVBO((byte*)sprites_data.data(),
 						sizeof(sprite_t) * sprites_data.size(), VBO_USAGE_STATIC, va("Sprites_%i", numSpriteVbos));
 					numSpriteVbos++;
-
 					for (srfSprites_t* sp : currentBatch)
 					{
 						sp->vbo = vbo;
@@ -4229,8 +4926,13 @@ static void R_BuildLightGridTexture(world_t* world)
 	// For volumetric fog, we don't need directionality, so just merge ambient and direct contributions
 	// I tried using the directionality with phase function and it looked bad. Created like visable noodles in the air.
 	// Potentiall add the seperated 3d images for other things, but currently there's no need.
+#ifdef REND2_SP
 	byte* lightBase = nullptr;
 	uint16_t* lightHDRBase = nullptr;
+#else // !REND2_SP
+	byte* lightBase = NULL;
+	uint16_t* lightHDRBase = NULL;
+#endif // REND2_SP
 	if (world->hdrLightGrid)
 	{
 		lightHDRBase = (uint16_t*)Z_Malloc(world->numGridArrayElements * sizeof(uint16_t) * 4, TAG_TEMP_WORKSPACE, qtrue);
@@ -4242,8 +4944,13 @@ static void R_BuildLightGridTexture(world_t* world)
 
 	if (world->lightGridData)
 	{
+#ifdef REND2_SP
 		uint16_t* lightHDR = nullptr;
 		byte* light = nullptr;
+#else // !REND2_SP
+		uint16_t* lightHDR = NULL;
+		byte* light = NULL;
+#endif // REND2_SP
 		if (world->hdrLightGrid)
 		{
 			lightHDR = lightHDRBase;
@@ -4344,12 +5051,20 @@ world_t* R_LoadBSP(const char* name, int* bspIndex)
 	}
 
 	// load it
+#ifdef REND2_SP
 	ri.FS_ReadFile(name, &buffer.v);
+#else // !REND2_SP
+	ri->FS_ReadFile(name, &buffer.v);
+#endif // REND2_SP
 	if (!buffer.b)
 	{
 		if (bspIndex == nullptr)
 		{
+#ifdef REND2_SP
 			ri.Error(ERR_DROP, "RE_LoadWorldMap: %s not found", name);
+#else // !REND2_SP
+			ri->Error(ERR_DROP, "RE_LoadWorldMap: %s not found", name);
+#endif // REND2_SP
 		}
 
 		return nullptr;
@@ -4365,6 +5080,7 @@ world_t* R_LoadBSP(const char* name, int* bspIndex)
 
 	const byte* startMarker = (const byte*)Hunk_Alloc(0, h_low);
 	dheader_t* header = (dheader_t*)buffer.b;
+#ifdef REND2_SP
 	fileBase = (byte*)header;
 
 	int bspVersion = LittleLong(header->version);
@@ -4376,10 +5092,27 @@ world_t* R_LoadBSP(const char* name, int* bspIndex)
 			name,
 			bspVersion,
 			BSP_VERSION);
+#else // !REND2_SP
+	fileBase = (byte*)header;
+
+	int bspVersion = LittleLong(header->version);
+	if (bspVersion != BSP_VERSION)
+	{
+		ri->Error(
+			ERR_DROP,
+			"R_LoadBSP: %s has wrong version number (%i should be %i)",
+			name,
+			bspVersion,
+			BSP_VERSION);
+#endif // REND2_SP
 	}
 
 	// swap all the lumps
+#ifdef REND2_SP
 	for (int i = 0; i < sizeof(dheader_t) / 4; ++i)
+#else // !REND2_SP
+	for (unsigned i = 0; i < sizeof(dheader_t) / 4; ++i)
+#endif // REND2_SP
 	{
 		((int*)header)[i] = LittleLong(((int*)header)[i]);
 	}
@@ -4434,9 +5167,7 @@ world_t* R_LoadBSP(const char* name, int* bspIndex)
 			&header->lumps[LUMP_BRUSHSIDES]);
 
 	R_LoadWeatherImages();
-
 	R_GenerateSurfaceSprites(worldData, worldIndex + 1);
-
 	R_BuildLightGridTexture(worldData);
 
 	// load cubemaps
@@ -4490,7 +5221,11 @@ world_t* R_LoadBSP(const char* name, int* bspIndex)
 	R_BindNullVBO();
 	R_BindNullIBO();
 
+#ifdef REND2_SP
 	ri.FS_FreeFile(buffer.v);
+#else // !REND2_SP
+	ri->FS_FreeFile(buffer.v);
+#endif // REND2_SP
 
 	return worldData;
 }
@@ -4505,7 +5240,11 @@ Called directly from cgame
 void RE_LoadWorldMap(const char* name) {
 	if (tr.worldMapLoaded)
 	{
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "ERROR: attempted to redundantly load world map");
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "ERROR: attempted to redundantly load world map");
+#endif // REND2_SP
 	}
 
 	// set default map light scale

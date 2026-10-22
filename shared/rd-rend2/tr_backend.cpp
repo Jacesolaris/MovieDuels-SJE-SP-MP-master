@@ -42,8 +42,20 @@ static float	s_flipMatrix[16] = {
 void GL_Bind(image_t* image) {
 	int texnum = 0;
 
+#ifdef REND2_SP
 	if (!image) {
 		ri.Printf(PRINT_WARNING, "GL_Bind: NULL image\n");
+#else // !REND2_SP
+	if (!image)
+	{
+		// (a shader whose image did not load, drawn every frame: named once, for developers)
+		static const shader_t* null_image_shader;
+		if (ri->Cvar_VariableIntegerValue("developer") && tess.shader != null_image_shader)
+		{
+			null_image_shader = tess.shader;
+			ri->Printf(PRINT_WARNING, S_COLOR_YELLOW "GL_Bind: NULL image in shader %s\n", tess.shader ? tess.shader->name : "?");
+		}
+#endif // REND2_SP
 		texnum = tr.defaultImage->texnum;
 	}
 	else {
@@ -59,14 +71,41 @@ void GL_Bind(image_t* image) {
 			image->frameUsed = tr.frameCount;
 		}
 		glState.currenttextures[glState.currenttmu] = texnum;
+#ifdef REND2_SP
 		if (image && image->flags & IMGFLAG_CUBEMAP)
+#else // !REND2_SP
+
+		if (image && (image->flags & IMGFLAG_CUBEMAP))
+		{
+#endif // REND2_SP
 			qglBindTexture(GL_TEXTURE_CUBE_MAP, texnum);
+#ifdef REND2_SP
 		else if (image && image->flags & IMGFLAG_3D)
+#else // !REND2_SP
+		}
+		else if (image && (image->flags & IMGFLAG_3D))
+		{
+#endif // REND2_SP
 			qglBindTexture(GL_TEXTURE_3D, texnum);
+#ifdef REND2_SP
 		else if (image && image->flags & IMGFLAG_2D_ARRAY)
+#else // !REND2_SP
+		}
+		else if (image && (image->flags & IMGFLAG_2D_ARRAY))
+		{
+#endif // REND2_SP
 			qglBindTexture(GL_TEXTURE_2D_ARRAY, texnum);
+#ifndef REND2_SP
+		}
+#endif // !REND2_SP
 		else
+#ifndef REND2_SP
+		{
+#endif // !REND2_SP
 			qglBindTexture(GL_TEXTURE_2D, texnum);
+#ifndef REND2_SP
+		}
+#endif // !REND2_SP
 	}
 }
 
@@ -81,7 +120,11 @@ void GL_SelectTexture(int unit)
 	}
 
 	if (!(unit >= 0 && unit <= 31))
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "GL_SelectTexture: unit = %i", unit);
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "GL_SelectTexture: unit = %i", unit);
+#endif // REND2_SP
 
 	qglActiveTexture(GL_TEXTURE0 + unit);
 
@@ -235,7 +278,11 @@ void GL_State(uint32_t stateBits)
 				srcFactor = GL_SRC_ALPHA_SATURATE;
 				break;
 			default:
+#ifdef REND2_SP
 				ri.Error(ERR_DROP, "GL_State: invalid src blend state bits");
+#else // !REND2_SP
+				ri->Error(ERR_DROP, "GL_State: invalid src blend state bits");
+#endif // REND2_SP
 				break;
 			}
 
@@ -266,7 +313,11 @@ void GL_State(uint32_t stateBits)
 				dstFactor = GL_ONE_MINUS_DST_ALPHA;
 				break;
 			default:
+#ifdef REND2_SP
 				ri.Error(ERR_DROP, "GL_State: invalid dst blend state bits");
+#else // !REND2_SP
+				ri->Error(ERR_DROP, "GL_State: invalid dst blend state bits");
+#endif // REND2_SP
 				break;
 			}
 
@@ -1051,8 +1102,13 @@ static void RB_BindTextures(size_t numBindings, const SamplerBinding* bindings)
 		{
 			int oldtmu = glState.currenttmu;
 			GL_SelectTexture(binding.slot);
+#ifdef REND2_SP
 			ri.CIN_RunCinematic(binding.videoMapHandle - 1);
 			ri.CIN_UploadCinematic(binding.videoMapHandle - 1);
+#else // !REND2_SP
+			ri->CIN_RunCinematic(binding.videoMapHandle - 1);
+			ri->CIN_UploadCinematic(binding.videoMapHandle - 1);
+#endif // REND2_SP
 			GL_SelectTexture(oldtmu);
 		}
 		else
@@ -1262,6 +1318,10 @@ static void RB_SubmitDrawSurfsForDepthFill(
 
 		R_DecomposeSort(drawSurf->sort, &entityNum, &shader, &cubemapIndex, &postRender);
 		assert(shader != nullptr);
+		if (shader == nullptr)
+		{
+			continue;
+		}
 
 		if (shader->sort != SS_OPAQUE || shader->useDistortion || shader->depthPrepass == DEPTHPREPASS_SKIP)
 		{
@@ -1352,6 +1412,10 @@ static void RB_SubmitDrawSurfs(
 
 		R_DecomposeSort(drawSurf->sort, &entityNum, &shader, &cubemapIndex, &postRender);
 		assert(shader != nullptr);
+		if (shader == nullptr)
+		{
+			continue;
+		}
 		fogNum = drawSurf->fogIndex;
 		dlighted = drawSurf->dlightBits;
 
@@ -1618,7 +1682,11 @@ void	RB_SetGL2D(void) {
 	GL_Cull(CT_TWO_SIDED);
 
 	// set time for 2D shaders
+#ifdef REND2_SP
 	backEnd.refdef.time = ri.Milliseconds();
+#else // !REND2_SP
+	backEnd.refdef.time = ri->Milliseconds();
+#endif // REND2_SP
 	backEnd.refdef.floatTime = backEnd.refdef.time * 0.001f;
 
 	// reset color scaling
@@ -1634,7 +1702,12 @@ Stretches a raw 32 bit power of 2 bitmap image over the given screen rectangle.
 Used for cinematics.
 =============
 */
+#ifdef REND2_SP
 void RE_StretchRaw(int x, int y, int w, int h, int cols, int rows, const byte* data, int client, qboolean dirty) {
+#else // !REND2_SP
+void RE_StretchRaw(const int x, const int y, const int w, const int h, const int cols, const int rows, const byte* data, const int client, const qboolean dirty)
+{
+#endif // REND2_SP
 	int			i = 0, j = 0;
 	int			start = 0, end = 0;
 	vec4_t quadVerts[4]; // all set below; no {} (it made /analyze report a NULL dereference, C6011)
@@ -1654,7 +1727,11 @@ void RE_StretchRaw(int x, int y, int w, int h, int cols, int rows, const byte* d
 
 	start = 0;
 	if (r_speeds->integer) {
+#ifdef REND2_SP
 		start = ri.Milliseconds();
+#else // !REND2_SP
+		start = ri->Milliseconds();
+#endif // REND2_SP
 	}
 
 	// make sure rows and cols are powers of 2
@@ -1663,14 +1740,23 @@ void RE_StretchRaw(int x, int y, int w, int h, int cols, int rows, const byte* d
 	for (j = 0; (1 << j) < rows; j++) {
 	}
 	if ((1 << i) != cols || (1 << j) != rows) {
+#ifdef REND2_SP
 		ri.Error(ERR_DROP, "Draw_StretchRaw: size not a power of 2: %i by %i", cols, rows);
+#else // !REND2_SP
+		ri->Error(ERR_DROP, "Draw_StretchRaw: size not a power of 2: %i by %i", cols, rows);
+#endif // REND2_SP
 	}
 
 	RE_UploadCinematic(cols, rows, data, client, dirty);
 
 	if (r_speeds->integer) {
+#ifdef REND2_SP
 		end = ri.Milliseconds();
 		ri.Printf(PRINT_ALL, "qglTexSubImage2D %i, %i: %i msec\n", cols, rows, end - start);
+#else // !REND2_SP
+		end = ri->Milliseconds();
+		ri->Printf(PRINT_ALL, "qglTexSubImage2D %i, %i: %i msec\n", cols, rows, end - start);
+#endif // REND2_SP
 	}
 
 	// FIXME: HUGE hack
@@ -2440,7 +2526,11 @@ static void RB_UpdateFogsConstants(gpuFrame_t* frame)
 
 	if (fogsBlock.numFogs > MAX_GPU_FOGS)
 	{
+#ifdef REND2_SP
 		ri.Printf(PRINT_DEVELOPER, "Too many fogs in current map. Increase MAX_GPU_FOGS\n");
+#else // !REND2_SP
+		ri->Printf(PRINT_DEVELOPER, "Too many fogs in current map. Increase MAX_GPU_FOGS\n");
+#endif // REND2_SP
 		fogsBlock.numFogs = MAX_GPU_FOGS;
 	}
 
@@ -2738,7 +2828,11 @@ static void RB_UpdateEntityConstants(
 
 		if (frame->numCachedModelUboOffsets >= MAX_REFENTITIES)
 		{
+#ifdef REND2_SP
 			ri.Printf(PRINT_DEVELOPER, "Too many models to cache, skipping now.\n");
+#else // !REND2_SP
+			ri->Printf(PRINT_DEVELOPER, "Too many models to cache, skipping now.\n");
+#endif // REND2_SP
 		}
 		else
 		{
@@ -2894,7 +2988,11 @@ void RB_ShowImages(void) {
 
 	qglFinish();
 
+#ifdef REND2_SP
 	start = ri.Milliseconds();
+#else // !REND2_SP
+	start = ri->Milliseconds();
+#endif // REND2_SP
 
 	image = tr.images;
 	for (i = 0; i < tr.numImages; i++, image = image->poolNext) {
@@ -2925,8 +3023,13 @@ void RB_ShowImages(void) {
 
 	qglFinish();
 
+#ifdef REND2_SP
 	end = ri.Milliseconds();
 	ri.Printf(PRINT_ALL, "%i msec to draw all images\n", end - start);
+#else // !REND2_SP
+	end = ri->Milliseconds();
+	ri->Printf(PRINT_ALL, "%i msec to draw all images\n", end - start);
+#endif // REND2_SP
 }
 
 /*
@@ -3052,8 +3155,13 @@ static const void* RB_SwapBuffers(const void* data) {
 		tr.numFramesToCapture--;
 		if (!tr.numFramesToCapture)
 		{
+#ifdef REND2_SP
 			ri.Printf(PRINT_ALL, "Frames captured\n");
 			ri.FS_FCloseFile(tr.debugFile);
+#else // !REND2_SP
+			ri->Printf(PRINT_ALL, "Frames captured\n");
+			ri->FS_FCloseFile(tr.debugFile);
+#endif // REND2_SP
 			tr.debugFile = 0;
 		}
 	}
@@ -3064,7 +3172,11 @@ static const void* RB_SwapBuffers(const void* data) {
 
 	R_PushDebugGroup(AL_NONE, "Done with frame");
 
+#ifdef REND2_SP
 	ri.WIN_Present(&window);
+#else // !REND2_SP
+	ri->WIN_Present(&window);
+#endif // REND2_SP
 
 	return (const void*)(cmd + 1);
 }
@@ -3440,7 +3552,11 @@ RB_ExecuteRenderCommands
 void RB_ExecuteRenderCommands(const void* data) {
 	int		t1 = 0, t2 = 0;
 
+#ifdef REND2_SP
 	t1 = ri.Milliseconds();
+#else // !REND2_SP
+	t1 = ri->Milliseconds();
+#endif // REND2_SP
 
 	while (1) {
 		data = PADP(data, sizeof(void*));
@@ -3503,7 +3619,11 @@ void RB_ExecuteRenderCommands(const void* data) {
 				RB_EndSurface();
 
 			// stop rendering
+#ifdef REND2_SP
 			t2 = ri.Milliseconds();
+#else // !REND2_SP
+			t2 = ri->Milliseconds();
+#endif // REND2_SP
 			backEnd.pc.msec = t2 - t1;
 			return;
 		}

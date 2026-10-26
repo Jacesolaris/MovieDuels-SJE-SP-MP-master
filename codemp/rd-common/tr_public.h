@@ -280,6 +280,12 @@ using refexport_t = struct refexport_s
 	} ext;
 
 	float (*IsOutsideCausingPain)(vec3_t pos);
+
+	// the weather wind, for BOTH_WIND in the MP game and cgame (bg_pmove.c PM_TorsoAgainstWind).
+	// NULL in a renderer without wind (dedicated). Kept last.
+	bool (*GetWindVector)(vec3_t windVector, vec3_t atPoint);
+	bool (*GetWindGusting)(vec3_t atpoint);
+	bool (*IsOutside)(vec3_t pos);
 };
 
 //

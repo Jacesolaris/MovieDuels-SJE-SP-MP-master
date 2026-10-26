@@ -239,59 +239,58 @@ void CG_CheckPlayerstateEvents(playerState_t* ps, playerState_t* ops)
 CG_CheckLocalSounds
 ==================
 */
-/*
-void CG_CheckLocalSounds( playerState_t *ps, playerState_t *ops ) {
-	const char *s;
+void CG_PainEvent(centity_t* cent, int health);
 
+static void CG_CheckLocalSounds(const playerState_t* ps, const playerState_t* ops)
+{
 	// hit changes
-	if ( ps->persistant[PERS_HITS] > ops->persistant[PERS_HITS] ) {
-		cgi_S_StartLocalSound( "sound/feedback/hit.wav" );
-	} else if ( ps->persistant[PERS_HITS] < ops->persistant[PERS_HITS] ) {
-		cgi_S_StartLocalSound( "sound/feedback/hit_teammate.wav" );
+	if (ps->persistant[PERS_HITS] > ops->persistant[PERS_HITS])
+	{
+		//cgi_S_StartLocalSound(cgs.media.hitsound, CHAN_LOCAL_SOUND);
+	}
+	else if (ps->persistant[PERS_HITS] < ops->persistant[PERS_HITS])
+	{
+		//cgi_S_StartLocalSound(cgs.media.hitTeamSound, CHAN_LOCAL_SOUND);
 	}
 
-	// score up / down changes
-	if ( ps->persistant[PERS_SCORE] > ops->persistant[PERS_SCORE] ) {
-		cgi_S_StartLocalSound( "sound/feedback/scoreup.wav" );
-	} else if ( ps->persistant[PERS_SCORE] < ops->persistant[PERS_SCORE] ) {
-		cgi_S_StartLocalSound( "sound/feedback/scoredown.wav" );
-	}
-
-	// reward sounds
-	if ( ps->persistant[PERS_REWARD_COUNT] > ops->persistant[PERS_REWARD_COUNT] ) {
-		switch ( ps->persistant[PERS_REWARD] ) {
-		case REWARD_IMPRESSIVE:
-			cgi_S_StartLocalSound( "sound/feedback/impressive.wav" );
-			break;
-		case REWARD_EXCELLENT:
-			cgi_S_StartLocalSound( "sound/feedback/excellent.wav" );
-			break;
-		case REWARD_DENIED:
-			cgi_S_StartLocalSound( "sound/feedback/denied.wav" );
-			break;
-
-		default:
-			CG_Error( "Bad reward_t" );
+	// health changes of more than -3 should make pain sounds
+	if (ps->stats[STAT_HEALTH] < ops->stats[STAT_HEALTH] - 3)
+	{
+		if (ps->stats[STAT_HEALTH] > 0)
+		{
+			CG_PainEvent(&cg_entities[ps->clientNum], ps->stats[STAT_HEALTH]);
 		}
 	}
 
-	// timelimit warnings
-	if ( cgs.timelimit > 0 ) {
-		if ( cgs.timelimit > 5 && !( cg.timelimitWarnings & 1 ) && cg.time > (cgs.timelimit - 5) * 60 * 1000 ) {
-			cg.timelimitWarnings |= 1;
-			cgi_S_StartLocalSound( "sound/feedback/5_minute.wav" );
+	if (cg_awardsounds.integer)
+	{
+		if (ps->persistant[PERS_EXCELLENT_COUNT] != ops->persistant[PERS_EXCELLENT_COUNT])
+		{
+			cgi_S_StartLocalSound(cgs.media.excellentSound, CHAN_ANNOUNCER);
 		}
-		if ( !( cg.timelimitWarnings & 2 ) && cg.time > (cgs.timelimit - 1) * 60 * 1000 ) {
-			cg.timelimitWarnings |= 2;
-			cgi_S_StartLocalSound( "sound/feedback/1_minute.wav" );
+		if (ps->persistant[PERS_GAUNTLET_FRAG_COUNT] != ops->persistant[PERS_GAUNTLET_FRAG_COUNT])
+		{
+			cgi_S_StartLocalSound(cgs.media.humiliationSound, CHAN_ANNOUNCER);
 		}
-		if ( !( cg.timelimitWarnings & 4 ) && cg.time > ( cgs.timelimit * 60 + 2 ) * 1000 ) {
-			cg.timelimitWarnings |= 4;
-			cgi_S_StartLocalSound( "sound/feedback/sudden_death.wav" );
+		if (ps->persistant[PERS_IMPRESSIVE_COUNT] != ops->persistant[PERS_IMPRESSIVE_COUNT])
+		{
+			cgi_S_StartLocalSound(cgs.media.impressiveSound, CHAN_ANNOUNCER);
+		}
+		if (ps->persistant[PERS_PLAYEREVENTS] != ops->persistant[PERS_PLAYEREVENTS])
+		{
+			if ((ps->persistant[PERS_PLAYEREVENTS] & PLAYEREVENT_DENIEDREWARD) != (ops->persistant[PERS_PLAYEREVENTS] &
+				PLAYEREVENT_DENIEDREWARD))
+			{
+				cgi_S_StartLocalSound(cgs.media.deniedSound, CHAN_ANNOUNCER);
+			}
+			else if ((ps->persistant[PERS_PLAYEREVENTS] & PLAYEREVENT_GAUNTLETREWARD) != (ops->persistant[
+				PERS_PLAYEREVENTS] & PLAYEREVENT_GAUNTLETREWARD))
+			{
+				cgi_S_StartLocalSound(cgs.media.humiliationSound, CHAN_ANNOUNCER);
+			}
 		}
 	}
 }
-*/
 
 /*
 ===============

@@ -1064,7 +1064,7 @@ int ForcePowerUsableOn(const gentity_t* attacker, const gentity_t* other, const 
 		return 0;
 
 	if (other->client &&
-		other->client->ps.fd.saberAnimLevel == SS_DESANN &&
+		(other->client->ps.fd.saberAnimLevel == SS_DESANN || other->client->ps.fd.saberAnimLevel == SS_BLASTER) && // SS_BLASTER
 		other->client->ps.saberFatigueChainCount >= MISHAPLEVEL_HEAVY)
 		return 0;
 
@@ -1188,6 +1188,8 @@ static qboolean class_is_gunner(const gentity_t* self)
 {
 	switch (self->client->ps.weapon)
 	{
+	case WP_NOGHRI_STICK:
+	case WP_TUSKEN_RIFLE:
 	case WP_STUN_BATON:
 	case WP_BRYAR_PISTOL:
 	case WP_BLASTER:
@@ -2300,7 +2302,7 @@ static qboolean WP_CounterForce(const gentity_t* attacker, const gentity_t* defe
 		return qfalse;
 	}
 	if (defender->client->ps.saberFatigueChainCount >= MISHAPLEVEL_LIGHT
-		&& attacker->client->ps.fd.saberAnimLevel == SS_DESANN)
+		&& (attacker->client->ps.fd.saberAnimLevel == SS_DESANN || attacker->client->ps.fd.saberAnimLevel == SS_BLASTER)) // SS_BLASTER
 	{
 		//can't block if we're too off balance and they are using Juyo's perk
 		return qfalse;
@@ -3494,8 +3496,15 @@ static void force_lightning_damage(gentity_t* self, gentity_t* traceEnt, vec3_t 
 							traceEnt->client->stunDamage = 9;
 							traceEnt->client->stunTime = level.time + 1000;
 
-							gentity_t* tent = G_TempEntity(traceEnt->r.currentOrigin, EV_STUNNED);
-							tent->s.owner = traceEnt->s.number;
+							// the event only starts the stunned player's 5 s wonky view (cg_event.c): one a second per
+							// living target is plenty - it was one per hit (every 50 ms, from every lightning user,
+							// corpses included)
+							if (traceEnt->health > 0 && traceEnt->client->stunEventTime <= level.time)
+							{
+								traceEnt->client->stunEventTime = level.time + 1000;
+								gentity_t* tent = G_TempEntity(traceEnt->r.currentOrigin, EV_STUNNED);
+								tent->s.owner = traceEnt->s.number;
+							}
 						}
 
 						if (traceEnt->client->ps.stats[STAT_HEALTH] <= 0 && class_is_gunner(traceEnt))
@@ -3667,6 +3676,7 @@ static void force_lightning_damage(gentity_t* self, gentity_t* traceEnt, vec3_t 
 								case SS_TAVION:
 								case SS_STRONG:
 								case SS_DESANN:
+								case SS_BLASTER: // SS_BLASTER
 								case SS_MEDIUM:
 									G_SetAnim(traceEnt, &traceEnt->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_T_,
 										SETANIM_AFLAG_PACE, 0);
@@ -3727,6 +3737,7 @@ static void force_lightning_damage(gentity_t* self, gentity_t* traceEnt, vec3_t 
 							case SS_TAVION:
 							case SS_STRONG:
 							case SS_DESANN:
+							case SS_BLASTER: // SS_BLASTER
 							case SS_MEDIUM:
 								G_SetAnim(traceEnt, &traceEnt->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_T_,
 									SETANIM_AFLAG_PACE, 0);
@@ -5505,22 +5516,8 @@ void WP_ResistForcePush(gentity_t* self, const gentity_t* pusher, const qboolean
 		parts = SETANIM_TORSO;
 	}
 
-	if (self->client->pers.botclass == BCLASS_YODA)
-	{
-		G_SetAnim(self, &self->client->pers.cmd, parts, BOTH_YODA_RESISTFORCE, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
-	}
-	else if (self->client->ps.fd.forcePowerLevel[FP_ABSORB] > FORCE_LEVEL_2)
-	{
-		G_SetAnim(self, &self->client->pers.cmd, parts, BOTH_RESISTPUSH, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
-	}
-	else if (self->client->saber[0].type == SABER_SINGLE_YODA)
-	{
-		G_SetAnim(self, &self->client->pers.cmd, parts, BOTH_YODA_RESISTFORCE, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
-	}
-	else
-	{
-		G_SetAnim(self, &self->client->pers.cmd, parts, BOTH_RESISTPUSH2, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
-	}
+	G_SetAnim(self, &self->client->pers.cmd, parts, BOTH_RESISTPUSH, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
+
 	self->client->ps.powerups[PW_MEDITATE] = level.time + self->client->ps.torsoTimer + 1000;
 
 	if (!no_penalty)
@@ -5612,6 +5609,14 @@ static void PushDamage(gentity_t* self, gentity_t* enemy, vec3_t location, const
 
 	default:
 		return; // no damage for invalid level
+	}
+
+	if (enemy->s.number >= MAX_CLIENTS || self->s.number >= MAX_CLIENTS)
+	{
+		// NPC fights play as MD SP (wp_saber.cpp PushDamage): the push hurts nothing, the knockdown and the throw do
+		// the work (the 10-20 damage killed low-health NPCs such as Tavion, health 10, with one push into a wall)
+		G_Damage(enemy, self, self, NULL, location, 0, DAMAGE_NO_KNOCKBACK, MOD_UNKNOWN);
+		return;
 	}
 
 	G_Damage(
@@ -7666,7 +7671,7 @@ static void SJE_StasisOne(gentity_t* self, gentity_t* ent, const int lvl)
 	}
 }
 
-static void ForceStasis(gentity_t* self)
+void ForceStasis(gentity_t* self)
 {
 	if (!SJE_PowerReady(self, FP_STASIS))
 	{
@@ -7771,7 +7776,7 @@ static void SJE_FireForceProjectile(gentity_t* self, const qboolean blast)
 	missile->bounceCount = 0;
 }
 
-static void ForceDestruction(gentity_t* self)
+void ForceDestruction(gentity_t* self)
 {
 	if (!SJE_PowerReady(self, FP_DESTRUCTION))
 	{
@@ -7798,7 +7803,7 @@ static void ForceBlast(gentity_t* self)
 // ------------------------------------------------------------------------------------------------------------------
 // FP_LIGHTNING_STRIKE: a lightning bolt into everything in a cone in front (128 / 256 / 512)
 // ------------------------------------------------------------------------------------------------------------------
-static void ForceLightningStrike(gentity_t* self)
+void ForceLightningStrike(gentity_t* self)
 {
 	if (!SJE_PowerReady(self, FP_LIGHTNING_STRIKE))
 	{
@@ -7964,7 +7969,7 @@ static void SJE_MindPower(gentity_t* self, const forcePowers_t fp)
 	SJE_PlayerStun(target, sjePlayerStunTime[lvl], fp == FP_FEAR ? BOTH_COWER1 : BOTH_SONICPAIN_HOLD);
 }
 
-static void ForceFear(gentity_t* self)
+void ForceFear(gentity_t* self)
 {
 	SJE_MindPower(self, FP_FEAR);
 }
@@ -9149,6 +9154,14 @@ static void wp_force_power_run(gentity_t* self, const forcePowers_t forcePower, 
 		}
 		else
 		{
+			// Never catch up more than one shot. The debounce is only kept current while WP_ForcePowersUpdate runs to
+			// the end with the power off; after it returned early for a while (bot not allowed force, grip, Boba
+			// wrist laser...) with the power on, this loop fired every missed 50 ms shot in one frame - a 31-bot MP
+			// match spawned ~3,900 temp entities (stun / effect / sound events) at once: "G_Spawn: no free entities".
+			if (self->client->force.drainDebounce < level.time - FORCE_DEBOUNCE_TIME * 2)
+			{
+				self->client->force.drainDebounce = level.time - FORCE_DEBOUNCE_TIME;
+			}
 			while (self->client->force.drainDebounce < level.time)
 			{
 				ForceShootDrain(self);
@@ -9186,6 +9199,11 @@ static void wp_force_power_run(gentity_t* self, const forcePowers_t forcePower, 
 		}
 		else
 		{
+			// never catch up more than one shot (see FP_DRAIN above)
+			if (self->client->force.lightningDebounce < level.time - FORCE_DEBOUNCE_TIME * 2)
+			{
+				self->client->force.lightningDebounce = level.time - FORCE_DEBOUNCE_TIME;
+			}
 			while (self->client->force.lightningDebounce < level.time)
 			{
 				force_shoot_lightning(self);

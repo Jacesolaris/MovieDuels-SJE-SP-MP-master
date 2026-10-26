@@ -23,6 +23,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "tr_local.h"
+#include "q_profile.h"
 
 static void* R_LocalMalloc(size_t size)
 {
@@ -77,6 +78,7 @@ static void R_LocalFree(void* ptr)
 // Loads a HDR image from file.
 void R_LoadHDRImage(const char* filename, byte** data, int* width, int* height)
 {
+	PROFILE_ZONE("Load: decode HDR");
 	byte* buf = NULL;
 	int x = 0, y = 0, n = 0;
 #ifdef REND2_SP

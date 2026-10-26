@@ -2072,6 +2072,7 @@ static void G_SetTauntAnim(gentity_t* ent, const int taunt)
 				case SS_MEDIUM:
 				case SS_STRONG:
 				case SS_DESANN:
+				case SS_BLASTER: // SS_BLASTER
 					if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
 					{
 						if (flags.isCountDooku == qtrue)
@@ -2383,6 +2384,7 @@ static void G_SetTauntAnim(gentity_t* ent, const int taunt)
 						break;
 					case SS_STRONG:
 					case SS_DESANN:
+					case SS_BLASTER: // SS_BLASTER
 						NPC_SetAnim(ent, SETANIM_TORSO, BOTH_SHOWOFF_STRONG, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 						break;
 					case SS_DUAL:
@@ -2429,6 +2431,7 @@ static void G_SetTauntAnim(gentity_t* ent, const int taunt)
 						break;
 					case SS_STRONG:
 					case SS_DESANN:
+					case SS_BLASTER: // SS_BLASTER
 						NPC_SetAnim(ent, SETANIM_BOTH, BOTH_SHOWOFF_STRONG, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 						break;
 					case SS_DUAL:
@@ -2562,6 +2565,7 @@ static void G_SetTauntAnim(gentity_t* ent, const int taunt)
 						break;
 					case SS_STRONG:
 					case SS_DESANN:
+					case SS_BLASTER: // SS_BLASTER
 						ent->client->ps.SaberActivate();
 						if (ent->client->ps.dualSabers && ent->weaponModel[1] == -1)
 						{
@@ -2614,6 +2618,7 @@ static void G_SetTauntAnim(gentity_t* ent, const int taunt)
 						break;
 					case SS_STRONG:
 					case SS_DESANN:
+					case SS_BLASTER: // SS_BLASTER
 						ent->client->ps.SaberActivate();
 						NPC_SetAnim(ent, SETANIM_TORSO, BOTH_VICTORY_STRONG, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 						break;
@@ -2816,6 +2821,7 @@ static void G_SetTauntAnim(gentity_t* ent, const int taunt)
 			case SS_MEDIUM:
 			case SS_STRONG:
 			case SS_DESANN:
+			case SS_BLASTER: // SS_BLASTER
 				if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
 				{
 					if (flags.isCountDooku == qtrue)
@@ -2935,6 +2941,7 @@ static void G_SetTauntAnim(gentity_t* ent, const int taunt)
 					NPC_SetAnim(ent, SETANIM_TORSO, TORSO_HANDSIGNAL4, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 					break;
 				case SS_DESANN:
+				case SS_BLASTER: // SS_BLASTER
 					if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
 					{
 						if (flags.isGalenMarek == qtrue)
@@ -3363,12 +3370,12 @@ void ClientCommand(const int clientNum)
 			gi.SendServerCommand(ent - g_entities, va("print \"usage: addsaberstyle <saber style>\n\""));
 			gi.SendServerCommand(ent - g_entities,
 				va(
-					"print \"Valid styles: SS_FAST, SS_MEDIUM, SS_STRONG, SS_DESANN, SS_TAVION, SS_DUAL and SS_STAFF\n\""));
+					"print \"Valid styles: SS_FAST, SS_MEDIUM, SS_STRONG, SS_DESANN, SS_TAVION, SS_BLASTER, SS_DUAL and SS_STAFF\n\""));
 			return;
 		}
 
 		const int addStyle = GetIDForString(SaberStyleTable, gi.argv(1));
-		if (addStyle > SS_NONE && addStyle < SS_STAFF)
+		if (addStyle > SS_NONE && (addStyle < SS_STAFF || addStyle == SS_BLASTER)) // SS_BLASTER
 		{
 			ent->client->ps.saberStylesKnown |= 1 << addStyle;
 		}
@@ -3386,12 +3393,12 @@ void ClientCommand(const int clientNum)
 			gi.SendServerCommand(ent - g_entities, va("print \"usage: setsaberstyle <saber style>\n\""));
 			gi.SendServerCommand(ent - g_entities,
 				va(
-					"print \"Valid styles: SS_FAST, SS_MEDIUM, SS_STRONG, SS_DESANN, SS_TAVION, SS_DUAL and SS_STAFF\n\""));
+					"print \"Valid styles: SS_FAST, SS_MEDIUM, SS_STRONG, SS_DESANN, SS_TAVION, SS_BLASTER, SS_DUAL and SS_STAFF\n\""));
 			return;
 		}
 
 		const int setStyle = GetIDForString(SaberStyleTable, gi.argv(1));
-		if (setStyle > SS_NONE && setStyle < SS_STAFF)
+		if (setStyle > SS_NONE && (setStyle < SS_STAFF || setStyle == SS_BLASTER)) // SS_BLASTER
 		{
 			ent->client->ps.saberStylesKnown = 1 << setStyle;
 			cg.saberAnimLevelPending = ent->client->ps.saberAnimLevel = setStyle;

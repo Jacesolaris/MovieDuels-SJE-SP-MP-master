@@ -1476,6 +1476,67 @@ static void NPC_BehaviorSet_Animal(const int b_state)
 
 /*
 -------------------------
+Calo_Nord (SP AI_Character.cpp)
+-------------------------
+*/
+static qboolean Calo_Nord(const gentity_t* self)
+{
+	if (!self || !self->client)
+	{
+		return qfalse;
+	}
+
+	if (self->client->NPC_class == CLASS_CALONORD
+		&& (Q_stricmp("calonord", self->NPC_type) == 0 ||
+			Q_stricmp("md_calo", self->NPC_type) == 0 ||
+			Q_stricmp("md_calonord", self->NPC_type) == 0))
+	{
+		return qtrue;
+	}
+	return qfalse;
+}
+
+/*
+-------------------------
+NPC_BehaviorSet_Grogu (SP NPC.cpp)
+-------------------------
+*/
+extern void NPC_BSST_Investigate(void);
+extern void NPC_BSST_Sleep(void);
+
+static void NPC_BehaviorSet_Grogu(const int b_state)
+{
+	switch (b_state)
+	{
+	case BS_STAND_GUARD:
+	case BS_PATROL:
+	case BS_STAND_AND_SHOOT:
+	case BS_HUNT_AND_KILL:
+	case BS_DEFAULT:
+		NPC_BSJedi_Default();
+		break;
+
+	case BS_FOLLOW_LEADER:
+	case BS_FOLLOW_OVERRIDE: //# 40: Follow your leader and shoot any enemies you come across
+		NPC_BSFollowLeader();
+		break;
+
+	case BS_INVESTIGATE:
+		NPC_BSST_Investigate();
+		break;
+
+	case BS_SLEEP:
+		NPC_BSST_Sleep();
+		break;
+
+	default:
+		NPC_BehaviorSet_Default(b_state);
+		break;
+	}
+}
+
+/*
+-------------------------
 NPC_RunBehavior
 -------------------------
 */
@@ -1542,9 +1603,12 @@ static void NPC_RunBehavior(const npcteam_t team, const int b_state)
 		//saber droid
 		NPC_BSSD_Default();
 	}
-	else if (NPCS.NPC->client->ps.weapon == WP_SABER)
+	else if (NPCS.NPC->client->ps.weapon == WP_SABER ||
+		Calo_Nord(NPCS.NPC) ||
+		(NPCS.NPC->client->NPC_class == CLASS_SITHLORD && NPCS.NPC->client->ps.weapon == WP_MELEE) ||
+		(NPCS.NPC->client->NPC_class == CLASS_SITHLORD && NPCS.NPC->client->ps.weapon == WP_NONE))
 	{
-		//jedi
+		//jedi (as SP: also Calo Nord and an unarmed / melee Sith lord)
 		NPC_BehaviorSet_Jedi(b_state);
 		dontSetAim = qtrue;
 	}
@@ -1552,6 +1616,12 @@ static void NPC_RunBehavior(const npcteam_t team, const int b_state)
 	{
 		//force-only reborn
 		NPC_BehaviorSet_Jedi(b_state);
+		dontSetAim = qtrue;
+	}
+	else if (NPCS.NPC->client->NPC_class == CLASS_GROGU)
+	{
+		//as SP
+		NPC_BehaviorSet_Grogu(b_state);
 		dontSetAim = qtrue;
 	}
 	else if (NPCS.NPC->client->NPC_class == CLASS_JEDI ||
@@ -2066,8 +2136,27 @@ void NPC_Think(gentity_t* self)
 {
 	vec3_t oldMoveDir;
 	const int i = 0;
+	static qboolean spreadRegistered = qfalse;
 
 	self->nextthink = level.time + FRAMETIME / 2;
+
+	// g_npcThinkSpread: NPCs think every 50 ms, which is every other server frame (sv_fps 40). Split them
+	// between the two frames by entity number, so NPCs spawned together don't all think in the same frame.
+	// 0 = as before.
+	if (!spreadRegistered)
+	{
+		trap->Cvar_Register(NULL, "g_npcThinkSpread", "1", CVAR_ARCHIVE);
+		spreadRegistered = qtrue;
+	}
+	const int frameMsec = level.time - level.previousTime;	// one server frame
+	if (trap->Cvar_VariableIntegerValue("g_npcThinkSpread") && frameMsec > 0 && frameMsec < FRAMETIME / 2)
+	{
+		const int frame = self->nextthink / frameMsec;
+		if ((frame + self->s.number) & 1)
+		{
+			self->nextthink += frameMsec;
+		}
+	}
 
 	SetNPCGlobals(self);
 

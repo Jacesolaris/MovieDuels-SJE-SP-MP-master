@@ -511,6 +511,23 @@ namespace
 	}
 }
 
+// Repeated weather makes it heavier: a map's Weather/<mapname>.cfg repeats a line for denser weather ("r_weather 4"
+// four times), and the vanilla renderer adds a particle cloud per command. Here each weather type is one slot, so a
+// slot switched on again while it is on gets its count times the number of times it was asked for (at most
+// R_WEATHER_MAX_STACK, and never more than its buffer holds). "clear" switches the slots off, so the count starts
+// over; the menu, the SP map start and the MP cgame all clear before they send their weather.
+static const int R_WEATHER_MAX_STACK = 3;
+static int weatherStack[NUM_WEATHER_TYPES];
+
+static int R_WeatherStackedCount(const int type, const int baseCount)
+{
+	const weatherObject_t& w = tr.weatherSystem->weatherSlots[type];
+	weatherStack[type] = w.active ? weatherStack[type] + 1 : 1;
+	const int stack = weatherStack[type] < R_WEATHER_MAX_STACK ? weatherStack[type] : R_WEATHER_MAX_STACK;
+	const int count = baseCount * stack;
+	return count < maxWeatherTypeParticles[type] ? count : maxWeatherTypeParticles[type];
+}
+
 void R_InitWeatherForMap()
 {
 	for (int i = 0; i < NUM_WEATHER_TYPES; i++)
@@ -689,6 +706,26 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		return;
 	}
 
+#ifdef REND2_SP
+	// r_weather -1 is the menu's "Off" (the menu clears the weather first): the bare "r_weather"
+	// command that follows has nothing to add (it printed the list of valid commands)
+	if ((!token[0] || (token[0] >= '0' && token[0] <= '9') || token[0] == '-') && g_Weather->integer < 0)
+	{
+		COM_EndParseSession();
+		return;
+	}
+	// The preset: a number given with the command is used as it is - a map's Weather/<mapname>.cfg ("r_weather 6",
+	// exec'd at map start). It used to read the r_weather cvar instead, but "r_weather 6" runs the r_weather command,
+	// which does not set the cvar, and SV_Map_ sets the cvar to 0 for every new map: every map file became "clear".
+	// The bare command uses the cvar. Named commands have no preset (-1).
+	if (token[0] == '-')
+	{
+		COM_EndParseSession();
+		return;
+	}
+	const int spPreset = !token[0] ? g_Weather->integer : (token[0] >= '0' && token[0] <= '9' ? atoi(token) : -1);
+#endif
+
 	//Die - clean up the whole weather system -rww
 	if (Q_stricmp(token, "die") == 0)
 	{
@@ -707,6 +744,8 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 			tr.weatherSystem->weatherSlots[i].active = false;
 		tr.weatherSystem->activeWeatherTypes = 0;
 		tr.weatherSystem->activeWindObjects = 0;
+		VectorClear(tr.weatherSystem->constWindDirection);	// constantwind adds up: a reloaded map doubled it
+		VectorClear(tr.weatherSystem->windDirection);
 		tr.weatherSystem->frozen = false;
 #ifdef REND2_SP
 		tr.weatherSystem->pain = 0.0f;
@@ -718,6 +757,8 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 			tr.weatherSystem->weatherSlots[i].active = false;
 		tr.weatherSystem->activeWeatherTypes = 0;
 		tr.weatherSystem->activeWindObjects = 0;
+		VectorClear(tr.weatherSystem->constWindDirection);	// constantwind adds up: a reloaded map doubled it
+		VectorClear(tr.weatherSystem->windDirection);
 		tr.weatherSystem->frozen = false;
 #endif // REND2_SP
 	}
@@ -819,7 +860,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_RAIN].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = 1000;
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = R_WeatherStackedCount(WEATHER_RAIN, 1000);
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].gravity = 2.0f;
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].fadeDistance = 6000.f;
@@ -843,7 +884,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_RAIN].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = 2000;
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = R_WeatherStackedCount(WEATHER_RAIN, 2000);
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].gravity = 2.0f;
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].fadeDistance = 6000.f;
@@ -865,7 +906,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_RAIN].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = 2000;
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = R_WeatherStackedCount(WEATHER_RAIN, 2000);
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].gravity = 2.0f;
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].fadeDistance = 6000.f;
@@ -890,7 +931,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_RAIN].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = 2000;
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = R_WeatherStackedCount(WEATHER_RAIN, 2000);
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].gravity = 2.0f;
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].fadeDistance = 6000.0f;
@@ -916,7 +957,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_RAIN].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = 2000;
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = R_WeatherStackedCount(WEATHER_RAIN, 2000);
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].gravity = 2.0f;
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].fadeDistance = 6000.0f;
@@ -943,7 +984,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_RAIN].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = 5000;
+		tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = R_WeatherStackedCount(WEATHER_RAIN, 5000);
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].gravity = 2.8f;
 		tr.weatherSystem->weatherSlots[WEATHER_RAIN].fadeDistance = 6000.0f;
@@ -967,7 +1008,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_SNOW].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_SNOW].particleCount = 1000;
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].particleCount = R_WeatherStackedCount(WEATHER_SNOW, 1000);
 		tr.weatherSystem->weatherSlots[WEATHER_SNOW].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_SNOW].gravity = 0.3f;
 		tr.weatherSystem->weatherSlots[WEATHER_SNOW].fadeDistance = 6000.0f;
@@ -991,7 +1032,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_SNOW].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_SNOW].particleCount = 1000;
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].particleCount = R_WeatherStackedCount(WEATHER_SNOW, 1000);
 		tr.weatherSystem->weatherSlots[WEATHER_SNOW].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_SNOW].gravity = 0.3f;
 		tr.weatherSystem->weatherSlots[WEATHER_SNOW].fadeDistance = 6000.0f;
@@ -1018,7 +1059,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].particleCount = 1200;
+		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].particleCount = R_WeatherStackedCount(WEATHER_SPACEDUST, 1200);
 		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].gravity = 0.0f;
 		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].fadeDistance = 3000.f;
@@ -1044,7 +1085,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].particleCount = 1200;
+		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].particleCount = R_WeatherStackedCount(WEATHER_SPACEDUST, 1200);
 		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].gravity = 0.0f;
 		tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].fadeDistance = 3000.f;
@@ -1068,7 +1109,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_SAND].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_SAND].particleCount = 1600;
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].particleCount = R_WeatherStackedCount(WEATHER_SAND, 1600);
 		tr.weatherSystem->weatherSlots[WEATHER_SAND].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_SAND].gravity = 0.0f;
 		tr.weatherSystem->weatherSlots[WEATHER_SAND].fadeDistance = 3000.f;
@@ -1086,7 +1127,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_SAND].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_SAND].particleCount = 1600;
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].particleCount = R_WeatherStackedCount(WEATHER_SAND, 1600);
 		tr.weatherSystem->weatherSlots[WEATHER_SAND].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_SAND].gravity = 0.0f;
 		tr.weatherSystem->weatherSlots[WEATHER_SAND].fadeDistance = 3000.f;
@@ -1103,7 +1144,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_SAND].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_SAND].particleCount = 1600;
+		tr.weatherSystem->weatherSlots[WEATHER_SAND].particleCount = R_WeatherStackedCount(WEATHER_SAND, 1600);
 		tr.weatherSystem->weatherSlots[WEATHER_SAND].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_SAND].gravity = 0.0f;
 		tr.weatherSystem->weatherSlots[WEATHER_SAND].fadeDistance = 3000.f;
@@ -1124,7 +1165,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_FOG].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = 1600;
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = R_WeatherStackedCount(WEATHER_FOG, 1600);
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].gravity = 0.0f;
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].fadeDistance = 3000.f;
@@ -1143,7 +1184,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_FOG].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = 1600;
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = R_WeatherStackedCount(WEATHER_FOG, 1600);
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].gravity = 0.0f;
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].fadeDistance = 3000.f;
@@ -1166,7 +1207,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_FOG].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = 210;
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = R_WeatherStackedCount(WEATHER_FOG, 210);
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].gravity = 0.0f;
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].fadeDistance = 2400.f;
@@ -1185,7 +1226,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_FOG].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = 210;
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = R_WeatherStackedCount(WEATHER_FOG, 210);
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].gravity = 0.0f;
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].fadeDistance = 2400.f;
@@ -1206,7 +1247,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_FOG].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = 70;
+		tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = R_WeatherStackedCount(WEATHER_FOG, 70);
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].gravity = 0.0f;
 		tr.weatherSystem->weatherSlots[WEATHER_FOG].fadeDistance = 2000.f;
@@ -1225,7 +1266,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		if (!tr.weatherSystem->weatherSlots[WEATHER_SNOW].active)
 			tr.weatherSystem->activeWeatherTypes++;
 
-		tr.weatherSystem->weatherSlots[WEATHER_SNOW].particleCount = 1000;
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].particleCount = R_WeatherStackedCount(WEATHER_SNOW, 1000);
 		tr.weatherSystem->weatherSlots[WEATHER_SNOW].active = true;
 		tr.weatherSystem->weatherSlots[WEATHER_SNOW].gravity = 0.3f;
 		tr.weatherSystem->weatherSlots[WEATHER_SNOW].fadeDistance = 6000.0f;
@@ -1255,26 +1296,28 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		// preset below and wiped the lava, fog and wind the map had already set up. Ignore them; the
 		// presets stay for the console/menu path ("r_weather", "weather <number>").
 		//----------------------------------------------------
-		if (g_Weather->integer == 0 && token[0] && !(token[0] >= '0' && token[0] <= '9') && token[0] != '-')
+		if (spPreset < 0)
 		{
 			ri.Printf(PRINT_DEVELOPER, "R_WorldEffectCommand: unknown command '%s' ignored\n", token);
 		}
 
 		// Clear - Removes All Particle Clouds And Wind Zones
 		//----------------------------------------------------
-		else if (g_Weather->integer == 0)
+		else if (spPreset == 0)
 		{
 			for (int i = 0; i < NUM_WEATHER_TYPES; i++)
 				tr.weatherSystem->weatherSlots[i].active = false;
 			tr.weatherSystem->activeWeatherTypes = 0;
 			tr.weatherSystem->activeWindObjects = 0;
+			VectorClear(tr.weatherSystem->constWindDirection);	// constantwind adds up: a reloaded map doubled it
+			VectorClear(tr.weatherSystem->windDirection);
 			tr.weatherSystem->frozen = false;
 			tr.weatherSystem->pain = 0.0f;
 		}
 
 		// Basic Wind
 		//------------
-		else if (g_Weather->integer == 8)
+		else if (spPreset == 8)
 		{
 			windObject_t* currentWindObject = &tr.weatherSystem->windSlots[tr.weatherSystem->activeWindObjects];
 			currentWindObject->chanceOfDeadTime = 0.3f;
@@ -1292,12 +1335,12 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 
 		// Create A Rain Storm
 		//---------------------
-		else if (g_Weather->integer == 2)
+		else if (spPreset == 2)
 		{
 			if (!tr.weatherSystem->weatherSlots[WEATHER_RAIN].active)
 				tr.weatherSystem->activeWeatherTypes++;
 
-			tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = 2000;
+			tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = R_WeatherStackedCount(WEATHER_RAIN, 2000);
 			tr.weatherSystem->weatherSlots[WEATHER_RAIN].active = true;
 			tr.weatherSystem->weatherSlots[WEATHER_RAIN].gravity = 2.0f;
 			tr.weatherSystem->weatherSlots[WEATHER_RAIN].fadeDistance = 6000.f;
@@ -1316,12 +1359,12 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 
 		// Create A Rain Storm
 		//---------------------
-		else if (g_Weather->integer == 7)
+		else if (spPreset == 7)
 		{
 			if (!tr.weatherSystem->weatherSlots[WEATHER_RAIN].active)
 				tr.weatherSystem->activeWeatherTypes++;
 
-			tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = 2000;
+			tr.weatherSystem->weatherSlots[WEATHER_RAIN].particleCount = R_WeatherStackedCount(WEATHER_RAIN, 2000);
 			tr.weatherSystem->weatherSlots[WEATHER_RAIN].active = true;
 			tr.weatherSystem->weatherSlots[WEATHER_RAIN].gravity = 2.0f;
 			tr.weatherSystem->weatherSlots[WEATHER_RAIN].fadeDistance = 6000.0f;
@@ -1342,12 +1385,12 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 
 		// Create A Snow Storm
 		//---------------------
-		else if (g_Weather->integer == 1)
+		else if (spPreset == 1)
 		{
 			if (!tr.weatherSystem->weatherSlots[WEATHER_SNOW].active)
 				tr.weatherSystem->activeWeatherTypes++;
 
-			tr.weatherSystem->weatherSlots[WEATHER_SNOW].particleCount = 1000;
+			tr.weatherSystem->weatherSlots[WEATHER_SNOW].particleCount = R_WeatherStackedCount(WEATHER_SNOW, 1000);
 			tr.weatherSystem->weatherSlots[WEATHER_SNOW].active = true;
 			tr.weatherSystem->weatherSlots[WEATHER_SNOW].gravity = 0.3f;
 			tr.weatherSystem->weatherSlots[WEATHER_SNOW].fadeDistance = 6000.0f;
@@ -1366,7 +1409,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 
 		// Create A Some stuff
 		//---------------------
-		else if (g_Weather->integer == 9)
+		else if (spPreset == 9)
 		{
 			int count = 0;
 			token = COM_ParseExt(&command, qfalse);
@@ -1375,7 +1418,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 			if (!tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].active)
 				tr.weatherSystem->activeWeatherTypes++;
 
-			tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].particleCount = 1200;
+			tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].particleCount = R_WeatherStackedCount(WEATHER_SPACEDUST, 1200);
 			tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].active = true;
 			tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].gravity = 0.0f;
 			tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].fadeDistance = 3000.f;
@@ -1394,12 +1437,12 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 
 		// Create A Sand Storm
 		//---------------------
-		else if (g_Weather->integer == 4)
+		else if (spPreset == 4)
 		{
 			if (!tr.weatherSystem->weatherSlots[WEATHER_SAND].active)
 				tr.weatherSystem->activeWeatherTypes++;
 
-			tr.weatherSystem->weatherSlots[WEATHER_SAND].particleCount = 1600;
+			tr.weatherSystem->weatherSlots[WEATHER_SAND].particleCount = R_WeatherStackedCount(WEATHER_SAND, 1600);
 			tr.weatherSystem->weatherSlots[WEATHER_SAND].active = true;
 			tr.weatherSystem->weatherSlots[WEATHER_SAND].gravity = 0.0f;
 			tr.weatherSystem->weatherSlots[WEATHER_SAND].fadeDistance = 3000.f;
@@ -1414,12 +1457,12 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 
 		// Create Blowing Clouds Of Fog
 		//------------------------------
-		else if (g_Weather->integer == 6)
+		else if (spPreset == 6)
 		{
 			if (!tr.weatherSystem->weatherSlots[WEATHER_FOG].active)
 				tr.weatherSystem->activeWeatherTypes++;
 
-			tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = 1600;
+			tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = R_WeatherStackedCount(WEATHER_FOG, 1600);
 			tr.weatherSystem->weatherSlots[WEATHER_FOG].active = true;
 			tr.weatherSystem->weatherSlots[WEATHER_FOG].gravity = 0.0f;
 			tr.weatherSystem->weatherSlots[WEATHER_FOG].fadeDistance = 3000.f;
@@ -1435,12 +1478,12 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 
 		// Create Heavy Rain Particle Cloud
 		//-----------------------------------
-		else if (g_Weather->integer == 5)
+		else if (spPreset == 5)
 		{
 			if (!tr.weatherSystem->weatherSlots[WEATHER_FOG].active)
 				tr.weatherSystem->activeWeatherTypes++;
 
-			tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = 210;
+			tr.weatherSystem->weatherSlots[WEATHER_FOG].particleCount = R_WeatherStackedCount(WEATHER_FOG, 210);
 			tr.weatherSystem->weatherSlots[WEATHER_FOG].active = true;
 			tr.weatherSystem->weatherSlots[WEATHER_FOG].gravity = 0.0f;
 			tr.weatherSystem->weatherSlots[WEATHER_FOG].fadeDistance = 2400.f;
@@ -1454,7 +1497,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 			VectorScale(tr.weatherSystem->weatherSlots[WEATHER_FOG].color, 0.3f, tr.weatherSystem->weatherSlots[WEATHER_FOG].color);
 		}
 
-		else if (g_Weather->integer == 3)
+		else if (spPreset == 3)
 #else // !REND2_SP
 	else if (preset == 3)
 #endif // REND2_SP
@@ -1462,7 +1505,7 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 			if (!tr.weatherSystem->weatherSlots[WEATHER_SNOW].active)
 				tr.weatherSystem->activeWeatherTypes++;
 
-			tr.weatherSystem->weatherSlots[WEATHER_SNOW].particleCount = 1000;
+			tr.weatherSystem->weatherSlots[WEATHER_SNOW].particleCount = R_WeatherStackedCount(WEATHER_SNOW, 1000);
 			tr.weatherSystem->weatherSlots[WEATHER_SNOW].active = true;
 			tr.weatherSystem->weatherSlots[WEATHER_SNOW].gravity = 0.3f;
 			tr.weatherSystem->weatherSlots[WEATHER_SNOW].fadeDistance = 6000.0f;
@@ -1647,14 +1690,7 @@ void RB_SurfaceWeather(srfWeather_t* surf)
 		}
 	}
 
-	// Get current global wind vector
-	VectorCopy(tr.weatherSystem->constWindDirection, tr.weatherSystem->windDirection);
-	for (int i = 0; i < tr.weatherSystem->activeWindObjects; i++)
-	{
-		windObject_t* windObject = &tr.weatherSystem->windSlots[i];
-		RB_UpdateWindObject(windObject);
-		VectorAdd(windObject->currentVelocity, tr.weatherSystem->windDirection, tr.weatherSystem->windDirection);
-	}
+	// the global wind vector changes once a frame in R_UpdateWeatherWind (RE_BeginFrame)
 
 	Allocator& frameAllocator = *backEndData->perFrameMemory;
 
@@ -1777,6 +1813,24 @@ static bool IsInsideBrush(const weatherBrushes_t* Brush, const vec3_t pos)
 
 	return (pos[0] > mins[0] && pos[1] > mins[1] && pos[2] > mins[2]
 		&& pos[0] < maxs[0] && pos[1] < maxs[1] && pos[2] < maxs[2]);
+}
+
+// RE_BeginFrame, once a frame: the global wind vector. It used to change only while weather particles
+// were drawn (RB_SurfaceWeather, once per view), so wind with no rain or snow never blew mesh cloth
+// (tr_ghoul2.cpp MC_WeatherWind) and R_GetWindVector kept a stale value.
+void R_UpdateWeatherWind()
+{
+	if (!tr.weatherSystem)
+	{
+		return;
+	}
+	VectorCopy(tr.weatherSystem->constWindDirection, tr.weatherSystem->windDirection);
+	for (int i = 0; i < tr.weatherSystem->activeWindObjects; i++)
+	{
+		windObject_t* windObject = &tr.weatherSystem->windSlots[i];
+		RB_UpdateWindObject(windObject);
+		VectorAdd(windObject->currentVelocity, tr.weatherSystem->windDirection, tr.weatherSystem->windDirection);
+	}
 }
 
 bool R_IsOutside(vec3_t pos)

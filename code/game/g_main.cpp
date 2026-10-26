@@ -22,6 +22,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "g_local.h"
+#include "q_profile.h"
 #include "g_pazaak.h"
 #include "g_functions.h"
 #include "Q3_Interface.h"
@@ -174,6 +175,7 @@ cvar_t* g_delayedShutdown;
 cvar_t* g_inactivity;
 cvar_t* g_debugMove;
 cvar_t* g_debugDamage;
+cvar_t* g_awardStreaks;
 cvar_t* g_weaponRespawn;
 cvar_t* g_subtitles;
 cvar_t* g_ICARUSDebug;
@@ -205,6 +207,7 @@ cvar_t* g_fighterArcade; // (2026-10-13) fighters: 1 = responsive flight, 0 = th
 cvar_t* g_fighterTurnScale; // (2026-10-13) fighters, g_fighterArcade 1: top turn rate = turningSpeed x this x 12 deg/s
 
 cvar_t* g_char_model;
+cvar_t* g_transitionSaberFix;
 cvar_t* g_char_skin_head;
 cvar_t* g_char_skin_torso;
 cvar_t* g_char_skin_legs;
@@ -218,6 +221,10 @@ cvar_t* g_saber2_color;
 cvar_t* g_saberDarkSideSaberColor;
 
 cvar_t* g_sentryexplode;
+cvar_t* g_saberBlasterAimArc; // SS_BLASTER
+cvar_t* g_saberBlasterAIFire;
+cvar_t* g_saberBlasterAimRange;
+cvar_t* g_saberBlasterLockCharge;
 
 // NPC attributes
 cvar_t* g_NPCtype;
@@ -277,6 +284,7 @@ cvar_t* g_allowgunnerbash;
 cvar_t* g_noAutoFollow;
 
 cvar_t* g_AllowLedgeGrab;
+cvar_t* g_saberscanstickinwall;
 cvar_t* g_saberscanstickinenemy; // 0 = thrown sabers never stick in an enemy's body
 cvar_t* g_candojumpdash;         // 0 = no air (jump) dash
 cvar_t* g_candodoublejump;       // 0 = no double jump
@@ -774,6 +782,7 @@ static void G_InitCvars()
 	g_inactivity = gi.cvar("g_inactivity", "0", 0);
 	g_debugMove = gi.cvar("g_debugMove", "0", CVAR_CHEAT);
 	g_debugDamage = gi.cvar("g_debugDamage", "0", CVAR_CHEAT);
+	g_awardStreaks = gi.cvar("g_awardStreaks", "1", CVAR_ARCHIVE); // award sounds for kill / death / saber-3 kill streaks of 4 (0: the old awards)
 	g_ICARUSDebug = gi.cvar("g_ICARUSDebug", "0", CVAR_CHEAT);
 	g_timescale = gi.cvar("timescale", "1", 0);
 	g_npcdebug = gi.cvar("g_npcdebug", "0", 0);
@@ -812,6 +821,13 @@ static void G_InitCvars()
 
 	g_sentryexplode = gi.cvar("g_sentryexplode", "3", CVAR_ARCHIVE);
 
+	// SS_BLASTER: pistol auto aim half angle (degrees) and range, saberlock charge time (ms),
+	// NPC pistol fire out of saber reach: average ms between bursts (0 = off)
+	g_saberBlasterAimArc = gi.cvar("g_saberBlasterAimArc", "30", CVAR_ARCHIVE);
+	g_saberBlasterAIFire = gi.cvar("g_saberBlasterAIFire", "2000", CVAR_ARCHIVE);
+	g_saberBlasterAimRange = gi.cvar("g_saberBlasterAimRange", "4096", CVAR_ARCHIVE);
+	g_saberBlasterLockCharge = gi.cvar("g_saberBlasterLockCharge", "1500", CVAR_ARCHIVE);
+
 	gi.cvar("newTotalSecrets", "0", CVAR_ROM);
 	gi.cvar_set("newTotalSecrets", "0"); //used to carry over the count from SP_target_secret to ClientBegin
 
@@ -820,6 +836,7 @@ static void G_InitCvars()
 	g_fighterTurnScale = gi.cvar("g_fighterTurnScale", "1.6", CVAR_ARCHIVE); // (2026-10-13)
 
 	g_char_model = gi.cvar("g_char_model", "jedi_hm", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
+	g_transitionSaberFix = gi.cvar("g_transitionSaberFix", "1", CVAR_ARCHIVE); // no empty second saber after a level change (T-pose)
 	g_char_skin_head = gi.cvar("g_char_skin_head", "head_a1", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
 	g_char_skin_torso = gi.cvar("g_char_skin_torso", "torso_a1", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
 	g_char_skin_legs = gi.cvar("g_char_skin_legs", "lower_a1", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
@@ -870,7 +887,7 @@ static void G_InitCvars()
 
 	g_noIgniteTwirl = gi.cvar("g_noIgniteTwirl", "1", CVAR_ARCHIVE); //if 1, don't do ignite twirl
 
-	g_SerenityJediEngineMode = gi.cvar("g_SerenityJediEngineMode", "0", CVAR_ARCHIVE); //Alternate saber combat system
+	g_SerenityJediEngineMode = gi.cvar("g_SerenityJediEngineMode", "2", CVAR_ARCHIVE); //Alternate saber combat system
 
 	g_SaberPerfectBlockingTimerMissile = gi.cvar("g_SaberPerfectBlockingTimerMissile", "750", CVAR_ARCHIVE);
 	//Alternate saber combat system 3 sec
@@ -888,19 +905,20 @@ static void G_InitCvars()
 
 	com_outcast = gi.cvar("com_outcast", "0", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
 
-	g_gundismemberment = gi.cvar("g_gundismemberment", "0", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
+	g_gundismemberment = gi.cvar("g_gundismemberment", "1", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
 
 	g_update9firststartup = gi.cvar("g_update9firststartup", "1", CVAR_ARCHIVE);
 
 	g_totgfirststartup = gi.cvar("g_totgfirststartup", "1", 0);
 
-	g_allowgunnerbash = gi.cvar("g_allowgunnerbash", "0", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
+	g_allowgunnerbash = gi.cvar("g_allowgunnerbash", "1", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
 
 	g_noAutoFollow = gi.cvar("g_noAutoFollow", "0", CVAR_ARCHIVE);
 
 	g_AllowLedgeGrab = gi.cvar("g_allowledgegrab", "0", CVAR_ARCHIVE);
 	// internal move locks (no menu entries): 1 = allowed, 0 = turned off
-	g_saberscanstickinenemy = gi.cvar("g_saberscanstickinenemy", "1", CVAR_ARCHIVE);
+	g_saberscanstickinenemy = gi.cvar("g_saberscanstickinenemy", "0", CVAR_ARCHIVE);
+	g_saberscanstickinwall = gi.cvar("g_saberscanstickinwall", "0", CVAR_ARCHIVE);
 	g_candojumpdash = gi.cvar("g_candojumpdash", "1", CVAR_ARCHIVE);
 	g_candodoublejump = gi.cvar("g_candodoublejump", "1", CVAR_ARCHIVE);
 
@@ -912,7 +930,7 @@ static void G_InitCvars()
 
 	g_allowdualpistols = gi.cvar("g_allowdualpistols", "0", CVAR_ARCHIVE | CVAR_NORESTART);
 
-	g_Bloodmist = gi.cvar("g_Bloodmist", "0", CVAR_ARCHIVE);
+	g_Bloodmist = gi.cvar("g_Bloodmist", "1", CVAR_ARCHIVE);
 
 	g_Weather = gi.cvar("r_weather", "0", CVAR_ARCHIVE);
 
@@ -945,7 +963,7 @@ static void G_InitCvars()
 
 	g_AdvancedWeaponPickup = gi.cvar("g_AdvancedWeaponPickup", "0", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
 
-	g_Advancedaitalk = gi.cvar("g_Advancedaitalk", "0", CVAR_ARCHIVE);
+	g_Advancedaitalk = gi.cvar("g_Advancedaitalk", "1", CVAR_ARCHIVE);
 
 	com_kotor = gi.cvar("com_kotor", "0", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
 
@@ -961,13 +979,13 @@ static void G_InitCvars()
 
 	g_SaberBounceOnWalls = gi.cvar("g_saberbounceonwalls", "0", CVAR_ARCHIVE);
 
-	g_SaberMustReturn = gi.cvar("g_sabermustreturn", "1", CVAR_ARCHIVE);
+	g_SaberMustReturn = gi.cvar("g_sabermustreturn", "0", CVAR_ARCHIVE);
 
 	com_rend2 = gi.cvar("com_rend2", "0", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
 
-	g_overpoweredsaberthrow = gi.cvar("g_overpoweredsaberthrow", "1", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
+	g_overpoweredsaberthrow = gi.cvar("g_overpoweredsaberthrow", "0", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
 
-	g_autoHealthRegen = gi.cvar("g_autoHealthRegen", "0", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
+	g_autoHealthRegen = gi.cvar("g_autoHealthRegen", "1", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
 
 	g_allowSuperSaberLockBreaks = gi.cvar("g_allowSuperSaberLockBreaks", "1", CVAR_ARCHIVE);
 
@@ -978,7 +996,7 @@ static void G_InitCvars()
 	g_debugItems = gi.cvar("g_debugItems", "0", CVAR_CHEAT);
 	g_fixJOItems = gi.cvar("g_fixJOItems", "1", CVAR_ARCHIVE);
 
-	g_npc_is_smart = gi.cvar("g_npc_is_smart", "0", CVAR_ARCHIVE | CVAR_SAVEGAME);
+	g_npc_is_smart = gi.cvar("g_npc_is_smart", "1", CVAR_ARCHIVE | CVAR_SAVEGAME);
 	g_npc_is_smart_range = gi.cvar("g_npc_is_smart_range", "3500", CVAR_ARCHIVE);
 
 	g_jkoeffects = gi.cvar("cg_outcastpusheffect", "1", CVAR_ARCHIVE);
@@ -996,9 +1014,9 @@ static void G_InitCvars()
 
 	g_AnimationStyle = gi.cvar("g_animationstyle", "0", CVAR_ARCHIVE | CVAR_SAVEGAME); //Alternate animationstyle
 
-	g_AllowSmashDown = gi.cvar("g_allowsmashdown", "0", CVAR_ARCHIVE);
+	g_AllowSmashDown = gi.cvar("g_allowsmashdown", "1", CVAR_ARCHIVE);
 
-	g_NPCAnimationStyle = gi.cvar("g_npcanimationstyle", "0", CVAR_ARCHIVE);
+	g_NPCAnimationStyle = gi.cvar("g_npcanimationstyle", "1", CVAR_ROM);
 }
 
 /*
@@ -1960,6 +1978,17 @@ qboolean G_RagDoll(gentity_t* ent, vec3_t forcedAngles)
 	// ------------------------------------------------------------
 	VectorCopy(ent->client->ps.origin, usedOrg);
 
+	// dying in water (BOTH_DEATH19): the ragdoll starts at its frame 45, not before (DH 2026-10-25)
+	extern float PM_WaterDeathFrame(const gentity_t* gent);
+	if (!ent->client->isRagging && ent->waterlevel >= 2 && ent->client->ps.legsAnim == BOTH_DEATH19)
+	{
+		if (PM_WaterDeathFrame(ent) < 45.0f)
+		{
+			return qfalse;
+		}
+		ent->client->isRagging = qtrue;
+	}
+
 	if (ent->client->isRagging == qfalse)
 	{
 		// If held by a client, always allow rag
@@ -1981,6 +2010,12 @@ qboolean G_RagDoll(gentity_t* ent, vec3_t forcedAngles)
 			{
 				inSomething = qtrue;
 			}
+		}
+
+		// dead in water: always ragdoll, the body floats (bg_pmove PM_WaterMove) (DH 2026-10-25)
+		if (ent->waterlevel >= 2 && ent->client->ps.legsAnim != BOTH_DEATH19 && ent->client->ps.legsAnimTimer <= 0)	// after the death anim
+		{
+			inSomething = qtrue;
 		}
 
 		// Broadsword > 1: always rag on death (except disallowed classes)
@@ -2591,6 +2626,7 @@ static void G_ApplyPlayerAnimationStyle()
 
 void G_RunFrame(const int level_time)
 {
+	PROFILE_ZONE("G_RunFrame");
 	G_EnforceUpdateSettings();
 	G_CheckAnimationStyleChange();
 	G_ApplyPlayerAnimationStyle();

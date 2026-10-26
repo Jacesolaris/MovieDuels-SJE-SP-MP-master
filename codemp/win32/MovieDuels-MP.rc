@@ -80,12 +80,12 @@ BLOCK "StringFileInfo"
 BEGIN
 BLOCK "040904b0"
 BEGIN
-VALUE "Comments", "Contributors"
-VALUE "FileDescription", "Multiplayer"
+VALUE "Comments", "MovieDuels Contributors"
+VALUE "FileDescription", "MovieDuels-MP-Update-9"
 VALUE "FileVersion", VERSION_STRING
-VALUE "InternalName", "JK MP"
-VALUE "OriginalFilename", "MovieDuels-MP.exe"
-VALUE "ProductName", "Multiplayer"
+VALUE "InternalName", "MovieDuels MP"
+VALUE "OriginalFilename", "MovieDuels-MP.x86_64.exe"
+VALUE "ProductName", "MovieDuels Multiplayer"
 VALUE "ProductVersion", VERSION_STRING
 END
 END

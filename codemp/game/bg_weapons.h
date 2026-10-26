@@ -61,14 +61,35 @@ typedef enum
 	WP_BOBA,             // selectable for all classes except BCLASS_SBD AND Bot_Is_Saber_Class(ent) unless cheats are on, then it is selectable for all classes except BCLASS_SBD
 	WP_CLONEPISTOL,      // selectable for all classes except BCLASS_SBD AND Bot_Is_Saber_Class(ent) unless cheats are on, then it is selectable for all classes except BCLASS_SBD
 	WP_DROIDEKA,         // the droideka's twin arm blasters (from MovieDuels SP), for droideka NPCs
+	WP_NOGHRI_STICK,     // the noghri stick (from SJE): poison dart + gas cloud, alt fire swings the stick
+	WP_TUSKEN_RIFLE,     // the tusken rifle (from SJE SP): the primary fire swings the butt, the alt fire shoots
+	WP_TUSKEN_STAFF,     // the tusken staff (gaffi stick, from SJE SP): swings only, the alt fire is the lunge
 	//end of new guns
 
 	WP_BRYAR_OLD,        // Only BCLASS_SBD can select this from WP_MELEE and back to WP_MELEE if cycling weapons
 	WP_EMPLACED_GUN,     // Not selectable in any cases even with cheats on
-	WP_TURRET,           // Not selectable in any cases even with cheats on
+	WP_TURRET,           // Not selectable in any cases even with cheats on. Slot 32 since the noghri stick: never owned,
+	                     // so never in STAT_WEAPONS (32 bits, sent in MAX_WEAPONS bits) or a weapon disable mask
 
 	WP_NUM_WEAPONS
 } weapon_t;
+
+// weapons below this fit the 32 bit STAT_WEAPONS / g_weaponDisable masks: loops over weapon bits stop here (1 << 32 is undefined)
+#define WP_NUM_OWNABLE_WEAPONS	WP_TURRET
+
+// owned weapons (2026-10-25, widened past 32 weapons): STAT_WEAPONS holds weapons 0-31, STAT_WEAPONS2 weapons 32-63
+// (the engine sends both in 32 bits, msg.cpp). Every owned-weapon bit goes through these: never 1 << weapon on
+// STAT_WEAPONS, that is undefined from weapon 32 on.
+#define WP_STAT_INDEX(w)			((w) < 32 ? STAT_WEAPONS : STAT_WEAPONS2)
+#define WP_STAT_BIT(w)				(1u << ((unsigned)(w) & 31u))
+#define BG_HasWeapon(stats, w)		(((unsigned)(stats)[WP_STAT_INDEX(w)] & WP_STAT_BIT(w)) != 0)
+#define BG_GiveWeapon(stats, w)		((stats)[WP_STAT_INDEX(w)] |= (int)WP_STAT_BIT(w))
+#define BG_TakeWeapon(stats, w)		((stats)[WP_STAT_INDEX(w)] &= ~(int)WP_STAT_BIT(w))
+#define BG_ClearWeapons(stats)		((stats)[STAT_WEAPONS] = 0, (stats)[STAT_WEAPONS2] = 0)
+#define BG_SetOnlyWeapon(stats, w)	(BG_ClearWeapons(stats), BG_GiveWeapon(stats, w))
+#define BG_HasAnyWeapon(stats)		((stats)[STAT_WEAPONS] != 0 || (stats)[STAT_WEAPONS2] != 0)
+#define WP_MASK_HAS(mask, w)		((w) < 32 && ((unsigned)(mask) & (1u << ((unsigned)(w) & 31u))) != 0) // a 32 bit weapon mask
+#define WP_MASK_ADD(mask, w)		((w) < 32 ? ((mask) |= (int)(1u << ((unsigned)(w) & 31u))) : (mask)) // (g_weaponDisable, siege class, NPC): weapons 32+ never in one
 
 #define FIRST_SELECTABLE_WEAPON		WP_STUN_BATON  // this is the first weapon for next and prev weapon switching
 #define LAST_SELECTABLE_WEAPON	    WP_BRYAR_OLD   //anything > this will be considered not player useable

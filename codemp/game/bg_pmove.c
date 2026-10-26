@@ -714,6 +714,20 @@ static animNumber_t QINLINE PM_GetWeaponAimAnim(void)
 	}
 }
 
+// the swings of the noghri stick, the tusken staff and the tusken rifle's butt (as SP: one of the tusken staff
+// attacks, with the whole body when standing)
+static void PM_StartStickSwingAnim(const int anim)
+{
+	if (VectorCompare(pm->ps->velocity, vec3_origin) && pm->cmd.upmove >= 0)
+	{
+		PM_SetAnim(SETANIM_BOTH, anim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART);
+	}
+	else
+	{
+		PM_SetAnim(SETANIM_TORSO, anim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART);
+	}
+}
+
 static qboolean PM_CanAimGun(void)
 {
 	switch (pm->ps->weapon)
@@ -739,6 +753,8 @@ static qboolean PM_CanAimGun(void)
 	case WP_JANGO:
 	case WP_BOBA:
 	case WP_CLONEPISTOL:
+	case WP_NOGHRI_STICK:
+	case WP_TUSKEN_RIFLE:
 	case WP_BRYAR_OLD:
 		return qtrue;
 	default:;
@@ -938,6 +954,7 @@ int PM_ReadyPoseForsaber_anim_level(void)
 			anim = BOTH_SABERDUAL_STANCE;
 			break;
 		case SS_STAFF:
+		case SS_BLASTER: // SS_BLASTER
 			anim = BOTH_SABERSTAFF_STANCE;
 			break;
 		case SS_FAST:
@@ -1028,7 +1045,7 @@ int PM_IdlePoseForsaber_anim_level(void)
 				{
 					return BOTH_WALK1;
 				}
-				if (pm->ps->fd.saberAnimLevel == SS_DESANN)
+				if ((pm->ps->fd.saberAnimLevel == SS_DESANN || pm->ps->fd.saberAnimLevel == SS_BLASTER)) // SS_BLASTER
 				{
 					return BOTH_WALK1;
 				}
@@ -1063,7 +1080,7 @@ int PM_IdlePoseForsaber_anim_level(void)
 				{
 					return BOTH_WALK1;
 				}
-				if (pm->ps->fd.saberAnimLevel == SS_DESANN)
+				if ((pm->ps->fd.saberAnimLevel == SS_DESANN || pm->ps->fd.saberAnimLevel == SS_BLASTER)) // SS_BLASTER
 				{
 					return BOTH_WALK1;
 				}
@@ -1100,7 +1117,7 @@ int PM_IdlePoseForsaber_anim_level(void)
 				{
 					return BOTH_WALKBACK1;
 				}
-				if (pm->ps->fd.saberAnimLevel == SS_DESANN)
+				if ((pm->ps->fd.saberAnimLevel == SS_DESANN || pm->ps->fd.saberAnimLevel == SS_BLASTER)) // SS_BLASTER
 				{
 					return BOTH_WALKBACK1;
 				}
@@ -1249,6 +1266,7 @@ int PM_IdlePoseForsaber_anim_level(void)
 				}
 				break;
 			case SS_MEDIUM:
+			case SS_BLASTER: // SS_BLASTER
 				if (is_holding_block_button)
 				{
 					if (pm_entSelf->s.botclass == BCLASS_YODA)
@@ -1728,6 +1746,7 @@ int PM_ReadyPoseForsaber_anim_levelBOT(void)
 		}
 		break;
 	case SS_STAFF:
+	case SS_BLASTER: // SS_BLASTER
 		if (pm_entSelf->s.botclass == BCLASS_YODA)
 		{
 			anim = BOTH_SABERYODA_STANCE;
@@ -2062,6 +2081,7 @@ int PM_ReadyPoseForsaber_anim_levelDucked(void)
 	switch (pm->ps->fd.saberAnimLevel)
 	{
 	case SS_DUAL:
+	case SS_BLASTER: // SS_BLASTER
 		anim = BOTH_SABERDUALCROUCH;
 		break;
 	case SS_STAFF:
@@ -2141,6 +2161,7 @@ static int PM_SPBlockingPoseSingleAMD(void)
 
 	// Explicit qboolean: is the player/NPC actively blocking + attacking?
 	const qboolean is_holding_block_button_and_attack = ((pm->ps->ManualBlockingFlags & (1 << MBF_HOLDINGBLOCKANDATTACK)) != 0) ? qtrue : qfalse;
+	const qboolean is_walking_and_blocking = (is_holding_block_button_and_attack && (pm->cmd.buttons & BUTTON_WALKING)) ? qtrue : qfalse;
 
 	// Movement inputs (signed chars)
 	const signed char forwardmove = pm->cmd.forwardmove;
@@ -2929,15 +2950,115 @@ static int PM_SPBlockingPoseSingleAMD(void)
 				anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_STAND_BLOCKING_ON_DOOKU;
 			}
 			else
-			{
+			{// new sje stances 2027
+				if (is_walking_and_blocking == qtrue)
+				{
+					switch (pm->ps->fd.saberAnimLevel)
+					{
+					case SS_FAST:
+						anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_SABERFAST_STANCE_JKA;
+						break;
+					case SS_TAVION:
+						anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_SABERTAVION_STANCE;
+						break;
+					case SS_STRONG:
+						anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_SABERSLOW_STANCE;
+						break;
+					case SS_DESANN:
+						anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_SABERDESANN_STANCE;
+						break;
+					case SS_MEDIUM:
+						anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_STAND2;
+						break;
+					case SS_NONE:
+					default:
+						anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_STAND2;
+						break;
+					}
+				}
+				else
+				{
+					switch (pm->ps->fd.saberAnimLevel)
+					{
+					case SS_FAST:
+						anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_SABERFAST_STANCE_JKA;
+						break;
+					case SS_TAVION:
+						anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_SABERTAVION_STANCE;
+						break;
+					case SS_STRONG:
+						anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_SABERSLOW_STANCE;
+						break;
+					case SS_DESANN:
+						anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_SABERDESANN_STANCE;
+						break;
+					case SS_MEDIUM:
+						anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_STAND2;
+						break;
+					case SS_NONE:
+					default:
+						anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_STAND2;
+						break;
+					}
+				}
 				// Pressing block only
-				anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_STAND_BLOCKING_ON;
+				//anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_STAND_BLOCKING_ON;
 			}
 		}
 		else
-		{
+		{// new sje stances 2027
+			if (is_walking_and_blocking == qtrue)
+			{
+				switch (pm->ps->fd.saberAnimLevel)
+				{
+				case SS_FAST:
+					anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_SABERFAST_STANCE_JKA;
+					break;
+				case SS_TAVION:
+					anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_SABERTAVION_STANCE;
+					break;
+				case SS_STRONG:
+					anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_SABERSLOW_STANCE;
+					break;
+				case SS_DESANN:
+					anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_SABERDESANN_STANCE;
+					break;
+				case SS_MEDIUM:
+					anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_STAND2;
+					break;
+				case SS_NONE:
+				default:
+					anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_STAND2;
+					break;
+				}
+			}
+			else
+			{
+				switch (pm->ps->fd.saberAnimLevel)
+				{
+				case SS_FAST:
+					anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_SABERFAST_STANCE_JKA;
+					break;
+				case SS_TAVION:
+					anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_SABERTAVION_STANCE;
+					break;
+				case SS_STRONG:
+					anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_SABERSLOW_STANCE;
+					break;
+				case SS_DESANN:
+					anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_SABERDESANN_STANCE;
+					break;
+				case SS_MEDIUM:
+					anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_STAND2;
+					break;
+				case SS_NONE:
+				default:
+					anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_STAND2;
+					break;
+				}
+			}
 			// Pressing block only
-			anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_STAND_BLOCKING_ON;
+			//anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_STAND_BLOCKING_ON;
 		}
 	}
 
@@ -8302,6 +8423,9 @@ static qboolean PM_IsGunner(void)
 {
 	switch (pm->ps->weapon)
 	{
+	case WP_NOGHRI_STICK:
+	case WP_TUSKEN_RIFLE:
+	case WP_TUSKEN_STAFF:
 	case WP_BRYAR_OLD:
 	case WP_BLASTER:
 	case WP_DISRUPTOR:
@@ -8637,6 +8761,24 @@ static void PM_WaterMove(void)
 	}
 #endif
 	PM_Friction();
+
+	// a dead body in water floats up to the surface and drifts about slowly once the death anim is done; it
+	// ragdolls there (DH 2026-10-25)
+	extern float BG_WaterDeathFrame(const playerState_t* ps, const animation_t* anims);
+	if (pm->ps->pm_type == PM_DEAD
+		&& (pm->ps->legsAnim == BOTH_DEATH19 ? BG_WaterDeathFrame(pm->ps, pm->animations) >= 20.0f : pm->ps->legsTimer <= 0))	// BOTH_DEATH19: from its frame 20
+	{
+		const float drift = pm->cmd.serverTime * 0.00025f + pm->ps->clientNum * 1.7f;
+
+		wishvel[0] = cosf(drift) * 8.0f;
+		wishvel[1] = sinf(drift) * 8.0f;
+		wishvel[2] = pm->waterlevel >= 3 ? 60.0f : 8.0f;	// up while under, then bob at the surface
+		VectorCopy(wishvel, wishdir);
+		wishspeed = VectorNormalize(wishdir);
+		PM_Accelerate(wishdir, wishspeed, pm_wateraccelerate);
+		PM_SlideMove(qfalse);
+		return;
+	}
 
 	scale = PM_CmdScale(&pm->cmd);
 	//
@@ -13719,6 +13861,9 @@ static qboolean PM_MoveRifle(const int weapon)
 	case WP_BOBA:
 	case WP_REBELRIFLE:
 	case WP_REPEATER:
+	case WP_NOGHRI_STICK: // the noghri stick moves like a rifle
+	case WP_TUSKEN_RIFLE:
+	case WP_TUSKEN_STAFF:
 		return qtrue;
 	default:
 		return qfalse;
@@ -15823,13 +15968,13 @@ void PM_BeginWeaponChange(const int weapon)
 	const qboolean is_sprinting = ((pm->ps->PlayerEffectFlags & 1 << PEF_SPRINTING) != 0) ? qtrue : qfalse;
 
 	// Invalid weapon index
-	if (weapon <= WP_NONE || weapon >= WP_NUM_WEAPONS)
+	if (weapon <= WP_NONE || weapon >= WP_NUM_OWNABLE_WEAPONS)
 	{
 		return;
 	}
 
 	// Player does not have this weapon
-	if ((pm->ps->stats[STAT_WEAPONS] & (1 << weapon)) == 0)
+	if ((BG_HasWeapon(pm->ps->stats, weapon)) == 0)
 	{
 		return;
 	}
@@ -15926,12 +16071,12 @@ void PM_FinishWeaponChange(void)
 	const qboolean active_blocking = ((pm->ps->ManualBlockingFlags & (1 << MBF_HOLDINGBLOCKANDATTACK)) != 0) ? qtrue : qfalse;
 
 	int weapon = pm->cmd.weapon;
-	if (weapon < WP_NONE || weapon >= WP_NUM_WEAPONS)
+	if (weapon < WP_NONE || weapon >= WP_NUM_OWNABLE_WEAPONS)
 	{
 		weapon = WP_NONE;
 	}
 
-	if (!(pm->ps->stats[STAT_WEAPONS] & 1 << weapon))
+	if (!(BG_HasWeapon(pm->ps->stats, weapon)))
 	{
 		weapon = WP_NONE;
 	}
@@ -17303,9 +17448,9 @@ static void PM_Weapon(void)
 		int i = 0;
 		int weap = -1;
 
-		while (i < WP_NUM_WEAPONS)
+		while (i < WP_NUM_OWNABLE_WEAPONS)
 		{
-			if (pm->ps->stats[STAT_WEAPONS] & 1 << i && i != WP_NONE)
+			if (BG_HasWeapon(pm->ps->stats, i) && i != WP_NONE)
 			{
 				//this one's good
 				weap = i;
@@ -17538,6 +17683,7 @@ static void PM_Weapon(void)
 				desiredAnim = BOTH_SABERPULL;
 				break;
 			case SS_STAFF:
+			case SS_BLASTER: // SS_BLASTER
 				desiredAnim = BOTH_SABERPULL_ALT;
 				break;
 			default:;
@@ -17552,6 +17698,7 @@ static void PM_Weapon(void)
 			case SS_MEDIUM:
 			case SS_STRONG:
 			case SS_DESANN:
+			case SS_BLASTER: // SS_BLASTER
 				desiredAnim = BOTH_STAND1TO2;
 				break;
 			case SS_DUAL:
@@ -18069,7 +18216,7 @@ static void PM_Weapon(void)
 
 		if (pm->ps->isJediMaster || pm->ps->trueJedi)
 		{
-			pm->ps->stats[STAT_WEAPONS] = 1 << WP_SABER;
+			BG_SetOnlyWeapon(pm->ps->stats, WP_SABER);
 		}
 	}
 
@@ -18838,6 +18985,21 @@ static void PM_Weapon(void)
 				PM_StartTorsoAnim(WeaponAltAttackAnim2[pm->ps->weapon]);
 			}
 #endif
+			else if (pm->ps->weapon == WP_NOGHRI_STICK)
+			{
+				// the noghri stick's swing
+				PM_StartStickSwingAnim(BOTH_TUSKENATTACK1 + pm->cmd.serverTime / 50 % 3);
+			}
+			else if (pm->ps->weapon == WP_TUSKEN_RIFLE)
+			{
+				// the tusken rifle's butt bash
+				PM_StartStickSwingAnim(BOTH_TUSKENATTACK1 + pm->cmd.serverTime / 50 % 3);
+			}
+			else if (pm->ps->weapon == WP_TUSKEN_STAFF)
+			{
+				// the tusken staff's lunge (as SP)
+				PM_StartStickSwingAnim(BOTH_TUSKENLUNGE1);
+			}
 			else
 			{
 				PM_StartTorsoAnim(WeaponAltAttackAnim[pm->ps->weapon]);
@@ -18864,6 +19026,11 @@ static void PM_Weapon(void)
 				PM_StartTorsoAnim(WeaponAttackAnim2[pm->ps->weapon]);
 			}
 #endif
+			else if (pm->ps->weapon == WP_TUSKEN_STAFF)
+			{
+				// the tusken staff's swing
+				PM_StartStickSwingAnim(BOTH_TUSKENATTACK1 + pm->cmd.serverTime / 50 % 3);
+			}
 			else
 			{
 				PM_StartTorsoAnim(WeaponAttackAnim[pm->ps->weapon]);
@@ -18961,6 +19128,14 @@ static void PM_Weapon(void)
 	}
 	pm->ps->weaponTime += addTime;
 	pm->ps->lastShotTime = 3000; //so we know when the last time we fired our gun is
+
+	if ((pm->ps->weapon == WP_NOGHRI_STICK && pm->cmd.buttons & BUTTON_ALT_ATTACK
+		|| pm->ps->weapon == WP_TUSKEN_RIFLE && pm->cmd.buttons & BUTTON_ALT_ATTACK
+		|| pm->ps->weapon == WP_TUSKEN_STAFF) && pm->ps->torsoTimer > pm->ps->weaponTime)
+	{
+		// no dart or new swing until the swing is done
+		pm->ps->weaponTime = pm->ps->torsoTimer;
+	}
 }
 
 /*
@@ -19038,6 +19213,7 @@ static void PM_BotGesture(void)
 				case SS_MEDIUM:
 				case SS_STRONG:
 				case SS_DESANN:
+				case SS_BLASTER: // SS_BLASTER
 					PM_SetAnim(SETANIM_TORSO, BOTH_ENGAGETAUNT, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 					break;
 				case SS_DUAL:
@@ -19148,6 +19324,7 @@ static void PM_BotGesture(void)
 					break;
 				case SS_STRONG:
 				case SS_DESANN:
+				case SS_BLASTER: // SS_BLASTER
 					pm->ps->saberHolstered = 0;
 					PM_SetAnim(SETANIM_TORSO, BOTH_VICTORY_STRONG, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 					break;
@@ -19211,6 +19388,7 @@ static void PM_BotGesture(void)
 					break;
 				case SS_STRONG:
 				case SS_DESANN:
+				case SS_BLASTER: // SS_BLASTER
 					PM_SetAnim(SETANIM_TORSO, BOTH_SHOWOFF_STRONG, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 					break;
 				case SS_DUAL:
@@ -20494,6 +20672,7 @@ static void BG_AdjustClientSpeed(playerState_t* ps, const usercmd_t* cmd, const 
 		{
 		case SS_TAVION:
 		case SS_FAST:
+		case SS_BLASTER: // SS_BLASTER
 			ps->speed *= 0.85f;
 			break;
 		case SS_MEDIUM:
@@ -20525,6 +20704,7 @@ static void BG_AdjustClientSpeed(playerState_t* ps, const usercmd_t* cmd, const 
 		case SS_MEDIUM:
 		case SS_DUAL:
 		case SS_STAFF:
+		case SS_BLASTER: // SS_BLASTER
 			ps->speed *= 0.85f;
 			break;
 		case SS_DESANN:
@@ -21223,6 +21403,18 @@ static void BG_G2ClientNeckAngles(void* ghoul2, const int time, const vec3_t loo
 }
 
 //rww - Finally decided to convert all this stuff to BG form.
+// SS_BLASTER: BOTH_PULL_IMPALE_STAB is the SS_BLASTER top-to-bottom swing, an ordinary attack there: it keeps
+// the motion bone correction (as in SP), without it the torso followed the anim's own body turn and twisted to the right.
+// Everywhere else (the real pull-stab special) it counts as a special attack as before.
+static qboolean BG_SpecialAttackNoMotionComp(const entityState_t* cent, const int anim)
+{
+	if (anim == BOTH_PULL_IMPALE_STAB && cent->fireflag == SS_BLASTER)
+	{
+		return qfalse;
+	}
+	return PM_SaberInSpecialAttack(anim);
+}
+
 static void BG_G2ClientSpineAngles(void* ghoul2, const int motionBolt, vec3_t cent_lerpOrigin, vec3_t cent_lerpAngles,
 	entityState_t* cent,
 	int time, vec3_t viewAngles, int ciLegs, int ciTorso, const vec3_t angles,
@@ -21254,8 +21446,8 @@ static void BG_G2ClientSpineAngles(void* ghoul2, const int motionBolt, vec3_t ce
 		!BG_InRollES(cent, cent->legsAnim) &&
 		!BG_InRollAnim(cent) &&
 		!PM_SaberInSpecial(cent->saberMove) &&
-		!PM_SaberInSpecialAttack(cent->torsoAnim) &&
-		!PM_SaberInSpecialAttack(cent->legsAnim) &&
+		!BG_SpecialAttackNoMotionComp(cent, cent->torsoAnim) &&
+		!BG_SpecialAttackNoMotionComp(cent, cent->legsAnim) &&
 
 		!BG_InKnockDown(cent->torsoAnim) &&
 		!BG_InKnockDown(cent->legsAnim) &&
@@ -21269,8 +21461,8 @@ static void BG_G2ClientSpineAngles(void* ghoul2, const int motionBolt, vec3_t ce
 		!PM_InSpecialJump(ciTorso) &&
 		!BG_InDeathAnim(ciLegs) &&
 		!BG_InDeathAnim(ciTorso) &&
-		!PM_SaberInSpecialAttack(ciTorso) &&
-		!PM_SaberInSpecialAttack(ciLegs) &&
+		!BG_SpecialAttackNoMotionComp(cent, ciTorso) &&
+		!BG_SpecialAttackNoMotionComp(cent, ciLegs) &&
 
 		!(cent->eFlags & EF_DEAD) &&
 		cent->legsAnim != cent->torsoAnim &&
@@ -22346,9 +22538,9 @@ static int PM_GetOkWeaponForVehicle(void)
 {
 	int i = 0;
 
-	while (i < WP_NUM_WEAPONS)
+	while (i < WP_NUM_OWNABLE_WEAPONS)
 	{
-		if (pm->ps->stats[STAT_WEAPONS] & 1 << i &&
+		if (BG_HasWeapon(pm->ps->stats, i) &&
 			PM_WeaponOkOnVehicle(i))
 		{
 			//this one's good
@@ -22829,6 +23021,210 @@ static void PM_RepulseHover(void)
 	pm->cmd.forwardmove = pm->cmd.rightmove = pm->cmd.upmove = 0;
 }
 
+// BOTH_WIND, as SP (bg_panimate.cpp TorsoAgainstWindTest): a client standing still outside in a strong gust,
+// facing into it, braces against it with the torso. The wind comes from the renderer through the engine
+// (WE_GetWindGust, g_windAnim 0 = off); a dedicated server has no wind, so there it never happens. Runs after
+// PM_Weapon, so it wins over the idle weapon pose, and puts that pose back when the gust is over.
+static void PM_TorsoAgainstWind(void)
+{
+	vec3_t windDir, fwd, angs;
+	qboolean brace = qfalse;
+
+	if (pm->ps->clientNum < MAX_CLIENTS
+		&& pm->ps->pm_type == PM_NORMAL
+		&& pm->ps->stats[STAT_HEALTH] > 0
+		&& pm->ps->groundEntityNum != ENTITYNUM_NONE
+		&& !pm->ps->m_iVehicleNum
+		&& !pm->cmd.forwardmove && !pm->cmd.rightmove && !pm->cmd.upmove
+		&& !(pm->cmd.buttons & (BUTTON_ATTACK | BUTTON_ALT_ATTACK | BUTTON_BLOCK))
+		&& pm->ps->weaponTime <= 0
+		&& pm->ps->torsoTimer <= 0
+		&& !(pm->ps->PlayerEffectFlags & (1 << PEF_SPRINTING | 1 << PEF_WEAPONSPRINTING))
+		&& !(pm->ps->communicatingflags & 1 << CF_AIMINGGUN)
+		&& !(pm->ps->ManualBlockingFlags & 1 << MBF_HOLDINGBLOCK)
+		&& (pm->ps->weapon != WP_SABER || pm->ps->saberMove == LS_READY || pm->ps->saberMove == LS_NONE)
+		&& pm->animations && pm->animations[BOTH_WIND].numFrames > 0
+		&& trap->WE_GetWindGust(pm->ps->origin, windDir))
+	{
+		VectorSet(angs, 0.0f, pm->ps->viewangles[YAW], 0.0f);
+		AngleVectors(angs, fwd, NULL, NULL);
+		brace = -DotProduct(fwd, windDir) > 0.65f ? qtrue : qfalse;	// facing into the wind
+	}
+
+	if (brace)
+	{
+		if (pm->ps->torsoAnim != BOTH_WIND)
+		{
+			PM_StartTorsoAnim(BOTH_WIND);
+		}
+	}
+	else if (pm->ps->torsoAnim == BOTH_WIND && pm->ps->torsoTimer <= 0)
+	{
+		// the gust is over (or we moved): back to the idle pose
+		if (pm->ps->weapon == WP_SABER)
+		{
+			PM_SetSaberMove(LS_READY);
+		}
+		else if (pm->ps->weapon == WP_MELEE)
+		{
+			PM_StartTorsoAnim(pm->ps->legsAnim);
+		}
+		else
+		{
+			PM_StartTorsoAnim(PM_GetWeaponReadyAnim());
+		}
+	}
+}
+
+//SS_BLASTER===================================================================
+// Saber in the right hand, a bryar pistol in the left hand (visual only, not an inventory weapon). Predicted here:
+// alt attack fires (torso BOTH_FORCELIGHTNING, clip in ps->ammo[SABERBLASTER_CLIP_SLOT] = shots used), alt attack +
+// attack reloads, no saber throw / kata. The server spawns the bolt on EV_SABERBLASTER (g_active.c ClientEvents).
+qboolean pm_saberBlasterAlt = qfalse; // alt attack held this pmove (taken out of pm->cmd), read by PM_SaberLocked
+static qboolean pm_saberBlasterReload = qfalse;
+// the shot leaves the pistol at the arm's full reach: SABERBLASTER_FIRE_FRAME of BOTH_FORCELIGHTNING (the 6th frame),
+// not as the anim starts. Predicted: SBE_FIRE goes out on the pmove where weaponTime (set to the bryar's
+// fireTime as the shot starts) passes fireTime - the delay; pm_saberBlasterPrevWeaponTime = weaponTime as this pmove began
+#define SABERBLASTER_FIRE_FRAME	5
+static int pm_saberBlasterPrevWeaponTime = 0;
+
+static int PM_SaberBlasterFireDelay(void)
+{
+	int delay = SABERBLASTER_FIRE_FRAME * 50;
+
+	if (pm_entSelf && pm_entSelf->localAnimIndex >= 0 && pm_entSelf->localAnimIndex < MAX_ANIM_FILES
+		&& bgAllAnims[pm_entSelf->localAnimIndex].anims)
+	{
+		delay = abs(bgAllAnims[pm_entSelf->localAnimIndex].anims[BOTH_FORCELIGHTNING].frameLerp) * SABERBLASTER_FIRE_FRAME;
+	}
+	if (delay > weaponData[WP_BRYAR_PISTOL].fireTime - 50)
+	{
+		delay = weaponData[WP_BRYAR_PISTOL].fireTime - 50;
+	}
+	return delay > 0 ? delay : 0;
+}
+
+static qboolean PM_SaberBlasterActive(void)
+{
+	return pm->ps->weapon == WP_SABER && pm->ps->fd.saberAnimLevel == SS_BLASTER ? qtrue : qfalse;
+}
+
+static void PM_SaberBlasterFilterCmd(void)
+{
+	const qboolean is_Ready_to_Reload = ((pm->cmd.buttons & BUTTON_WALKING) && (pm->cmd.buttons & BUTTON_DASH)) ? qtrue : qfalse;
+
+	pm_saberBlasterAlt = qfalse;
+	pm_saberBlasterReload = qfalse;
+	pm_saberBlasterPrevWeaponTime = pm->ps->weaponTime;
+
+	if (!PM_SaberBlasterActive())
+	{
+		return;
+	}
+
+	const qboolean alt = is_Ready_to_Reload;
+	const qboolean reload = alt && pm->cmd.buttons & BUTTON_ATTACK ? qtrue : qfalse;
+
+	if (reload)
+	{
+		pm->cmd.buttons &= ~BUTTON_ATTACK;
+	}
+	if (alt)
+	{
+		// SS_BLASTER: test the reload flag, not the button: the attack button was already cleared just
+		// above, so the combo always took the fire branch and never reloaded (MP only; SP was fine)
+		if (reload)
+		{
+			// alt attack + attack reloads the pistol instead of a kata
+			pm_saberBlasterReload = qtrue;
+			pm->cmd.buttons &= ~BUTTON_ATTACK;
+		}
+		else
+		{
+			pm_saberBlasterAlt = qtrue;
+		}
+		//pm->cmd.buttons &= ~BUTTON_ALT_ATTACK;
+	}
+	// alt attack belongs to the pistol: no saber throw in this style
+	pm->cmd.buttons &= ~BUTTON_BOTSABERTHROW;
+
+	if (pm->ps->saberLockTime < pm->cmd.serverTime)
+	{
+		pm->ps->weaponChargeTime = 0; // saberlock charge (see PM_SaberLocked)
+	}
+}
+
+static void WP_SaberBlasterThink(void)
+{
+	// a shot started earlier goes now, its arm fully out - unless he was knocked down / killed / the anim was cut
+	if (PM_SaberBlasterActive()
+		&& pm->ps->torsoAnim == BOTH_FORCELIGHTNING
+		&& pm->ps->stats[STAT_HEALTH] > 0
+		&& pm->ps->pm_type != PM_DEAD
+		&& !PM_InKnockDown(pm->ps))
+	{
+		const int delay = PM_SaberBlasterFireDelay();
+		const int fire_at = weaponData[WP_BRYAR_PISTOL].fireTime - delay;
+
+		if (delay > 0 && pm_saberBlasterPrevWeaponTime > fire_at && pm->ps->weaponTime <= fire_at)
+		{
+			PM_AddEventWithParm(EV_SABERBLASTER, SBE_FIRE);
+		}
+	}
+
+	if (!PM_SaberBlasterActive()
+		|| pm->ps->weaponTime > 0
+		|| pm->ps->saberLockTime >= pm->cmd.serverTime //the lock is handled in PM_SaberLocked
+		|| pm->ps->saberInFlight
+		|| pm->ps->pm_type == PM_DEAD
+		|| pm->ps->stats[STAT_HEALTH] <= 0
+		|| PM_InKnockDown(pm->ps))
+	{
+		return;
+	}
+
+	if (pm_saberBlasterReload)
+	{
+		if (pm->ps->ammo[SABERBLASTER_CLIP_SLOT] > 0)
+		{
+			pm->ps->ammo[SABERBLASTER_CLIP_SLOT] = 0;
+			if (pm_entSelf && BG_HasAnimation(pm_entSelf->localAnimIndex, BOTH_RELOAD))
+			{
+				PM_SetAnim(SETANIM_TORSO, BOTH_RELOAD, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART);
+				pm->ps->torsoTimer = SABERBLASTER_RELOAD_TIME;
+			}
+			pm->ps->weaponTime = SABERBLASTER_RELOAD_TIME;
+			PM_AddEventWithParm(EV_SABERBLASTER, SBE_RELOAD);
+		}
+		return;
+	}
+
+	if (!pm_saberBlasterAlt)
+	{
+		return;
+	}
+
+	if (pm->ps->ammo[SABERBLASTER_CLIP_SLOT] >= SABERBLASTER_CLIP_SIZE)
+	{
+		// empty clip: click
+		pm->ps->weaponTime = 500;
+		PM_AddEventWithParm(EV_SABERBLASTER, SBE_EMPTY);
+		return;
+	}
+
+	pm->ps->ammo[SABERBLASTER_CLIP_SLOT]++;
+	pm->ps->saberBlocked = BLOCKED_NONE;
+	PM_SetAnim(SETANIM_TORSO, BOTH_FORCELIGHTNING, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART);
+	pm->ps->weaponTime = weaponData[WP_BRYAR_PISTOL].fireTime;
+	pm->ps->torsoTimer = pm->ps->weaponTime;
+	if (PM_SaberBlasterFireDelay() <= 0)
+	{
+		PM_AddEventWithParm(EV_SABERBLASTER, SBE_FIRE);
+	}
+	// else: SBE_FIRE at the anim's SABERBLASTER_FIRE_FRAME (top of this function, a later pmove)
+}
+
+
 static void PmoveSingle(pmove_t* pmove)
 {
 	qboolean stiffenedUp = qfalse;
@@ -22883,6 +23279,8 @@ static void PmoveSingle(pmove_t* pmove)
 	}
 
 	gPMDoSlowFall = PM_DoSlowFall();
+
+	PM_SaberBlasterFilterCmd(); // SS_BLASTER
 
 	// this counter lets us debug movement problems with a journal
 	// by setting a conditional breakpoint fot the previous frame
@@ -23446,8 +23844,9 @@ static void PmoveSingle(pmove_t* pmove)
 	}
 
 	// make sure walking button is clear if they are running, to avoid
-	// proxy no-footsteps cheats
-	if (abs(pm->cmd.forwardmove) > 64 || abs(pm->cmd.rightmove) > 64)
+	// proxy no-footsteps cheats (players only: as SP, NPCs move with full cmd values and walk via ps->speed,
+	// so clearing it here made them play run anims at walk speed)
+	if (pm->ps->clientNum < MAX_CLIENTS && (abs(pm->cmd.forwardmove) > 64 || abs(pm->cmd.rightmove) > 64))
 	{
 		pm->cmd.buttons &= ~BUTTON_WALKING;
 	}
@@ -24142,6 +24541,8 @@ static void PmoveSingle(pmove_t* pmove)
 		//only run weapons if a valid weapon is selected
 		// weapons
 		PM_Weapon();
+		WP_SaberBlasterThink(); // SS_BLASTER
+		PM_TorsoAgainstWind();	// BOTH_WIND against strong gusts, as in SP
 	}
 
 	PM_Use();

@@ -589,8 +589,11 @@ issues.
 
 qboolean FS_Initialized();
 
-void FS_InitFilesystem();
+void FS_InitFilesystem();
 void FS_Shutdown(qboolean closemfp);
+void FS_LookupCacheBegin();	// files.cpp: missing-file lookups during a map load
+void FS_LookupCacheEnd();
+void FS_LookupCacheFlush();
 
 qboolean FS_ConditionalRestart(int checksumFeed);
 void FS_Restart(int checksumFeed);

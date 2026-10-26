@@ -931,6 +931,21 @@ void BotUtilizePersonality(bot_state_t* bs)
 		{
 			bs->botWeaponWeights[WP_DROIDEKA] = atoi(readbuf);
 		}
+
+		if (GetPairedValue(group, "WP_NOGHRI_STICK", readbuf))
+		{
+			bs->botWeaponWeights[WP_NOGHRI_STICK] = atoi(readbuf);
+		}
+
+		if (GetPairedValue(group, "WP_TUSKEN_RIFLE", readbuf))
+		{
+			bs->botWeaponWeights[WP_TUSKEN_RIFLE] = atoi(readbuf);
+		}
+
+		if (GetPairedValue(group, "WP_TUSKEN_STAFF", readbuf))
+		{
+			bs->botWeaponWeights[WP_TUSKEN_STAFF] = atoi(readbuf);
+		}
 	}
 	if (!bs->saberSpecialist)
 	{

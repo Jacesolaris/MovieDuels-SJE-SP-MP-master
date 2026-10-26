@@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 // tr_map.c
 
 #include "../server/exe_headers.h"
+#include "q_profile.h"
 
 #include "tr_common.h"
 #include "tr_local.h"
@@ -102,12 +103,12 @@ R_ColorShiftLightingBytes
 */
 static void R_ColorShiftLightingBytes(byte in[4], byte out[4]) {
 	// shift the color data based on overbright range
-	const int shift = Q_max(0, r_mapOverBrightBits->integer - tr.overbrightBits);
+	const float scale = powf(2.0f, Q_max(0.0f, r_mapOverBrightBits->value - tr.overbright));
 
 	// shift the data based on overbright range
-	int r = in[0] << shift;
-	int g = in[1] << shift;
-	int b = in[2] << shift;
+	int r = static_cast<int>(in[0] * scale);
+	int g = static_cast<int>(in[1] * scale);
+	int b = static_cast<int>(in[2] * scale);
 
 	// normalize by color instead of saturating to white
 	if ((r | g | b) > 255) {
@@ -118,6 +119,13 @@ static void R_ColorShiftLightingBytes(byte in[4], byte out[4]) {
 		b = b * 255 / max;
 	}
 
+	// r_fullbright between 0 and 1: the lighting goes that far towards full bright (1 = white, as before)
+	const float fb = r_fullbright->value > 0.0f ? (r_fullbright->value < 1.0f ? r_fullbright->value : 1.0f) : 0.0f;
+	if (fb > 0.0f) {
+		r = r + static_cast<int>((255 - r) * fb);
+		g = g + static_cast<int>((255 - g) * fb);
+		b = b + static_cast<int>((255 - b) * fb);
+	}
 	out[0] = r;
 	out[1] = g;
 	out[2] = b;
@@ -132,12 +140,12 @@ R_ColorShiftLightingBytes
 */
 static void R_ColorShiftLightingBytes(byte in[3]) {
 	// shift the color data based on overbright range
-	const int shift = Q_max(0, r_mapOverBrightBits->integer - tr.overbrightBits);
+	const float scale = powf(2.0f, Q_max(0.0f, r_mapOverBrightBits->value - tr.overbright));
 
 	// shift the data based on overbright range
-	int r = in[0] << shift;
-	int g = in[1] << shift;
-	int b = in[2] << shift;
+	int r = static_cast<int>(in[0] * scale);
+	int g = static_cast<int>(in[1] * scale);
+	int b = static_cast<int>(in[2] * scale);
 
 	// normalize by color instead of saturating to white
 	if ((r | g | b) > 255) {
@@ -148,6 +156,13 @@ static void R_ColorShiftLightingBytes(byte in[3]) {
 		b = b * 255 / max;
 	}
 
+	// r_fullbright between 0 and 1: the lighting goes that far towards full bright (1 = white, as before)
+	const float fb = r_fullbright->value > 0.0f ? (r_fullbright->value < 1.0f ? r_fullbright->value : 1.0f) : 0.0f;
+	if (fb > 0.0f) {
+		r = r + static_cast<int>((255 - r) * fb);
+		g = g + static_cast<int>((255 - g) * fb);
+		b = b + static_cast<int>((255 - b) * fb);
+	}
 	in[0] = r;
 	in[1] = g;
 	in[2] = b;
@@ -162,6 +177,7 @@ R_LoadLightmaps
 #define	LIGHTMAP_SIZE	128
 static	void R_LoadLightmaps(const lump_t* l, const char* ps_map_name, world_t& worldData)
 {
+	PROFILE_ZONE("Load: BSP lightmaps");
 	static byte		image[LIGHTMAP_SIZE * LIGHTMAP_SIZE * 4]{};
 	int j = 0;
 	float				max_intensity = 0;
@@ -612,6 +628,7 @@ R_LoadSurfaces
 */
 static	void R_LoadSurfaces(const lump_t* surfs, const lump_t* verts, const lump_t* index_lump, world_t& worldData, const int index)
 {
+	PROFILE_ZONE("Load: BSP surfaces");
 	int			i = 0;
 	int num_faces = 0;
 	int num_meshes = 0;
@@ -842,6 +859,7 @@ R_LoadShaders
 */
 static	void R_LoadShaders(const lump_t* l, world_t& worldData)
 {
+	PROFILE_ZONE("Load: BSP shaders");
 	const dshader_t* in = reinterpret_cast<dshader_t*>(fileBase + l->fileofs);
 	if (l->filelen % sizeof * in)
 		Com_Error(ERR_DROP, "LoadMap: funny lump size in %s", worldData.name);
@@ -1430,6 +1448,9 @@ void RE_LoadWorldMap_Actual(const char* name, world_t& worldData, const int inde
 //
 void RE_LoadWorldMap(const char* name)
 {
+	R_SyncRenderThread();	// r_smp: the back end reads the world
+	PROFILE_ZONE("Load: world map (BSP)");
+	R_ImagePrefetch_Begin(name, "gl_sp");	// this map's JPGs decoded ahead on the job workers
 	*ri.gbUsingCachedMapDataRightNow() = qtrue;	// !!!!!!!!!!!!
 
 	RE_LoadWorldMap_Actual(name, s_worldData, 0);

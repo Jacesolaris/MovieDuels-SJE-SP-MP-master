@@ -188,6 +188,7 @@ qboolean NPC_TryJump(const vec3_t& pos, float max_xy_dist = 0.0f, float max_z_di
 #define CHECK_SHOOT		8
 #define CHECK_VISRANGE	16
 extern qboolean CanSee(const gentity_t* ent);
+extern qboolean NPC_SeesThroughWalls(const gentity_t* self);
 extern qboolean InFOV(const gentity_t* ent, const gentity_t* from, int hFOV, int vFOV);
 extern qboolean InFOV(const vec3_t origin, const gentity_t* from, int hFOV, int vFOV);
 extern qboolean InFOV(const vec3_t spot, vec3_t from, vec3_t fromAngles, int hFOV, int vFOV);

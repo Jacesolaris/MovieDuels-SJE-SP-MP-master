@@ -70,13 +70,13 @@ BEGIN
 BLOCK "040904b0"
 BEGIN
 VALUE "Comments", "MovieDuels Contributors"
-VALUE "CompanyName", "Activision Inc"
-VALUE "FileDescription", "MovieDuels-SJE-1.0-SP"
+VALUE "CompanyName", "MovieDuels Team"
+VALUE "FileDescription", "MovieDuels-SP-Update-9"
 VALUE "FileVersion", VERSION_STRING
-VALUE "InternalName", "MovieDuels SP Game"
-VALUE "LegalCopyright", "Copyright (C) 2023"
-VALUE "OriginalFilename", "MovieDuels-gamex86.dll"
-VALUE "ProductName", "MovieDuels"
+VALUE "InternalName", "MovieDuels SP"
+VALUE "LegalCopyright", "Copyright (C) 2027 MovieDuels Team"
+VALUE "OriginalFilename", "MovieDuels-gamex86_64.dll"
+VALUE "ProductName", "MovieDuels Single Player"
 VALUE "ProductVersion", VERSION_STRING
 END
 END

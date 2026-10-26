@@ -123,6 +123,19 @@ stringID_table_t ClassTable[] =
 	ENUM2STRING(CLASS_VADER),
 	ENUM2STRING(CLASS_SITHLORD),
 	ENUM2STRING(CLASS_OBJECT),
+	// SP classes (DH 2026-10-24)
+	ENUM2STRING(CLASS_YODA),
+	ENUM2STRING(CLASS_JANGO),
+	ENUM2STRING(CLASS_JANGODUAL),
+	ENUM2STRING(CLASS_GALEN),
+	ENUM2STRING(CLASS_GUARD),
+	ENUM2STRING(CLASS_AHSOKA),
+	ENUM2STRING(CLASS_BOC),
+	ENUM2STRING(CLASS_PROJECTION),
+	ENUM2STRING(CLASS_JEDIMASTER),
+	ENUM2STRING(CLASS_GROGU),
+	ENUM2STRING(CLASS_CALONORD),
+	{ "CLASS_MANDALORIAN", CLASS_MANDO },
 	{ "CLASS_GALAK_MECH", CLASS_GALAKMECH },
 	{ "", -1 }
 };
@@ -467,9 +480,9 @@ static void NPC_PrecacheWeapons(team_t playerTeam, int spawnflags, char* NPCtype
 {
 	int weapons = NPC_WeaponsForTeam(playerTeam, spawnflags, NPCtype);
 
-	for (int curWeap = WP_SABER; curWeap < WP_NUM_WEAPONS; curWeap++)
+	for (int curWeap = WP_SABER; curWeap < WP_NUM_OWNABLE_WEAPONS; curWeap++)
 	{
-		if (weapons & 1 << curWeap)
+		if (WP_MASK_HAS(weapons, curWeap))
 		{
 			RegisterItem(BG_FindItemForWeapon(curWeap));
 		}
@@ -478,9 +491,9 @@ static void NPC_PrecacheWeapons(team_t playerTeam, int spawnflags, char* NPCtype
 #if 0
 	int weapons = NPC_WeaponsForTeam(playerTeam, spawnflags, NPCtype);
 	gitem_t* item;
-	for (int curWeap = WP_SABER; curWeap < WP_NUM_WEAPONS; curWeap++)
+	for (int curWeap = WP_SABER; curWeap < WP_NUM_OWNABLE_WEAPONS; curWeap++)
 	{
-		if ((weapons & (1 << curWeap)))
+		if ((WP_MASK_HAS(weapons, curWeap)))
 		{
 			item = FindItemForWeapon(((weapon_t)(curWeap)));	//precache the weapon
 			CG_RegisterItemSounds((item - bg_itemlist));
@@ -2455,10 +2468,10 @@ qboolean NPC_ParseParms(const char* npc_name, gentity_t* npc)
 					//  EEEWWWWW!!!!!
 					weap = WP_BLASTER;
 				}
-				if (weap >= WP_NONE && weap <= WP_NUM_WEAPONS)
+				if (weap >= WP_NONE && weap < WP_NUM_OWNABLE_WEAPONS)
 				{
 					npc->client->ps.weapon = weap;
-					npc->client->ps.stats[STAT_WEAPONS] |= 1 << npc->client->ps.weapon;
+					BG_GiveWeapon(npc->client->ps.stats, npc->client->ps.weapon);
 					if (weap > WP_NONE)
 					{
 						npc->client->ps.ammo[weaponData[npc->client->ps.weapon].ammoIndex] = 100; //FIXME: max ammo!
@@ -3390,14 +3403,20 @@ qboolean NPC_ParseParms(const char* npc_name, gentity_t* npc)
 					SkipRestOfLine(&p);
 					continue;
 				}
-				//cap
+				//cap (SS_BLASTER is allowed too)
 				if (n < 0)
 				{
 					n = 0;
 				}
-				else if (n > 5)
+				else if (n > 5 && n != SS_BLASTER)
 				{
 					n = 5;
+				}
+				// SS_BLASTER: each line adds a known style, the last one is the starting style (only enforced when
+				// SS_BLASTER is among them, G_ValidSaberStyle / NPC_spawn.c)
+				if (n >= SS_FAST)
+				{
+					npc->client->saberStylesKnown |= 1 << n;
 				}
 				npc->client->ps.fd.saberAnimLevel = n;
 				continue;
@@ -3488,6 +3507,10 @@ qboolean NPC_ParseParms(const char* npc_name, gentity_t* npc)
 			//vehicles want their names fed in as models
 			//we put the $ in front to indicate a name and not a model
 			strcpy(playerModel, va("$%s", npc_name));
+		}
+		if (npc->client)
+		{
+			Q_strncpyz(npc->client->modelname, playerModel, sizeof npc->client->modelname);	// G_SaberBlasterKyleModel
 		}
 		SetupGameGhoul2Model(npc, playerModel, customSkin);
 

@@ -872,6 +872,8 @@ static qboolean SurfIsOffscreen(const drawSurf_t* draw_surf) {
 	unsigned int point_or = 0;
 	unsigned int point_and = static_cast<unsigned>(~0);
 
+	R_SmpWaitRenderThread();	// r_smp: this test borrows the back end's tess
+
 	R_RotateForViewer();
 
 	R_DecomposeSort(draw_surf->sort, &entityNum, &shader, &fogNum, &dlighted);

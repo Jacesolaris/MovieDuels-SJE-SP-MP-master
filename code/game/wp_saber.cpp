@@ -299,6 +299,7 @@ extern cvar_t* g_SerenityJediEngineMode;
 extern cvar_t* g_IsSaberDoingAttackDamage;
 extern cvar_t* g_DebugSaberCombat;
 extern cvar_t* g_saberscanstickinenemy;
+extern cvar_t* g_saberscanstickinwall;
 extern cvar_t* g_lightningdamage;
 extern cvar_t* com_outcast;
 extern cvar_t* g_SaberBounceOnWalls;
@@ -638,6 +639,8 @@ stringID_table_t SaberStyleTable[] =
 	{ "desann", SS_DESANN },
 	ENUM2STRING(SS_TAVION),
 	{ "tavion", SS_TAVION },
+	ENUM2STRING(SS_BLASTER), // SS_BLASTER
+	{ "blaster", SS_BLASTER },
 	ENUM2STRING(SS_DUAL),
 	{ "dual", SS_DUAL },
 	ENUM2STRING(SS_STAFF),
@@ -3840,7 +3843,7 @@ static qboolean WP_SaberApplyDamageMD(gentity_t* ent, const float base_damage, c
 								{
 									gi.Printf(S_COLOR_YELLOW"saberInBackAttack\n");
 								}
-								if (ent->client->ps.saberAnimLevel == SS_DESANN || ent->client->ps.saberAnimLevel ==
+								if (ent->client->ps.saberAnimLevel == SS_DESANN || ent->client->ps.saberAnimLevel == SS_BLASTER || ent->client->ps.saberAnimLevel ==
 									SS_STRONG)
 								{
 									if (g_saberRealisticCombat->integer == 0) // kill move: realistic 0 = 75% of realistic 1, never lower than before
@@ -3905,7 +3908,7 @@ static qboolean WP_SaberApplyDamageMD(gentity_t* ent, const float base_damage, c
 								{
 									gi.Printf(S_COLOR_YELLOW"saberInOverHeadAttack\n");
 								}
-								if (ent->client->ps.saberAnimLevel == SS_DESANN || ent->client->ps.saberAnimLevel ==
+								if (ent->client->ps.saberAnimLevel == SS_DESANN || ent->client->ps.saberAnimLevel == SS_BLASTER || ent->client->ps.saberAnimLevel ==
 									SS_STRONG)
 								{
 									if (g_saberRealisticCombat->integer == 0) // kill move: realistic 0 = 75% of realistic 1, never lower than before
@@ -6013,10 +6016,13 @@ constexpr auto LOCK_IDEAL_DIST_JKA = 46.0f;
 extern void PM_SetAnimFrame(gentity_t* gent, int frame, qboolean torso, qboolean legs);
 extern qboolean ValidAnimFileIndex(int index);
 
-static int G_SaberLockAnim(const int attacker_saber_style, const int defender_saber_style, const int top_or_side,
+static int G_SaberLockAnim(const int attacker_saber_style_in, const int defender_saber_style_in, const int top_or_side,
 	const int lock_or_break_or_super_break,
 	const int win_or_lose)
 {
+	// SS_BLASTER: saberlocks use the dual saber lock anims (BOTH_LK_DL_*)
+	const int attacker_saber_style = attacker_saber_style_in == SS_BLASTER ? SS_DUAL : attacker_saber_style_in;
+	const int defender_saber_style = defender_saber_style_in == SS_BLASTER ? SS_DUAL : defender_saber_style_in;
 	int base_anim = -1;
 	if (lock_or_break_or_super_break == SABERLOCK_LOCK)
 	{
@@ -9170,7 +9176,7 @@ static void WP_SaberDamageTrace(gentity_t* ent, int saberNum, int bladeNum)
 								PM_VelocityForSaberMove(&ent->client->ps, throw_dir);
 								WP_SaberLose(hit_owner, throw_dir);
 								if (ent->client->ps.saberAnimLevel == SS_STRONG && !Q_irand(0, 3)
-									|| ent->client->ps.saberAnimLevel == SS_DESANN && !Q_irand(0, 1))
+									|| (ent->client->ps.saberAnimLevel == SS_DESANN || ent->client->ps.saberAnimLevel == SS_BLASTER) && !Q_irand(0, 1))
 								{
 									// a strong attack
 									if (WP_BrokenParryKnockDown(hit_owner))
@@ -9183,7 +9189,7 @@ static void WP_SaberDamageTrace(gentity_t* ent, int saberNum, int bladeNum)
 							else
 							{
 								if (ent->client->ps.saberAnimLevel == SS_STRONG && !Q_irand(0, 5)
-									|| ent->client->ps.saberAnimLevel == SS_DESANN && !Q_irand(0, 3))
+									|| (ent->client->ps.saberAnimLevel == SS_DESANN || ent->client->ps.saberAnimLevel == SS_BLASTER) && !Q_irand(0, 3))
 								{
 									// a strong attack
 									if (WP_BrokenParryKnockDown(hit_owner))
@@ -9223,7 +9229,7 @@ static void WP_SaberDamageTrace(gentity_t* ent, int saberNum, int bladeNum)
 									hit_owner->client->ps.saberBlocked);
 							}
 							else if (ent->client->ps.saberAnimLevel == SS_STRONG && !Q_irand(0, 6)
-								|| ent->client->ps.saberAnimLevel == SS_DESANN && !Q_irand(0, 3))
+								|| (ent->client->ps.saberAnimLevel == SS_DESANN || ent->client->ps.saberAnimLevel == SS_BLASTER) && !Q_irand(0, 3))
 							{
 								// a strong attack can sometimes do a knockdown
 								//HMM... maybe only if they're moving backwards?
@@ -12901,6 +12907,7 @@ static void WP_SaberCatchFromWall(gentity_t* self, gentity_t* saber, const qbool
 		case SS_MEDIUM:
 		case SS_STRONG:
 		case SS_DESANN:
+		case SS_BLASTER: // SS_BLASTER
 			NPC_SetAnim(self, SETANIM_TORSO, BOTH_STAND1TO2, SETANIM_AFLAG_PACE | SETANIM_FLAG_OVERRIDE);
 			break;
 
@@ -13552,6 +13559,7 @@ static void WP_SaberImpact(gentity_t* owner, gentity_t* saber, trace_t* trace)
 	//===========================
 	if (g_SerenityJediEngineMode &&
 		g_SerenityJediEngineMode->integer &&
+		g_saberscanstickinwall->integer &&
 		g_SaberMustReturn &&
 		g_SaberMustReturn->integer < 1 &&
 		owner &&
@@ -13561,7 +13569,7 @@ static void WP_SaberImpact(gentity_t* owner, gentity_t* saber, trace_t* trace)
 			owner->client &&
 			owner->client->ps.saberEntityState == SES_LEAVING &&
 			other->s.number == ENTITYNUM_WORLD && // hit solid world
-			owner->client->ps.forcePowerLevel[FP_SABERTHROW] >= FORCE_LEVEL_3)
+			owner->client->ps.forcePowerLevel[FP_SABERTHROW] >= FORCE_LEVEL_2)
 		{
 			// Reject floors and ceilings
 			if (trace->plane.normal[2] >= 0.8f || trace->plane.normal[2] <= -0.8f)
@@ -15166,6 +15174,7 @@ void WP_SaberCatch(gentity_t* self, gentity_t* saber, const qboolean switch_to_s
 		case SS_MEDIUM:
 		case SS_STRONG:
 		case SS_DESANN:
+		case SS_BLASTER: // SS_BLASTER
 			NPC_SetAnim(self, SETANIM_TORSO, BOTH_STAND1TO2, SETANIM_AFLAG_PACE | SETANIM_FLAG_OVERRIDE);
 			break;
 
@@ -17094,6 +17103,7 @@ static int BasicSaberBlockCost(const int attacker_style)
 	case SS_MEDIUM:
 		return 15;
 	case SS_DESANN:
+	case SS_BLASTER: // SS_BLASTER
 		return 16;
 	case SS_STRONG:
 		return 17;
@@ -21237,6 +21247,7 @@ qboolean WP_SaberBlockBolt_AMD(gentity_t* self, vec3_t hitloc, const qboolean mi
 				}
 				break;
 			case SS_DESANN:
+			case SS_BLASTER: // SS_BLASTER
 				if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
 				{
 					if (flags.isYoda == qtrue)
@@ -21383,6 +21394,7 @@ qboolean WP_SaberBlockBolt_AMD(gentity_t* self, vec3_t hitloc, const qboolean mi
 				}
 				break;
 			case SS_DESANN:
+			case SS_BLASTER: // SS_BLASTER
 				if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
 				{
 					if (flags.isYoda == qtrue)
@@ -21529,6 +21541,7 @@ qboolean WP_SaberBlockBolt_AMD(gentity_t* self, vec3_t hitloc, const qboolean mi
 				}
 				break;
 			case SS_DESANN:
+			case SS_BLASTER: // SS_BLASTER
 				if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
 				{
 					if (flags.isYoda == qtrue)
@@ -21682,6 +21695,7 @@ qboolean WP_SaberBlockBolt_AMD(gentity_t* self, vec3_t hitloc, const qboolean mi
 				}
 				break;
 			case SS_DESANN:
+			case SS_BLASTER: // SS_BLASTER
 				if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
 				{
 					if (flags.isYoda == qtrue)
@@ -21828,6 +21842,7 @@ qboolean WP_SaberBlockBolt_AMD(gentity_t* self, vec3_t hitloc, const qboolean mi
 				}
 				break;
 			case SS_DESANN:
+			case SS_BLASTER: // SS_BLASTER
 				if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
 				{
 					if (flags.isYoda == qtrue)
@@ -21974,6 +21989,7 @@ qboolean WP_SaberBlockBolt_AMD(gentity_t* self, vec3_t hitloc, const qboolean mi
 				}
 				break;
 			case SS_DESANN:
+			case SS_BLASTER: // SS_BLASTER
 				if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
 				{
 					if (flags.isYoda == qtrue)
@@ -22123,6 +22139,7 @@ qboolean WP_SaberBlockBolt_AMD(gentity_t* self, vec3_t hitloc, const qboolean mi
 				}
 				break;
 			case SS_DESANN:
+			case SS_BLASTER: // SS_BLASTER
 				if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
 				{
 					if (flags.isYoda == qtrue)
@@ -22269,6 +22286,7 @@ qboolean WP_SaberBlockBolt_AMD(gentity_t* self, vec3_t hitloc, const qboolean mi
 				}
 				break;
 			case SS_DESANN:
+			case SS_BLASTER: // SS_BLASTER
 				if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
 				{
 					if (flags.isYoda == qtrue)
@@ -23601,6 +23619,369 @@ static void WP_SetSaberMove(const gentity_t* self, const short blocked)
 	self->client->ps.saberBlocked = blocked;
 }
 
+//SS_BLASTER (ported from SJE)=========================================================
+// Saber in the right hand, a bryar pistol in the left hand (visual only, not an inventory weapon).
+// Walk + Dash fires the pistol (auto aim at the chest of the enemy nearest the crosshair), that + attack
+// reloads its clip (ps.ammo[SABERBLASTER_CLIP_SLOT] = shots used), in a saberlock Walk + Dash charges a shot that
+// ends the lock. Transient per-entity state (not saved): fire held this frame, saberlock charge start.
+static qboolean saberBlasterAltHeld[MAX_GENTITIES];
+static int saberBlasterChargeStart[MAX_GENTITIES];
+// the shot leaves the pistol at the arm's full reach: SABERBLASTER_FIRE_FRAME of BOTH_FORCELIGHTNING (the 6th frame),
+// not as the anim starts; saberBlasterFireTime = when the pending shot goes (0 = none)
+constexpr int SABERBLASTER_FIRE_FRAME = 5;
+static int saberBlasterFireTime[MAX_GENTITIES];
+extern qboolean G_ValidEnemy(const gentity_t* self, const gentity_t* enemy);
+extern gentity_t* CreateMissile(vec3_t org, vec3_t dir, float vel, int life, gentity_t* owner, qboolean alt_fire);
+extern void WP_TraceSetStart(const gentity_t* ent, vec3_t start);
+
+static qboolean WP_SaberBlasterActive(const gentity_t* ent)
+{
+	return ent && ent->client
+		&& ent->client->ps.weapon == WP_SABER
+		&& ent->client->ps.saberAnimLevel == SS_BLASTER
+		&& !ent->client->ps.dualSabers
+		? qtrue
+		: qfalse;
+}
+
+static qboolean WP_SaberBlasterIsPistolModel(const gentity_t* ent)
+{
+	const int model_index = ent->weaponModel[1];
+
+	if (model_index <= 0 || model_index >= static_cast<int>(ent->ghoul2.size()))
+	{
+		return qfalse;
+	}
+	char base[MAX_QPATH];
+	Q_strncpyz(base, weaponData[WP_BRYAR_PISTOL].weaponMdl, sizeof base);
+	if (char* ext = strrchr(base, '.'))
+	{
+		*ext = 0;
+	}
+	return Q_stricmpn(ent->ghoul2[model_index].mFileName, base, static_cast<int>(strlen(base))) == 0 ? qtrue : qfalse;
+}
+
+// the pistol model on the left hand bolt while the style is used, removed otherwise
+static void WP_SaberBlasterUpdatePistolModel(gentity_t* ent)
+{
+	if (WP_SaberBlasterActive(ent) && ent->health > 0 && ent->playerModel >= 0 && ent->handLBolt >= 0)
+	{
+		if (ent->weaponModel[1] <= 0)
+		{
+			G_CreateG2AttachedWeaponModel(ent, weaponData[WP_BRYAR_PISTOL].weaponMdl, ent->handLBolt, 1);
+		}
+	}
+	else if (!ent->client->ps.dualSabers && WP_SaberBlasterIsPistolModel(ent))
+	{
+		gi.G2API_RemoveGhoul2Model(ent->ghoul2, ent->weaponModel[1]);
+		ent->weaponModel[1] = -1;
+	}
+}
+
+static void WP_SaberBlasterMuzzle(gentity_t* ent, vec3_t muzzle_point)
+{
+	if (ent->playerModel >= 0 && ent->handLBolt >= 0 && ent->ghoul2.size())
+	{
+		mdxaBone_t bolt_matrix;
+		vec3_t bolt_origin;
+		const vec3_t yaw_only_angles = { 0, ent->currentAngles[YAW], 0 };
+
+		gi.G2API_GetBoltMatrix(ent->ghoul2, ent->playerModel, ent->handLBolt, &bolt_matrix, yaw_only_angles,
+			ent->currentOrigin, cg.time ? cg.time : level.time, nullptr, ent->s.modelScale);
+		gi.G2API_GiveMeVectorFromMatrix(bolt_matrix, ORIGIN, bolt_origin);
+		VectorCopy(bolt_origin, muzzle_point);
+		return;
+	}
+	// no ghoul2 hand: in front of the left shoulder
+	vec3_t fwd, right;
+	AngleVectors(ent->client->ps.viewangles, fwd, right, nullptr);
+	VectorCopy(ent->client->renderInfo.eyePoint, muzzle_point);
+	muzzle_point[2] -= 12.0f;
+	VectorMA(muzzle_point, 16.0f, fwd, muzzle_point);
+	VectorMA(muzzle_point, -8.0f, right, muzzle_point);
+}
+
+// auto aim: the enemy whose chest is nearest the crosshair within the arc (g_saberBlasterAimArc half angle,
+// g_saberBlasterAimRange), with a clear line of sight
+static gentity_t* WP_SaberBlasterFindTarget(const gentity_t* ent, const vec3_t eye, const vec3_t fwd)
+{
+	const float arc = Com_Clamp(0.0f, 180.0f, g_saberBlasterAimArc->value);
+	const float range = g_saberBlasterAimRange->value;
+	float best_dot = cosf(DEG2RAD(arc));
+	gentity_t* best = nullptr;
+
+	for (int i = 0; i < globals.num_entities; i++)
+	{
+		gentity_t* other = &g_entities[i];
+
+		if (other == ent || !other->inuse || !other->client || other->health <= 0)
+		{
+			continue;
+		}
+		if (!G_ValidEnemy(ent, other))
+		{
+			continue;
+		}
+		vec3_t spot, dir;
+		CalcEntitySpot(other, SPOT_CHEST, spot);
+		VectorSubtract(spot, eye, dir);
+		if (VectorNormalize(dir) > range)
+		{
+			continue;
+		}
+		const float dot = DotProduct(dir, fwd);
+		if (dot < best_dot)
+		{
+			continue;
+		}
+		trace_t tr;
+		gi.trace(&tr, eye, nullptr, nullptr, spot, ent->s.number, MASK_SHOT, static_cast<EG2_Collision>(0), 0);
+		if (tr.fraction < 1.0f && tr.entityNum != other->s.number)
+		{
+			continue;
+		}
+		best_dot = dot;
+		best = other;
+	}
+	return best;
+}
+
+static void WP_SaberBlasterFire(gentity_t* ent, const qboolean charged, gentity_t* target)
+{
+	vec3_t eye, fwd, start, dir;
+
+	VectorCopy(ent->client->renderInfo.eyePoint, eye);
+	AngleVectors(ent->client->ps.viewangles, fwd, nullptr, nullptr);
+	WP_SaberBlasterMuzzle(ent, start);
+	WP_TraceSetStart(ent, start);
+
+	if (!target)
+	{
+		target = WP_SaberBlasterFindTarget(ent, eye, fwd);
+	}
+	if (target)
+	{
+		vec3_t spot;
+		CalcEntitySpot(target, SPOT_CHEST, spot);
+		VectorSubtract(spot, start, dir);
+	}
+	else
+	{
+		// no enemy in the arc: where the crosshair points
+		trace_t tr;
+		vec3_t end;
+		VectorMA(eye, 8192.0f, fwd, end);
+		gi.trace(&tr, eye, nullptr, nullptr, end, ent->s.number, MASK_SHOT, static_cast<EG2_Collision>(0), 0);
+		VectorSubtract(tr.endpos, start, dir);
+	}
+	if (VectorNormalize(dir) < 1.0f)
+	{
+		VectorCopy(fwd, dir);
+	}
+
+	gentity_t* missile = CreateMissile(start, dir, BRYAR_PISTOL_VEL, 10000, ent, charged);
+	if (!missile)
+	{
+		return;
+	}
+	missile->classname = "bryar_proj";
+	missile->s.weapon = WP_BRYAR_PISTOL;
+	if (charged)
+	{
+		constexpr int count = 5; // fully charged
+		missile->count = count;
+		missile->damage = weaponData[WP_CONCUSSION].damage * count;
+		missile->methodOfDeath = MOD_BRYAR_ALT;
+	}
+	else
+	{
+		missile->damage = weaponData[WP_CONCUSSION].damage;
+		missile->methodOfDeath = MOD_BRYAR;
+	}
+	missile->dflags = DAMAGE_DEATH_KNOCKBACK;
+	missile->clipmask = MASK_SHOT | CONTENTS_LIGHTSABER;
+	missile->bounceCount = 8;
+
+	G_SoundOnEnt(ent, CHAN_WEAPON, charged ? "sound/weapons/bryar/alt_fire.wav" : "sound/weapons/bryar/fire.wav");
+	G_PlayEffect("bryar/muzzle_flash", start, dir);
+	ent->client->ps.persistant[PERS_ACCURACY_SHOTS]++;
+}
+
+// SS_BLASTER is Kyle Katarn's style only: his model folders (kyle, kylejk2, kyle_jedimaster, DarkKyle, ...)
+static qboolean WP_SaberBlasterKyleModel(const gentity_t* ent)
+{
+	if (ent->playerModel < 0 || ent->playerModel >= static_cast<int>(ent->ghoul2.size()))
+	{
+		return qfalse;
+	}
+	char path[MAX_QPATH];
+	Q_strncpyz(path, ent->ghoul2[ent->playerModel].mFileName, sizeof path);
+	Q_strlwr(path);
+	return strstr(path, "kyle") ? qtrue : qfalse;
+}
+
+// any other character loses the style, however he got it (NPC file, give all, setforceall, style cycle), and
+// leaves it for Medium
+static void WP_SaberBlasterKyleOnly(gentity_t* ent)
+{
+	playerState_t* ps = &ent->client->ps;
+	if (!(ps->saberStylesKnown & 1 << SS_BLASTER) && ps->saberAnimLevel != SS_BLASTER)
+	{
+		return;
+	}
+	if (WP_SaberBlasterKyleModel(ent))
+	{
+		return;
+	}
+	ps->saberStylesKnown &= ~(1 << SS_BLASTER);
+	if (ps->saberAnimLevel == SS_BLASTER)
+	{
+		ps->saberStylesKnown |= 1 << SS_MEDIUM;
+		ps->saberAnimLevel = SS_MEDIUM;
+	}
+}
+
+// called from ClientThink_real before the force powers, the saber and Pmove see the buttons
+void WP_SaberBlasterThink(gentity_t* ent, usercmd_t* ucmd)
+{
+	if (!ent || !ent->client)
+	{
+		return;
+	}
+	const int ent_num = ent->s.number;
+
+	WP_SaberBlasterKyleOnly(ent);
+	WP_SaberBlasterUpdatePistolModel(ent);
+	saberBlasterAltHeld[ent_num] = qfalse;
+
+	// a shot started below goes now, its arm fully out - unless he was knocked down / killed / the anim was cut
+	if (saberBlasterFireTime[ent_num] && saberBlasterFireTime[ent_num] <= level.time)
+	{
+		saberBlasterFireTime[ent_num] = 0;
+		if (WP_SaberBlasterActive(ent)
+			&& ent->health > 0
+			&& ent->client->ps.torsoAnim == BOTH_FORCELIGHTNING
+			&& !PM_InKnockDown(&ent->client->ps))
+		{
+			WP_SaberBlasterFire(ent, qfalse, nullptr);
+		}
+	}
+
+	if (ent->client->ps.saberLockTime < level.time)
+	{
+		saberBlasterChargeStart[ent_num] = 0;
+	}
+	if (!WP_SaberBlasterActive(ent))
+	{
+		return;
+	}
+
+	// the fire button: Walk + Dash
+	const qboolean alt = ent->client->buttons & BUTTON_WALKING && ent->client->buttons & BUTTON_DASH ? qtrue : qfalse;
+	const qboolean reload = alt && ucmd->buttons & BUTTON_ATTACK ? qtrue : qfalse;
+
+	if (reload)
+	{
+		ucmd->buttons &= ~BUTTON_ATTACK;
+	}
+	saberBlasterAltHeld[ent_num] = alt && !reload ? qtrue : qfalse;
+
+	playerState_t* ps = &ent->client->ps;
+
+	if (ps->ammo[SABERBLASTER_CLIP_SLOT] < 0 || ps->ammo[SABERBLASTER_CLIP_SLOT] > SABERBLASTER_CLIP_SIZE)
+	{
+		// MD: the slot is ps.ammo[AMMO_NONE], which a vehicle may have used: treat as an empty clip
+		ps->ammo[SABERBLASTER_CLIP_SLOT] = SABERBLASTER_CLIP_SIZE;
+	}
+
+	if (!alt
+		|| ent->health <= 0
+		|| ps->weaponTime > 0
+		|| ps->saberLockTime >= level.time //the lock is handled in PM_SaberLocked
+		|| ps->saberInFlight
+		|| PM_InKnockDown(ps)
+		|| (!ent_num && (cg.zoomMode || in_camera)))
+	{
+		return;
+	}
+
+	if (reload)
+	{
+		if (ps->ammo[SABERBLASTER_CLIP_SLOT] > 0)
+		{
+			ps->ammo[SABERBLASTER_CLIP_SLOT] = 0;
+			NPC_SetAnim(ent, SETANIM_TORSO, BOTH_RELOAD, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART);
+			ps->torsoAnimTimer = SABERBLASTER_RELOAD_TIME;
+			ps->weaponTime = SABERBLASTER_RELOAD_TIME;
+			G_SoundOnEnt(ent, CHAN_WEAPON, "sound/weapons/reload.mp3");
+		}
+		return;
+	}
+
+	if (ps->ammo[SABERBLASTER_CLIP_SLOT] >= SABERBLASTER_CLIP_SIZE)
+	{
+		// empty clip: click
+		ps->weaponTime = 500;
+		G_SoundOnEnt(ent, CHAN_WEAPON, "sound/weapons/noammo.wav");
+		return;
+	}
+
+	ps->ammo[SABERBLASTER_CLIP_SLOT]++;
+	ps->saberBlocked = BLOCKED_NONE;
+	NPC_SetAnim(ent, SETANIM_TORSO, BOTH_FORCELIGHTNING, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART);
+	ps->weaponTime = weaponData[WP_BRYAR_PISTOL].fireTime;
+	ps->torsoAnimTimer = ps->weaponTime;
+
+	// fire at the anim's SABERBLASTER_FIRE_FRAME (the left arm fully out), within the shot's weaponTime
+	int fire_delay = SABERBLASTER_FIRE_FRAME * 50;
+	const int anim_file = ent->client->clientInfo.animFileIndex;
+	if (ValidAnimFileIndex(anim_file))
+	{
+		fire_delay = abs(level.knownAnimFileSets[anim_file].animations[BOTH_FORCELIGHTNING].frameLerp) * SABERBLASTER_FIRE_FRAME;
+	}
+	if (fire_delay > ps->weaponTime - 50)
+	{
+		fire_delay = ps->weaponTime - 50;
+	}
+	if (fire_delay <= 0)
+	{
+		saberBlasterFireTime[ent_num] = 0;
+		WP_SaberBlasterFire(ent, qfalse, nullptr);
+	}
+	else
+	{
+		saberBlasterFireTime[ent_num] = level.time + fire_delay;
+	}
+}
+
+// called from PM_SaberLocked: Walk + Dash starts a charge, after g_saberBlasterLockCharge ms a charged shot is fired
+// at the lock enemy's chest; returns qtrue when the shot was fired (the caller ends the lock as a win)
+qboolean WP_SaberBlasterLockCharge(gentity_t* ent, gentity_t* enemy)
+{
+	if (!WP_SaberBlasterActive(ent) || !enemy || !enemy->client)
+	{
+		return qfalse;
+	}
+	const int ent_num = ent->s.number;
+
+	if (!saberBlasterChargeStart[ent_num])
+	{
+		if (saberBlasterAltHeld[ent_num])
+		{
+			saberBlasterChargeStart[ent_num] = level.time;
+			G_SoundOnEnt(ent, CHAN_WEAPON, "sound/weapons/bryar/altcharge.wav");
+		}
+		return qfalse;
+	}
+	if (level.time - saberBlasterChargeStart[ent_num] < g_saberBlasterLockCharge->integer)
+	{
+		return qfalse;
+	}
+	saberBlasterChargeStart[ent_num] = 0;
+	WP_SaberBlasterFire(ent, qtrue, enemy);
+	return qtrue;
+}
+
 extern void CG_CubeOutline(vec3_t mins, vec3_t maxs, int time, unsigned int color);
 
 void WP_SaberUpdateJKA(gentity_t* self, const usercmd_t* ucmd)
@@ -24703,7 +25084,7 @@ void WP_ResistForcePush(gentity_t* self, const gentity_t* pusher, const qboolean
 		//play resist just in torso
 		parts = SETANIM_TORSO;
 	}
-
+	
 	NPC_SetAnim(self, parts, BOTH_RESISTPUSH, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 
 	if (g_SerenityJediEngineMode->integer == 2)
@@ -35589,6 +35970,7 @@ static void ForceShootstrike(gentity_t* self)
 								case SS_TAVION:
 								case SS_STRONG:
 								case SS_DESANN:
+								case SS_BLASTER: // SS_BLASTER
 								case SS_MEDIUM:
 								case SS_NONE:
 								default:
@@ -35885,6 +36267,7 @@ static void ForceShootstrike(gentity_t* self)
 								case SS_TAVION:
 								case SS_STRONG:
 								case SS_DESANN:
+								case SS_BLASTER: // SS_BLASTER
 								case SS_MEDIUM:
 								case SS_NONE:
 								default:
@@ -36189,6 +36572,7 @@ static void ForceShootstrike(gentity_t* self)
 								case SS_TAVION:
 								case SS_STRONG:
 								case SS_DESANN:
+								case SS_BLASTER: // SS_BLASTER
 								case SS_MEDIUM:
 								case SS_NONE:
 								default:
@@ -36562,6 +36946,7 @@ static void ForceLightningDamage(gentity_t* self, gentity_t* traceEnt, vec3_t di
 				case SS_TAVION:
 				case SS_STRONG:
 				case SS_DESANN:
+				case SS_BLASTER: // SS_BLASTER
 				case SS_MEDIUM:
 				case SS_NONE:
 				default:
@@ -36789,6 +37174,7 @@ static void ForceLightningDamage(gentity_t* self, gentity_t* traceEnt, vec3_t di
 						case SS_TAVION:
 						case SS_STRONG:
 						case SS_DESANN:
+						case SS_BLASTER: // SS_BLASTER
 						case SS_MEDIUM:
 						case SS_NONE:
 						default:
@@ -36919,6 +37305,7 @@ static void ForceLightningDamage(gentity_t* self, gentity_t* traceEnt, vec3_t di
 							case SS_TAVION:
 							case SS_STRONG:
 							case SS_DESANN:
+							case SS_BLASTER: // SS_BLASTER
 							case SS_MEDIUM:
 							case SS_NONE:
 							default:
@@ -36971,6 +37358,7 @@ static void ForceLightningDamage(gentity_t* self, gentity_t* traceEnt, vec3_t di
 							case SS_TAVION:
 							case SS_STRONG:
 							case SS_DESANN:
+							case SS_BLASTER: // SS_BLASTER
 							case SS_MEDIUM:
 							case SS_NONE:
 							default:
@@ -37029,6 +37417,7 @@ static void ForceLightningDamage(gentity_t* self, gentity_t* traceEnt, vec3_t di
 						case SS_TAVION:
 						case SS_STRONG:
 						case SS_DESANN:
+						case SS_BLASTER: // SS_BLASTER
 						case SS_MEDIUM:
 							NPC_SetAnim(traceEnt, SETANIM_TORSO, BOTH_P1_S1_TL, SETANIM_AFLAG_PACE);
 							break;
@@ -37363,6 +37752,7 @@ static void ForceLightningDamage_AMD(gentity_t* self, gentity_t* traceEnt, vec3_
 				case SS_TAVION:
 				case SS_STRONG:
 				case SS_DESANN:
+				case SS_BLASTER: // SS_BLASTER
 				case SS_MEDIUM:
 				case SS_NONE:
 				default:
@@ -37588,6 +37978,7 @@ static void ForceLightningDamage_AMD(gentity_t* self, gentity_t* traceEnt, vec3_
 						case SS_TAVION:
 						case SS_STRONG:
 						case SS_DESANN:
+						case SS_BLASTER: // SS_BLASTER
 						case SS_MEDIUM:
 						case SS_NONE:
 						default:
@@ -37811,6 +38202,7 @@ static void ForceLightningDamage_AMD(gentity_t* self, gentity_t* traceEnt, vec3_
 						case SS_TAVION:
 						case SS_STRONG:
 						case SS_DESANN:
+						case SS_BLASTER: // SS_BLASTER
 						case SS_MEDIUM:
 							if (is_holding_block_button_and_attack)
 							{
@@ -38009,6 +38401,7 @@ static void ForceLightningDamage_AMD(gentity_t* self, gentity_t* traceEnt, vec3_
 						case SS_TAVION:
 						case SS_STRONG:
 						case SS_DESANN:
+						case SS_BLASTER: // SS_BLASTER
 						case SS_MEDIUM:
 							NPC_SetAnim(traceEnt, SETANIM_TORSO, BOTH_P1_S1_TL, SETANIM_AFLAG_PACE);
 							break;
@@ -38090,6 +38483,7 @@ static void ForceLightningDamage_AMD(gentity_t* self, gentity_t* traceEnt, vec3_
 						case SS_TAVION:
 						case SS_STRONG:
 						case SS_DESANN:
+						case SS_BLASTER: // SS_BLASTER
 						case SS_MEDIUM:
 							NPC_SetAnim(traceEnt, SETANIM_TORSO, BOTH_P1_S1_T__MD, SETANIM_AFLAG_PACE);
 							break;
@@ -38430,6 +38824,7 @@ static void ForceLightningDamage_MD(gentity_t* self, gentity_t* traceEnt, vec3_t
 				case SS_TAVION:
 				case SS_STRONG:
 				case SS_DESANN:
+				case SS_BLASTER: // SS_BLASTER
 				case SS_MEDIUM:
 				case SS_NONE:
 				default:
@@ -38654,6 +39049,7 @@ static void ForceLightningDamage_MD(gentity_t* self, gentity_t* traceEnt, vec3_t
 						case SS_TAVION:
 						case SS_STRONG:
 						case SS_DESANN:
+						case SS_BLASTER: // SS_BLASTER
 						case SS_MEDIUM:
 						case SS_NONE:
 						default:
@@ -38780,6 +39176,7 @@ static void ForceLightningDamage_MD(gentity_t* self, gentity_t* traceEnt, vec3_t
 						case SS_TAVION:
 						case SS_STRONG:
 						case SS_DESANN:
+						case SS_BLASTER: // SS_BLASTER
 						case SS_MEDIUM:
 						case SS_NONE:
 						default:
@@ -38835,6 +39232,7 @@ static void ForceLightningDamage_MD(gentity_t* self, gentity_t* traceEnt, vec3_t
 						case SS_TAVION:
 						case SS_STRONG:
 						case SS_DESANN:
+						case SS_BLASTER: // SS_BLASTER
 						case SS_MEDIUM:
 							NPC_SetAnim(traceEnt, SETANIM_TORSO, BOTH_P1_S1_TL, SETANIM_AFLAG_PACE);
 							break;
@@ -38902,6 +39300,7 @@ static void ForceLightningDamage_MD(gentity_t* self, gentity_t* traceEnt, vec3_t
 						case SS_TAVION:
 						case SS_STRONG:
 						case SS_DESANN:
+						case SS_BLASTER: // SS_BLASTER
 						case SS_MEDIUM:
 						case SS_NONE:
 						default:

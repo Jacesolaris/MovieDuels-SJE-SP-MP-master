@@ -437,6 +437,10 @@ using cg_t = struct cg_s
 	// low ammo warning state
 	int lowAmmoWarning; // 1 = low, 2 = empty
 
+	// reward medals
+	int rewardTime;
+	int rewardCount;
+
 	// crosshair client ID
 	int crosshairclientNum; //who you're looking at
 	int crosshairClientTime; //last time you looked at them
@@ -611,6 +615,9 @@ extern vmCvar_t cg_shadowCullDistance;
 extern vmCvar_t cg_paused;
 extern vmCvar_t cg_drawTimer;
 extern vmCvar_t cg_drawFPS;
+extern vmCvar_t cg_clothForcePush;
+extern vmCvar_t cg_clothExplosion;
+extern vmCvar_t cg_traceCull;
 extern vmCvar_t cg_drawSnapshot;
 extern vmCvar_t cg_drawAmmoWarning;
 extern vmCvar_t cg_drawCrosshair;
@@ -654,6 +661,7 @@ extern vmCvar_t cg_updatedDataPadForcePower2;
 extern vmCvar_t cg_updatedDataPadForcePower3;
 extern vmCvar_t cg_updatedDataPadObjective;
 extern vmCvar_t cg_drawBreath;
+extern vmCvar_t cg_drawAirBar;
 extern vmCvar_t cg_roffdebug;
 #ifndef FINAL_BUILD
 extern	vmCvar_t		cg_roffval1;
@@ -715,9 +723,12 @@ extern vmCvar_t cg_drawVehLeadIndicator;
 
 extern vmCvar_t cg_drawSelectionScrollBar;
 
+extern vmCvar_t cg_awardsounds;
+
 extern vmCvar_t cg_trueguns;
 extern vmCvar_t cg_holsteredweapons;
 extern vmCvar_t cg_holsterHide;
+extern vmCvar_t cg_blasterHipPullIn; // SS_BLASTER
 void CG_MDWheel_Down_f();
 void CG_MDWheel_Up_f();
 void CG_MDWheel_Menu_f();

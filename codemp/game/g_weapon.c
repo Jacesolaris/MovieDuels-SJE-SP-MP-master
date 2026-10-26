@@ -2437,6 +2437,183 @@ static void WP_RepeaterAltFire(gentity_t* ent)
 }
 
 //---------------------------------------------------------
+// the noghri stick (from SJE SP's wp_noghri_stick.cpp): the primary fire is a slow poison dart that leaves a cloud of
+// gas where it lands (G_SpawnNoghriGasCloud), the alt fire swings the stick
+//---------------------------------------------------------
+#define NOGHRI_STICK_VELOCITY		1200
+#define NOGHRI_STICK_DAMAGE			10 // players and bots (SP: the NPCs do 1/5/10 by skill)
+#define NOGHRI_STICK_NPC_DAMAGE		5
+#define NOGHRI_GAS_RADIUS			100 // as SP
+#define NOGHRI_STICK_SWING_RANGE	64
+#define NOGHRI_STICK_SWING_DELAY	300 // as SP's "smackTime": the hit comes at the right point of the swing
+
+static void WP_FireNoghriStick(gentity_t* ent)
+{
+	vec3_t dir, angs;
+
+	vectoangles(forward, angs);
+
+	if (ent->s.eType == ET_NPC && ent->NPC && NPC_IsNotHavingEnoughForceSight(ent))
+	{
+		// as SP: add some slop to the NPCs' aim (force sight 2+ gives perfect aim)
+		angs[PITCH] += Q_flrand(-1.0f, 1.0f) * (BLASTER_NPC_SPREAD + (6 - ent->NPC->currentAim) * 0.25f);
+		angs[YAW] += Q_flrand(-1.0f, 1.0f) * (BLASTER_NPC_SPREAD + (6 - ent->NPC->currentAim) * 0.25f);
+	}
+
+	AngleVectors(angs, dir, NULL, NULL);
+
+	gentity_t* missile = CreateMissile(muzzle, dir, NOGHRI_STICK_VELOCITY, 10000, ent, qfalse);
+
+	missile->classname = "noghri_proj";
+	missile->s.weapon = WP_NOGHRI_STICK;
+	missile->damage = ent->s.eType == ET_NPC ? NOGHRI_STICK_NPC_DAMAGE : NOGHRI_STICK_DAMAGE;
+	missile->dflags = DAMAGE_DEATH_KNOCKBACK;
+	missile->methodOfDeath = MOD_BLASTER;
+	missile->clipmask = MASK_SHOT;
+	missile->splashDamage = 0;
+	missile->splashRadius = NOGHRI_GAS_RADIUS; // the gas cloud's radius
+	missile->splashMethodOfDeath = MOD_GAS;
+}
+
+// the swings of the noghri stick, the tusken staff (SP's Noghri_StickTrace / Tusken_StaffTracenew) and the tusken
+// rifle's butt (SP: WP_Melee), traced along the view here as MP has no weapon bolt on the server
+#define TUSKEN_STAFF_SWING_RANGE	78 // as SP's staff trace
+#define TUSKEN_STAFF_LUNGE_RANGE	96
+#define TUSKEN_RIFLE_SWING_RANGE	48
+
+static void WP_StickSmack(gentity_t* ent, const int weapon, const qboolean lunge)
+{
+	trace_t tr;
+	vec3_t start, end, fwd;
+	vec3_t mins = { -6, -6, -6 }, maxs = { 6, 6, 6 };
+	int range, dmg, knockdownDmg;
+
+	switch (weapon)
+	{
+	case WP_TUSKEN_STAFF:
+		range = lunge ? TUSKEN_STAFF_LUNGE_RANGE : TUSKEN_STAFF_SWING_RANGE;
+		dmg = Q_irand(10, 20) + (lunge ? 4 : 0); // SP: 5-10 times the skill level + 1
+		knockdownDmg = 19; // as SP
+		break;
+	case WP_TUSKEN_RIFLE:
+		range = TUSKEN_RIFLE_SWING_RANGE;
+		dmg = Q_irand(6, 12); // SP's WP_Melee for an NPC on hard
+		knockdownDmg = 999; // the butt does not knock down
+		break;
+	default:
+		range = NOGHRI_STICK_SWING_RANGE;
+		dmg = Q_irand(12, 20); // as SP
+		knockdownDmg = 17;
+		break;
+	}
+
+	AngleVectors(ent->client->ps.viewangles, fwd, NULL, NULL);
+	VectorCopy(ent->client->ps.origin, start);
+	start[2] += ent->client->ps.viewheight - 8;
+	VectorMA(start, range + ent->r.maxs[0], fwd, end);
+
+	trap->Trace(&tr, start, mins, maxs, end, ent->s.number, MASK_SHOT, qfalse, 0, 0);
+
+	if (tr.entityNum >= ENTITYNUM_WORLD)
+	{
+		return;
+	}
+
+	gentity_t* traceEnt = &g_entities[tr.entityNum];
+
+	if (!traceEnt->takedamage)
+	{
+		return;
+	}
+
+	G_Sound(traceEnt, CHAN_AUTO, G_SoundIndex(va("sound/weapons/tusken_staff/stickhit%d.mp3", Q_irand(1, 4))));
+	G_Damage(traceEnt, ent, ent, fwd, tr.endpos, dmg, DAMAGE_NO_KNOCKBACK, MOD_MELEE);
+
+	if (traceEnt->client && traceEnt->health > 0 && dmg > knockdownDmg)
+	{
+		// a hard one knocks them down (as SP)
+		G_Knockdown(traceEnt, ent, fwd, 300, qtrue);
+	}
+}
+
+static void StickSwingThink(gentity_t* self)
+{
+	gentity_t* owner = self->parent;
+	const int weapon = self->s.weapon;
+
+	G_FreeEntity(self);
+
+	if (!owner || !owner->inuse || !owner->client || owner->health <= 0 || owner->client->ps.weapon != weapon)
+	{
+		// dead or switched weapons
+		return;
+	}
+
+	const int anim = owner->client->ps.torsoAnim;
+
+	if (anim == BOTH_TUSKENLUNGE1)
+	{
+		WP_StickSmack(owner, weapon, qtrue);
+	}
+	else if (anim >= BOTH_TUSKENATTACK1 && anim <= BOTH_TUSKENATTACK3)
+	{
+		WP_StickSmack(owner, weapon, qfalse);
+	}
+	// else knocked out of the swing
+}
+
+static void WP_StickSwing(gentity_t* ent)
+{
+	if (!ent->client)
+	{
+		return;
+	}
+
+	// bg_pmove.c started the swing anim (PM_Weapon); hit at the right point of it
+	gentity_t* swing = G_Spawn();
+
+	swing->classname = "stick_swing";
+	swing->r.svFlags |= SVF_NOCLIENT;
+	swing->parent = ent;
+	swing->s.weapon = ent->client->ps.weapon;
+	swing->think = StickSwingThink;
+	swing->nextthink = level.time + NOGHRI_STICK_SWING_DELAY;
+}
+
+//---------------------------------------------------------
+// the tusken rifle's shot (from SJE SP's wp_tusken.cpp)
+//---------------------------------------------------------
+#define TUSKEN_RIFLE_VEL			3000 // as SP
+#define TUSKEN_RIFLE_DAMAGE			50 // as SP for the player
+#define TUSKEN_RIFLE_NPC_DAMAGE		30 // as SP's NPCs on medium
+
+static void WP_FireTuskenRifle(gentity_t* ent)
+{
+	vec3_t dir, angs;
+
+	vectoangles(forward, angs);
+
+	if (ent->s.eType == ET_NPC && ent->NPC && NPC_IsNotHavingEnoughForceSight(ent))
+	{
+		// as SP: add some slop to the NPCs' aim (force sight 2+ gives perfect aim)
+		angs[PITCH] += Q_flrand(-1.0f, 1.0f) * BLASTER_NPC_SPREAD;
+		angs[YAW] += Q_flrand(-1.0f, 1.0f) * BLASTER_NPC_SPREAD;
+	}
+
+	AngleVectors(angs, dir, NULL, NULL);
+
+	gentity_t* missile = CreateMissile(muzzle, dir, TUSKEN_RIFLE_VEL, 10000, ent, qtrue);
+
+	missile->classname = "trifle_proj";
+	missile->s.weapon = WP_TUSKEN_RIFLE;
+	missile->damage = ent->s.eType == ET_NPC ? TUSKEN_RIFLE_NPC_DAMAGE : TUSKEN_RIFLE_DAMAGE;
+	missile->dflags = DAMAGE_DEATH_KNOCKBACK;
+	missile->methodOfDeath = MOD_BLASTER;
+	missile->clipmask = MASK_SHOT | CONTENTS_LIGHTSABER;
+	missile->bounceCount = 8; // as SP: it doesn't bounce forever
+}
+
+//---------------------------------------------------------
 static void WP_FireRepeater(gentity_t* ent, const qboolean alt_fire)
 //---------------------------------------------------------
 {
@@ -6885,6 +7062,36 @@ void FireWeapon(gentity_t* ent, const qboolean alt_fire)
 		WP_FireZ6RotaryCannon(ent, alt_fire);
 		break;
 
+	case WP_NOGHRI_STICK:
+		if (alt_fire)
+		{
+			alert = 0;
+			WP_StickSwing(ent);
+		}
+		else
+		{
+			WP_FireNoghriStick(ent);
+		}
+		break;
+
+	case WP_TUSKEN_RIFLE:
+		if (alt_fire)
+		{
+			// the alt fire bashes with the butt (SP has it the other way round)
+			alert = 0;
+			WP_StickSwing(ent);
+		}
+		else
+		{
+			WP_FireTuskenRifle(ent);
+		}
+		break;
+
+	case WP_TUSKEN_STAFF:
+		alert = 0;
+		WP_StickSwing(ent);
+		break;
+
 	case WP_REBELRIFLE:
 		WP_FireRebelRifle(ent, alt_fire);
 		break;
@@ -7135,7 +7342,7 @@ void emplaced_gun_use(gentity_t* self, gentity_t* other)
 	// swap the users weapon with the emplaced gun
 	activator->client->ps.weapon = self->s.weapon;
 	activator->client->ps.weaponstate = WEAPON_READY;
-	activator->client->ps.stats[STAT_WEAPONS] |= 1 << WP_EMPLACED_GUN;
+	BG_GiveWeapon(activator->client->ps.stats, WP_EMPLACED_GUN);
 
 	activator->client->ps.emplacedIndex = self->s.number;
 
@@ -7269,7 +7476,7 @@ static void emplaced_gun_update(gentity_t* self)
 			|| own_len > 64))
 	{
 		//get the user off of me then
-		self->activator->client->ps.stats[STAT_WEAPONS] &= ~(1 << WP_EMPLACED_GUN);
+		BG_TakeWeapon(self->activator->client->ps.stats, WP_EMPLACED_GUN);
 		self->activator->client->ps.ammo[weaponData[WP_EMPLACED_GUN].ammoIndex] = 0;
 
 		const int old_weap = self->activator->client->ps.weapon;
@@ -7481,4 +7688,147 @@ void SP_emplaced_eweb(gentity_t* ent)
 	ent->s.shouldtarget = qtrue;
 
 	trap->LinkEntity((sharedEntity_t*)ent);
+}
+
+//SS_BLASTER===================================================================
+// The left hand bryar pistol of SS_BLASTER: the shot is spawned here on EV_SABERBLASTER (g_active.c ClientEvents),
+// the anim, fire rate and clip are predicted in bg_pmove.c WP_SaberBlasterThink / bg_saber.c PM_SaberLocked.
+extern void CalcEntitySpot(const gentity_t* ent, spot_t spot, vec3_t point);
+extern qboolean G_ValidEnemy(const gentity_t* self, const gentity_t* enemy);
+
+static qboolean G_SaberBlasterIsEnemy(const gentity_t* self, const gentity_t* other)
+{
+	if (other == self || !other->inuse || !other->client || other->health <= 0)
+	{
+		return qfalse;
+	}
+	if (other->client->ps.pm_type == PM_DEAD
+		|| other->client->sess.sessionTeam == TEAM_SPECTATOR
+		|| other->client->ps.pm_flags & PMF_FOLLOW
+		|| other->s.NPC_class == CLASS_VEHICLE)
+	{
+		return qfalse;
+	}
+	if (self->enemy == other)
+	{
+		return qtrue;
+	}
+	if (self->s.number < MAX_CLIENTS && other->s.number < MAX_CLIENTS)
+	{
+		// player vs player: anyone not on my team
+		return OnSameTeam(self, other) ? qfalse : qtrue;
+	}
+	return G_ValidEnemy(self, other);
+}
+
+// auto aim: the enemy whose chest is nearest the crosshair within the arc (g_saberBlasterAimArc half angle,
+// g_saberBlasterAimRange), with a clear line of sight
+static gentity_t* G_SaberBlasterFindTarget(const gentity_t* ent, const vec3_t eye, const vec3_t fwd)
+{
+	const float arc = Com_Clamp(0.0f, 180.0f, g_saberBlasterAimArc.value);
+	const float range = g_saberBlasterAimRange.value;
+	float best_dot = cosf(DEG2RAD(arc));
+	gentity_t* best = NULL;
+
+	for (int i = 0; i < level.num_entities; i++)
+	{
+		gentity_t* other = &g_entities[i];
+		vec3_t spot, dir;
+		trace_t tr;
+
+		if (!G_SaberBlasterIsEnemy(ent, other))
+		{
+			continue;
+		}
+		CalcEntitySpot(other, SPOT_CHEST, spot);
+		VectorSubtract(spot, eye, dir);
+		if (VectorNormalize(dir) > range)
+		{
+			continue;
+		}
+		const float dot = DotProduct(dir, fwd);
+		if (dot < best_dot)
+		{
+			continue;
+		}
+		trap->Trace(&tr, eye, NULL, NULL, spot, ent->s.number, MASK_SHOT, qfalse, 0, 0);
+		if (tr.fraction < 1.0f && tr.entityNum != other->s.number)
+		{
+			continue;
+		}
+		best_dot = dot;
+		best = other;
+	}
+	return best;
+}
+
+void G_SaberBlasterFire(gentity_t* ent, const qboolean charged, gentity_t* target)
+{
+	vec3_t eye, fwd, right, start, dir;
+
+	if (!ent || !ent->client || ent->health <= 0)
+	{
+		return;
+	}
+
+	VectorCopy(ent->client->ps.origin, eye);
+	eye[2] += ent->client->ps.viewheight;
+	AngleVectors(ent->client->ps.viewangles, fwd, right, NULL);
+
+	// left hand, in front of the left shoulder
+	VectorCopy(eye, start);
+	start[2] -= 12.0f;
+	VectorMA(start, 16.0f, fwd, start);
+	VectorMA(start, -8.0f, right, start);
+	WP_TraceSetStart(ent, start, vec3_origin, vec3_origin);
+
+	if (!target)
+	{
+		target = G_SaberBlasterFindTarget(ent, eye, fwd);
+	}
+	if (target && target->inuse)
+	{
+		vec3_t spot;
+		CalcEntitySpot(target, SPOT_CHEST, spot);
+		VectorSubtract(spot, start, dir);
+	}
+	else
+	{
+		// no enemy in the arc: where the crosshair points
+		trace_t tr;
+		vec3_t end;
+		VectorMA(eye, 8192.0f, fwd, end);
+		trap->Trace(&tr, eye, NULL, NULL, end, ent->s.number, MASK_SHOT, qfalse, 0, 0);
+		VectorSubtract(tr.endpos, start, dir);
+	}
+	if (VectorNormalize(dir) < 1.0f)
+	{
+		VectorCopy(fwd, dir);
+	}
+
+	gentity_t* missile = CreateMissile(start, dir, BRYAR_PISTOL_VEL, 10000, ent, charged);
+
+	missile->classname = "bryar_proj";
+	missile->s.weapon = WP_BRYAR_PISTOL;
+
+	if (charged)
+	{
+		const float box_size = BRYAR_ALT_SIZE * (BRYAR_MAX_CHARGE * 0.5f);
+
+		missile->s.generic1 = BRYAR_MAX_CHARGE; // fully charged
+		missile->damage = CONC_DAMAGE;
+		missile->methodOfDeath = MOD_BRYAR_PISTOL_ALT;
+		VectorSet(missile->r.maxs, box_size, box_size, box_size);
+		VectorSet(missile->r.mins, -box_size, -box_size, -box_size);
+	}
+	else
+	{
+		missile->damage = CONC_DAMAGE;
+		missile->methodOfDeath = MOD_BRYAR_PISTOL;
+	}
+	missile->dflags = DAMAGE_DEATH_KNOCKBACK | DAMAGE_EXTRA_KNOCKBACK;
+	missile->clipmask = MASK_SHOT;
+	missile->bounceCount = 8;
+
+	ent->client->accuracy_shots++;
 }

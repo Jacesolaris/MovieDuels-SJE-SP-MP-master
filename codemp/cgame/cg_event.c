@@ -1623,6 +1623,8 @@ static void CG_G2MarkEvent(entityState_t* es)
 	case WP_BOBA:
 	case WP_CLONEPISTOL:
 	case WP_DROIDEKA:
+	case WP_NOGHRI_STICK:
+	case WP_TUSKEN_RIFLE:
 	case WP_TURRET:
 		if (!size)
 		{
@@ -1848,6 +1850,108 @@ also called by CG_CheckPlayerstateEvents
 #define	DEBUGNAME(x) if(cg_debugEvents.integer){trap->Print(x"\n");}
 
 extern void CG_ChatBox_AddString(char* chat_str);
+
+// An explosion (a splash weapon's missile hit something): tell the renderer, whose mesh cloth then blows the
+// capes and robes near it outwards (renderer command meshcloth_blast). Sized roughly like each weapon's blast.
+// cg_clothExplosion scales it, 0 = off.
+static void CG_ClothBlast(const int weapon, const qboolean altFire, const vec3_t origin)
+{
+	float radius = 0.0f, strength = 0.0f;
+	switch (weapon)
+	{
+	case WP_ROCKET_LAUNCHER:	radius = 200.0f; strength = 800.0f; break;
+	case WP_THERMAL:			radius = 280.0f; strength = 1000.0f; break;
+	case WP_TRIP_MINE:
+	case WP_DET_PACK:			radius = 280.0f; strength = 1100.0f; break;
+	case WP_CONCUSSION:			if (!altFire) { radius = 200.0f; strength = 800.0f; } break;
+	case WP_REPEATER:			if (altFire) { radius = 160.0f; strength = 600.0f; } break;
+	case WP_FLECHETTE:			if (altFire) { radius = 160.0f; strength = 600.0f; } break;
+	case WP_DEMP2:				if (altFire) { radius = 200.0f; strength = 500.0f; } break;
+	default: break;
+	}
+	if (radius <= 0.0f || cg_clothExplosion.value <= 0.0f)
+	{
+		return;
+	}
+	trap->SendConsoleCommand(va("meshcloth_blast %.0f %.0f %.0f %.0f %.0f\n", origin[0], origin[1], origin[2],
+		strength * cg_clothExplosion.value, radius));
+}
+
+
+// SS_BLASTER: sounds and muzzle flash of the left hand pistol (the bolt itself is a server missile)
+static void CG_SaberBlasterEvent(const int owner_num, const int parm)
+{
+	const weaponInfo_t* weap = &cg_weapons[WP_BRYAR_PISTOL];
+	centity_t* owner = NULL;
+
+	if (owner_num < 0 || owner_num >= ENTITYNUM_WORLD)
+	{
+		return;
+	}
+	owner = &cg_entities[owner_num];
+	CG_RegisterWeapon(WP_BRYAR_PISTOL);
+
+	switch (parm)
+	{
+	case SBE_EMPTY:
+		trap->S_StartSound(NULL, owner_num, CHAN_WEAPON, cgs.media.noAmmoSound);
+		break;
+	case SBE_RELOAD:
+		trap->S_StartSound(NULL, owner_num, CHAN_WEAPON, trap->S_RegisterSound("sound/weapons/reload.mp3"));
+		break;
+	case SBE_CHARGE:
+		if (weap->altChargeSound)
+		{
+			trap->S_StartSound(NULL, owner_num, CHAN_WEAPON, weap->altChargeSound);
+		}
+		break;
+	case SBE_FIRE:
+	case SBE_LOCKSHOT:
+	{
+		const qboolean charged = parm == SBE_LOCKSHOT ? qtrue : qfalse;
+		const sfxHandle_t sfx = charged ? weap->altFlashSound[0] : weap->flashSound[0];
+		const fxHandle_t fx = charged ? weap->altMuzzleEffect : weap->muzzleEffect;
+		const clientInfo_t* ci = NULL;
+		vec3_t fwd, right, flash_origin;
+
+		if (sfx)
+		{
+			trap->S_StartSound(NULL, owner_num, CHAN_WEAPON, sfx);
+		}
+		if (!fx)
+		{
+			break;
+		}
+		AngleVectors(owner->lerpAngles, fwd, right, NULL);
+		if (owner->currentState.eType == ET_NPC)
+		{
+			ci = owner->npcClient;
+		}
+		else if (owner_num < MAX_CLIENTS)
+		{
+			ci = &cgs.clientinfo[owner_num];
+		}
+		if (ci && owner->ghoul2 && ci->bolt_lhand)
+		{
+			mdxaBone_t matrix;
+			trap->G2API_GetBoltMatrix(owner->ghoul2, 0, ci->bolt_lhand, &matrix, owner->turAngles, owner->lerpOrigin,
+				cg.time, cgs.game_models, owner->modelScale);
+			BG_GiveMeVectorFromMatrix(&matrix, ORIGIN, flash_origin);
+		}
+		else
+		{
+			VectorCopy(owner->lerpOrigin, flash_origin);
+			flash_origin[2] += DEFAULT_VIEWHEIGHT - 12.0f;
+			VectorMA(flash_origin, 16.0f, fwd, flash_origin);
+			VectorMA(flash_origin, -8.0f, right, flash_origin);
+		}
+		trap->FX_PlayEffectID(fx, flash_origin, fwd, -1, -1, qfalse);
+	}
+	break;
+	default:
+		break;
+	}
+}
 
 void CG_EntityEvent(centity_t* cent, vec3_t position)
 {
@@ -3001,7 +3105,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position)
 
 				if (es->eventParm && es->eventParm < WP_NUM_WEAPONS)
 				{
-					cg.snap->ps.stats[STAT_WEAPONS] &= ~(1 << es->eventParm);
+					BG_TakeWeapon(cg.snap->ps.stats, es->eventParm);
 					weap = cg.snap->ps.weapon;
 				}
 				else if (es->eventParm)
@@ -3018,7 +3122,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position)
 			int weapon = es->eventParm;
 			weaponInfo_t* weapon_info = NULL;
 
-			assert(weapon >= 0 && weapon < MAX_WEAPONS);
+			assert(weapon >= 0 && weapon < WP_NUM_WEAPONS);
 
 			weapon_info = &cg_weapons[weapon];
 
@@ -4469,6 +4573,10 @@ void CG_EntityEvent(centity_t* cent, vec3_t position)
 			}
 			if (doit)
 			{
+				if (!es->emplacedOwner)
+				{
+					CG_ClothBlast(es->weapon, (cent->currentState.eFlags & EF_ALT_FIRING) ? qtrue : qfalse, position);	// splash weapons blow mesh cloth
+				}
 				if (es->emplacedOwner)
 				{
 					//hack: this is an index to a custom effect to use
@@ -4516,6 +4624,10 @@ void CG_EntityEvent(centity_t* cent, vec3_t position)
 			}
 			if (doit)
 			{
+				if (!es->emplacedOwner)
+				{
+					CG_ClothBlast(es->weapon, (cent->currentState.eFlags & EF_ALT_FIRING) ? qtrue : qfalse, position);	// splash weapons blow mesh cloth
+				}
 				if (es->emplacedOwner)
 				{
 					//hack: this is an index to a custom effect to use
@@ -4562,6 +4674,10 @@ void CG_EntityEvent(centity_t* cent, vec3_t position)
 			}
 			if (doit)
 			{
+				if (!es->emplacedOwner)
+				{
+					CG_ClothBlast(es->weapon, (cent->currentState.eFlags & EF_ALT_FIRING) ? qtrue : qfalse, position);	// splash weapons blow mesh cloth
+				}
 				if (es->emplacedOwner)
 				{
 					//hack: this is an index to a custom effect to use
@@ -5279,6 +5395,11 @@ void CG_EntityEvent(centity_t* cent, vec3_t position)
 	case EV_BLOCKLINE:
 		DEBUGNAME("EV_BLOCKLINE");
 		CG_BlockLine(es->origin, es->origin2, es->time2, es->weapon, 1);
+		break;
+
+	case EV_SABERBLASTER: // SS_BLASTER: the left hand bryar pistol of the blaster saber style
+		DEBUGNAME("EV_SABERBLASTER");
+		CG_SaberBlasterEvent(es->number, es->eventParm);
 		break;
 
 	case EV_FFASPAWN:

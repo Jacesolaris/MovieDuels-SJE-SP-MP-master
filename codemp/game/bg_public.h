@@ -147,7 +147,7 @@ animFlags_t BG_AnimStyleFlags(int animStyle);
 #define DEFAULT_REDTEAM_NAME	"Empire"
 #define DEFAULT_BLUETEAM_NAME	"Rebellion"
 
-#define CURRENT_MD_CLIENTVERSION		"Day-22,Month-10,Year-26,BuildNum-03" // build date
+#define CURRENT_MD_CLIENTVERSION		"Day-25,Month-10,Year-26,BuildNum-05" // build date
 
 #define	STEPSIZE		18
 
@@ -780,7 +780,9 @@ typedef enum {
 	STAT_DODGE,			//number of Dodge Points the player has.  DP is used for evading/blocking attacks before they hurt you.
 	STAT_MAX_DODGE,		//maximum number of dodge points allowed.
 	STAT_AMMOPOOL,
-	STAT_SABER_WEAR			//breakable saber staffs: 0-100 wear (101: broken by a heavy hit)
+	STAT_SABER_WEAR,		//breakable saber staffs: 0-100 wear (101: broken by a heavy hit)
+	STAT_AIR,				// air left under water for the breath bar: 0 = breathing, else 1 + tenths of seconds (0..120) (DH 2026-10-25)
+	STAT_WEAPONS2 = 14		// owned weapons 32-63 (msg.cpp sends it in 32 bits like STAT_WEAPONS), see BG_HasWeapon
 } statIndex_t;
 
 // playerState_t->persistant[] indexes
@@ -850,7 +852,7 @@ typedef enum {
 #define	EF2_HYPERSPACE			(1<<5)		// Used to both start the hyperspace effect on the predicted client and to let the vehicle know it can now jump into hyperspace (after turning to face the proper angle)
 #define	EF2_BRACKET_ENTITY		(1<<6)		// Draw as bracketed
 #define	EF2_SHIP_DEATH			(1<<7)		// "died in ship" mode
-#define	EF2_NOT_USED_1			(1<<8)		// not used
+#define	EF2_SCEPTER				(1<<8)		// holds Ragnos' scepter (SP's WP_SCEPTER) in the left hand: the Possessed Tavion bot (ai_main.c, cg_players.c)
 #define EF2_BOWCASTERSCOPE		(1<<9)      //[BowcasterScope]
 #define EF2_PLAYERHIT			(1<<10)     //[SPShield]
 #define	EF3_JETPACK_HOVER		(1<<11)
@@ -1260,6 +1262,7 @@ typedef enum {
 	EV_STASIS,
 	EV_BLOCKLINE,
 	EV_FFASPAWN,
+	EV_SABERBLASTER, // SS_BLASTER: left hand pistol fire / empty / reload / lock shot (parm saberBlasterEvent_t)
 } entity_event_t;			// There is a maximum of 256 events (8 bits transmission, 2 high bits for uniqueness)
 
 // EV_SABER_BLOCK eventParm for a saber-vs-saber block (0 = projectile deflect). Old cgames only test
@@ -1992,8 +1995,26 @@ typedef enum saber_styles_e {
 	SS_TAVION,
 	SS_DUAL,
 	SS_STAFF,
+	SS_BLASTER, // SS_BLASTER: saber right hand + bryar pistol left hand, appended so existing values do not shift
 	SS_NUM_SABER_STYLES
 } saber_styles_t;
+
+// SS_BLASTER: the left hand bryar pistol of SS_BLASTER (visual only, no inventory weapon)
+#define SABERBLASTER_CLIP_SIZE		20			// bryar shots per clip
+#define SABERBLASTER_RELOAD_TIME	1000		// ms, alt attack + attack
+#define SABERBLASTER_LOCK_CHARGE	1500		// ms of charging in a saberlock before the shot
+#define SABERBLASTER_CLIP_SLOT		AMMO_MAX	// unused ps.ammo[] slot (networked): shots used from the clip (0 = full)
+
+typedef enum
+{
+	SBE_FIRE,		// EV_SABERBLASTER parms
+	SBE_EMPTY,
+	SBE_RELOAD,
+	SBE_LOCKSHOT,
+	SBE_CHARGE
+} saberBlasterEvent_t;
+
+int BG_NextSaberStyleInCycle(int style);
 
 //SABER FLAGS
 //Old bools converted to a flag now

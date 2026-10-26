@@ -1810,6 +1810,9 @@ float botGlobalNavWeaponWeights[WP_NUM_WEAPONS] =
 	0, //WP_BOBA,
 	0, //WP_CLONEPISTOL,
 	3, //WP_DROIDEKA,
+	3, //WP_NOGHRI_STICK,
+	3, //WP_TUSKEN_RIFLE,
+	1, //WP_TUSKEN_STAFF,
 
 	0, //WP_BRYAR_OLD,
 	0 ,//WP_EMPLACED_GUN,

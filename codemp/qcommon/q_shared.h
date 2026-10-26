@@ -43,7 +43,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define CLIENT_WINDOW_TITLE "MovieDuels (MP)"
 #define CLIENT_CONSOLE_TITLE "MovieDuels Console (MP)"
 #define HOMEPATH_NAME_UNIX "MovieDuels"
-#define HOMEPATH_NAME_WIN "MovieDuels"
+#define HOMEPATH_NAME_WIN "MovieDuels-UD9"
 #define HOMEPATH_NAME_MACOSX HOMEPATH_NAME_WIN
 
 #define	BASEGAME "base"
@@ -2248,6 +2248,7 @@ typedef enum
 	MBF_MELEEDODGE,
 	MBF_BLOCKWALKING,
 	MBF_ACCURATEMISSILEBLOCKING,
+	MBF_NPCBLOCKSTANCE, // SP: NPC holds a block stance (DH 2026-10-24 SP NPC port)
 } ManualBlockingFlag_e;
 
 typedef enum

@@ -1396,6 +1396,18 @@ void G_LoadAnimFileSet(gentity_t* ent, const char* p_model_name)
 			*slash = 0;
 
 		stripped_name = COM_SkipPath(anim_name);
+
+		// A character playing a map's cutscene anim reports that map's cinematic GLA
+		// (_humanoid_<map>/_humanoid_<map>.gla). That is not an animation set of its own: it belongs to the
+		// _humanoid set (G_ParseAnimFileSet adds it there). Picking it as the set after a save-load
+		// (G_RefreshAnimFileSetsAfterLoad) left the character with none of its normal or cutscene anims:
+		// the player copy in the t1_rail intro stood up out of his seat after loading the checkpoint.
+		const char* map_name = strrchr(level.mapname, '/');
+		map_name = map_name ? map_name + 1 : level.mapname;
+		if (!Q_stricmp(stripped_name, va("_humanoid_%s", map_name)))
+		{
+			stripped_name = "_humanoid";
+		}
 	}
 
 	// g_ActivateAnimationStyle 1: nothing to do here. gla_name is the GLA the model really loaded, so for a
@@ -4591,9 +4603,9 @@ qboolean NPC_ParseParms(const char* npc_name, gentity_t* npc)
 					continue;
 				}
 				//cap
-				if (n > SS_STAFF)
+				if (n > SS_BLASTER) // SS_BLASTER
 				{
-					n = SS_STAFF;
+					n = SS_BLASTER;
 				}
 				else if (n < SS_FAST)
 				{

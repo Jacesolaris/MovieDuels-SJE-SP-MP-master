@@ -52,6 +52,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 constexpr auto SLOWDOWN_DIST = 128.0f;
 constexpr auto MIN_NPC_SPEED = 16.0f;
+extern void WP_SaberBlasterThink(gentity_t* ent, usercmd_t* ucmd); // SS_BLASTER
 
 extern qboolean Q3_TaskIDPending(const gentity_t* ent, taskID_t taskType);
 extern qboolean Manual_NPCKickAbsorbing(const gentity_t* defender);
@@ -787,6 +788,22 @@ static void P_WorldEffects(gentity_t* ent)
 
 				G_Damage(ent, nullptr, nullptr, nullptr, nullptr,
 					ent->damage, DAMAGE_NO_ARMOR, MOD_WATER);
+				if (ent->health > 0)
+				{	// the last 4 hits before drowning: BOTH_PAIN16, 17, 18, then BOTH_CHOKE3 (then BOTH_DEATH19) (DH 2026-10-25)
+					static const int drownPain[4] = { BOTH_PAIN16, BOTH_PAIN17, BOTH_PAIN18, BOTH_CHOKE3 };
+					int hitsLeft = 0, dmg = ent->damage, total = 0;
+
+					while (total < ent->health && hitsLeft < 5)
+					{	// each hit does 2 more, at most 15
+						dmg = dmg + 2 < 15 ? dmg + 2 : 15;
+						total += dmg;
+						hitsLeft++;
+					}
+					if (hitsLeft >= 1 && hitsLeft <= 4)
+					{
+						NPC_SetAnim(ent, SETANIM_TORSO, drownPain[4 - hitsLeft], SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
+					}
+				}
 			}
 		}
 	}
@@ -3257,7 +3274,7 @@ static gentity_t* G_KickTrace(gentity_t* ent, vec3_t kick_dir, const float kick_
 								}
 							}
 						}
-						else if (ent->client->ps.saberAnimLevel == SS_DESANN
+						else if ((ent->client->ps.saberAnimLevel == SS_DESANN || ent->client->ps.saberAnimLevel == SS_BLASTER) // SS_BLASTER
 							&& (hitEnt->client->ps.saberFatigueChainCount >= MISHAPLEVEL_HEAVY ||
 								hitEnt->client->ps.BlasterAttackChainCount >= BLASTERMISHAPLEVEL_HEAVY)
 							&& !(hitEnt->client->ps.ManualBlockingFlags & 1 << MBF_HOLDINGBLOCK))
@@ -8383,6 +8400,7 @@ static void ClientAlterSpeed(gentity_t* ent, usercmd_t* ucmd, const qboolean con
 			{
 			case SS_TAVION:
 			case SS_FAST:
+			case SS_BLASTER: // SS_BLASTER
 				client->ps.speed *= 0.85f;
 				break;
 			case SS_MEDIUM:
@@ -8438,6 +8456,7 @@ static void ClientAlterSpeed(gentity_t* ent, usercmd_t* ucmd, const qboolean con
 			case SS_MEDIUM:
 			case SS_DUAL:
 			case SS_STAFF:
+			case SS_BLASTER: // SS_BLASTER
 				client->ps.speed *= 0.85f;
 				break;
 			case SS_DESANN:
@@ -10997,6 +11016,8 @@ static void ClientThink_real(gentity_t* ent, usercmd_t* ucmd)
 	BG_AddPushVecToUcmd(ent, ucmd);
 
 	G_CheckClampUcmd(ent, ucmd);
+
+	WP_SaberBlasterThink(ent, ucmd); // SS_BLASTER: left hand pistol
 
 	WP_ForcePowersUpdate(ent, ucmd);
 

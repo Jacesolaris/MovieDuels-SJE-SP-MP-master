@@ -68,6 +68,7 @@ extern void G_VehicleSetDamageLocFlags(gentity_t* veh, int impactDir, int deathP
 extern void WP_DeactivateSaber(const gentity_t* self, qboolean clear_length = qfalse);
 
 extern cvar_t* g_debugDamage;
+extern cvar_t* g_awardStreaks;
 extern qboolean stop_icarus;
 extern cvar_t* g_dismemberment;
 extern cvar_t* g_gundismemberment;
@@ -4494,6 +4495,50 @@ extern void Wampa_DropVictim(gentity_t* self);
 extern void WP_StopForceHealEffects(const gentity_t* self);
 extern void Boba_NoDeadFlameThrower(const gentity_t* self);
 
+// award streaks (DH 2026-10-25, g_awardStreaks 1; 0 = the old awards): every 4th kill in a row without dying plays
+// "excellent", every 4th kill of a saber user with saber offense 3 or more (without dying) "impressive", and every 4th
+// death in a row without a kill "humiliation". The cgame plays them when the counters change (cg_awardsounds 1).
+#define AWARD_STREAK		4
+#define AWARD_STREAKS_ON	(g_awardStreaks && g_awardStreaks->integer)
+static int s_awardKills[MAX_CLIENTS];
+static int s_awardSaberKills[MAX_CLIENTS];
+static int s_awardDeaths[MAX_CLIENTS];
+
+static void G_AwardStreaks(gentity_t* self, gentity_t* attacker)
+{
+	if (!AWARD_STREAKS_ON || !self->client)
+	{
+		return;
+	}
+	if (self->s.number < MAX_CLIENTS)
+	{
+		s_awardKills[self->s.number] = 0;
+		s_awardSaberKills[self->s.number] = 0;
+		if (++s_awardDeaths[self->s.number] % AWARD_STREAK == 0)
+		{
+			self->client->ps.persistant[PERS_GAUNTLET_FRAG_COUNT]++;
+		}
+	}
+	if (!attacker || attacker == self || !attacker->client || attacker->s.number >= MAX_CLIENTS || OnSameTeam(self, attacker))
+	{
+		return;
+	}
+	const int a = attacker->s.number;
+
+	s_awardDeaths[a] = 0;
+	if (++s_awardKills[a] % AWARD_STREAK == 0)
+	{
+		attacker->client->ps.persistant[PERS_EXCELLENT_COUNT]++;
+		attacker->client->rewardTime = level.time + REWARD_SPRITE_TIME;
+	}
+	if (self->client->ps.weapon == WP_SABER && self->client->ps.forcePowerLevel[FP_SABER_OFFENSE] >= FORCE_LEVEL_3
+		&& ++s_awardSaberKills[a] % AWARD_STREAK == 0)
+	{
+		attacker->client->ps.persistant[PERS_IMPRESSIVE_COUNT]++;
+		attacker->client->rewardTime = level.time + REWARD_SPRITE_TIME;
+	}
+}
+
 void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker,
 	const int damage, const int means_of_death, const int dflags, const int hit_loc)
 {
@@ -5109,6 +5154,8 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker,
 		G_MakeTeamVulnerable();
 	}
 
+	G_AwardStreaks(self, attacker);
+
 	if (attacker && attacker->client)
 	{
 		if (attacker == self || OnSameTeam(self, attacker))
@@ -5120,6 +5167,29 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker,
 			AddScore(attacker, 1);
 			AddFatigueKillBonus(attacker, self, means_of_death);
 		}
+
+		if (!AWARD_STREAKS_ON && means_of_death == MOD_FORCE_LIGHTNING && (self->s.number < MAX_CLIENTS || G_ControlledByPlayer(self)))
+		{
+			// play humiliation on player
+			attacker->client->ps.persistant[PERS_GAUNTLET_FRAG_COUNT]++;
+			attacker->client->rewardTime = level.time + REWARD_SPRITE_TIME;
+			// also play humiliation on target
+			self->client->ps.persistant[PERS_PLAYEREVENTS] ^= PLAYEREVENT_GAUNTLETREWARD;
+		}
+
+		// check for two kills in a short amount of time
+		// if this is close enough to the last kill, give a reward sound
+		if (!AWARD_STREAKS_ON && level.time - attacker->client->lastKillTime < CARNAGE_REWARD_TIME)
+		{
+			// play excellent on player
+			attacker->client->ps.persistant[PERS_EXCELLENT_COUNT]++;
+
+			// add the sprite over the player's head
+			/*attacker->client->ps.eFlags &= ~(EF_AWARD_IMPRESSIVE | EF_AWARD_EXCELLENT | EF_AWARD_GAUNTLET | EF_AWARD_ASSIST | EF_AWARD_DEFEND | EF_AWARD_CAP);
+			attacker->client->ps.eFlags |= EF_AWARD_EXCELLENT;*/
+			attacker->client->rewardTime = level.time + REWARD_SPRITE_TIME;
+		}
+		attacker->client->lastKillTime = level.time;
 	}
 	else
 	{
@@ -5729,6 +5799,10 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker,
 			AddSightEvent(attacker, self->currentOrigin, 384, AEL_DISCOVERED, 10);
 		}
 
+		if (anim >= 0 && self->waterlevel >= 2)
+		{	// dying in water: BOTH_DEATH19, then float and ragdoll (PM_WaterDeathFrame) (DH 2026-10-25)
+			anim = BOTH_DEATH19;
+		}
 		if (anim >= 0)
 		{
 			NPC_SetAnim(self, SETANIM_BOTH, anim,

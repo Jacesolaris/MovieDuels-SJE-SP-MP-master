@@ -48,6 +48,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define	FRAMETIME			100					// msec
 #define	EVENT_VALID_MSEC	300
 #define	CARNAGE_REWARD_TIME	3000
+#define REWARD_SPRITE_TIME  2000
 
 #define	INTERMISSION_DELAY_TIME	1000
 

@@ -58,10 +58,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #if JK2_MODE
 #define PRODUCT_NAME			"openjo_sp"
 
-#define CLIENT_WINDOW_TITLE "OpenJO (SP)"
-#define CLIENT_CONSOLE_TITLE "OpenJO Console (SP)"
-#define HOMEPATH_NAME_UNIX "openjo"
-#define HOMEPATH_NAME_WIN "OpenJO"
+#define CLIENT_WINDOW_TITLE "MovieDuelsJO (SP)"
+#define CLIENT_CONSOLE_TITLE "MovieDuelsJO Console (SP)"
+#define HOMEPATH_NAME_UNIX "MovieDuelsJO"
+#define HOMEPATH_NAME_WIN "MovieDuelsJO"
 #define HOMEPATH_NAME_MACOSX HOMEPATH_NAME_WIN
 #else
 #define PRODUCT_NAME   "MovieDuels-SP"
@@ -69,7 +69,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 constexpr auto CLIENT_WINDOW_TITLE = "MovieDuels-SP (SP)";
 constexpr auto CLIENT_CONSOLE_TITLE = "MovieDuels-SP Console (SP)";
 constexpr auto HOMEPATH_NAME_UNIX = "MovieDuels-SP";
-constexpr auto HOMEPATH_NAME_WIN = "MovieDuels";
+constexpr auto HOMEPATH_NAME_WIN = "MovieDuels-UD9";
 #endif
 
 constexpr auto BASEGAME = "base";
@@ -1058,6 +1058,7 @@ using saber_styles_t = enum saber_styles_e
 	SS_TAVION,
 	SS_DUAL,
 	SS_STAFF,
+	SS_BLASTER, // SS_BLASTER: saber right hand + bryar pistol left hand, appended so existing values do not shift
 	SS_NUM_SABER_STYLES
 };
 

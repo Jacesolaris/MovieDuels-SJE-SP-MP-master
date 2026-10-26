@@ -487,7 +487,7 @@ static void CG_DrawSaberStyle(const centity_t* cent, const float hud_ratio)
 	{
 		index = OHB_SABERSTYLE_TAVION;
 	}
-	else if (cg.saberAnimLevelPending == SS_DESANN)
+	else if (cg.saberAnimLevelPending == SS_DESANN || cg.saberAnimLevelPending == SS_BLASTER) // SS_BLASTER
 	{
 		index = OHB_SABERSTYLE_DESANN;
 	}
@@ -504,7 +504,8 @@ static void CG_DrawSaberStyle(const centity_t* cent, const float hud_ratio)
 		index = OHB_SABERSTYLE_STRONG;
 	}
 
-	cgi_R_SetColor(otherHUDBits[index].color);
+	// SS_BLASTER: the Desann icon tinted pink (placeholder)
+	cgi_R_SetColor(cg.saberAnimLevelPending == SS_BLASTER ? colorTable[CT_LTPINK] : otherHUDBits[index].color);
 
 	CG_DrawPic(
 		SCREEN_WIDTH - (SCREEN_WIDTH - otherHUDBits[index].xPos) * hud_ratio,
@@ -1663,6 +1664,25 @@ static void CG_DrawDF_Stamina_Sprint()
 	}
 }
 
+// air left under water as 0..1 while it is being used up, -1 otherwise (the game's air timer, P_WorldEffects)
+static float CG_AirLeftFrac()
+{
+	const gentity_t* pl = &g_entities[cg.snap->ps.clientNum];
+	if (!cg_drawAirBar.integer || !pl->client || cg.snap->ps.stats[STAT_HEALTH] <= 0)
+	{
+		return -1.0f;
+	}
+	const int airLeft = pl->client->airOutTime - level.time;
+	if (airLeft >= 11900)
+	{
+		return -1.0f;
+	}
+	return airLeft > 0 ? airLeft / 12000.0f : 0.0f;
+}
+
+// MD: the left HUD's middle bar shows the air under water with the jetpack fuel tics (blue) (DH 2026-10-25)
+static float cg_dfFuelOverride = -1.0f;
+
 static void CG_DrawDF_JetPackFuel()
 {
 	vec4_t calc_color;
@@ -1672,7 +1692,7 @@ static void CG_DrawDF_JetPackFuel()
 	// Look at the amount of health left and show only as much of the graphic as there is health.
 	// Use alpha to fade out partial section of health
 	constexpr float inc = static_cast<float>(PLAYER_FUEL_MAX) / MAX_DFHUDTICS;
-	float cur_value = cg.snap->ps.jetpackFuel;
+	float cur_value = cg_dfFuelOverride >= 0.0f ? cg_dfFuelOverride : cg.snap->ps.jetpackFuel;
 	memcpy(calc_color, colorTable[CT_WHITE], sizeof(vec4_t));
 	for (int i = MAX_DFHUDTICS - 1; i >= 0; i--)
 	{
@@ -2390,12 +2410,14 @@ static void CG_DrawDF_SaberStyle_Fatigue(const centity_t* cent)
 	case SS_MEDIUM: index = OHB_SABERSTYLE_MEDIUM_DF; break;
 	case SS_TAVION: index = OHB_SABERSTYLE_TAVION_DF; break;
 	case SS_DESANN: index = OHB_SABERSTYLE_DESANN_DF; break;
+	case SS_BLASTER: index = OHB_SABERSTYLE_DESANN_DF; break; // SS_BLASTER
 	case SS_STAFF:  index = OHB_SABERSTYLE_STAFF_DF;  break;
 	case SS_DUAL:   index = OHB_SABERSTYLE_DUAL_DF;   break;
 	default:        index = OHB_SABERSTYLE_STRONG_DF; break;
 	}
 
-	cgi_R_SetColor(otherHUDBits[index].color);
+	// SS_BLASTER: the Desann icon tinted pink (placeholder)
+	cgi_R_SetColor(cg.saberAnimLevelPending == SS_BLASTER ? colorTable[CT_LTPINK] : otherHUDBits[index].color);
 
 	// ------------------------------------------------------------
 	// Compute fatigue percentage
@@ -2456,6 +2478,25 @@ constexpr auto SPFUELBAR_H = 100.0f;
 constexpr auto SPFUELBAR_W = 5.0f;
 #define SPFUELBAR_X			(SCREEN_WIDTH-SPFUELBAR_W-4.0f)
 constexpr auto SPFUELBAR_Y = 240.0f;
+
+// breath bar (DH 2026-10-25, cg_drawAirBar): while the player uses up air under water, a blue bar above the
+// HUD shrinks towards its middle as the air runs out (12 seconds of air; empty = drowning)
+#define AIRBAR_W			296.0f
+#define AIRBAR_H			8.0f
+#define AIRBAR_X			((SCREEN_WIDTH - AIRBAR_W) * 0.5f)
+#define AIRBAR_Y			420.0f
+
+static void CG_DrawAirBar(float frac)
+{
+	vec4_t fill = { 0.15f, 0.4f, 1.0f, 0.9f };
+	vec4_t back = { 0.0f, 0.0f, 0.0f, 0.4f };
+
+	if (frac < 0.0f) frac = 0.0f;
+	if (frac > 1.0f) frac = 1.0f;
+	CG_FillRect(AIRBAR_X, AIRBAR_Y, AIRBAR_W, AIRBAR_H, back);
+	CG_FillRect(AIRBAR_X + AIRBAR_W * (1.0f - frac) * 0.5f, AIRBAR_Y, AIRBAR_W * frac, AIRBAR_H, fill);
+	CG_DrawRect(AIRBAR_X, AIRBAR_Y, AIRBAR_W, AIRBAR_H, 0.5f, colorTable[CT_BLACK]);
+}
 
 static void CG_DrawSprintFuel()
 {
@@ -2854,6 +2895,11 @@ static void CG_DrawJK2Ammo(const centity_t* cent, const int x, const int y)
 			break;
 		case 7: //FORCE_LEVEL_5://DUELS
 			CG_DrawPic(x, y, 80, 40, cgs.media.JK2HUDSaberStyleDuels);
+			break;
+		case SS_BLASTER: // SS_BLASTER: the Desann icon tinted pink (placeholder)
+			cgi_R_SetColor(colorTable[CT_LTPINK]);
+			CG_DrawPic(x, y, 80, 40, cgs.media.JK2HUDSaberStyleDesann);
+			cgi_R_SetColor(colorTable[CT_WHITE]);
 			break;
 		default:;
 		}
@@ -4358,7 +4404,7 @@ static void CG_DrawBatteryCharge()
 static void CG_DrawSimpleSaberStyle(const centity_t* cent)
 {
 	uint32_t calc_color = 0;
-	char num[7] = { 0 };
+	char num[16] = { 0 }; // room for "BLASTER 20" (SS_BLASTER)
 	int weap_x = 16;
 
 	if (!cent->currentState.weapon) // We don't have a weapon right now
@@ -4396,6 +4442,12 @@ static void CG_DrawSimpleSaberStyle(const centity_t* cent)
 	case SS_DESANN:
 		Com_sprintf(num, sizeof num, "DESANN");
 		calc_color = CT_HUD_RED;
+		break;
+	case SS_BLASTER: // SS_BLASTER: style name + pistol clip, pink placeholder colour
+		Com_sprintf(num, sizeof num, "BLASTER %d",
+			SABERBLASTER_CLIP_SIZE - Com_Clampi(0, SABERBLASTER_CLIP_SIZE, cg.snap->ps.ammo[SABERBLASTER_CLIP_SLOT]));
+		calc_color = CT_LTPINK;
+		weap_x = 60; // the longer text starts further left, or it runs off the screen
 		break;
 	case SS_TAVION:
 		Com_sprintf(num, sizeof num, "TAVION");
@@ -4792,7 +4844,13 @@ static void CG_DrawHUD(const centity_t* cent)
 			CG_DrawDF_Health();
 			CG_DrawDF_Armor();
 
-			if (cg.snap->ps.jetpackFuel < 100 && cg_SerenityJediEngineMode.integer)
+			if (CG_AirLeftFrac() >= 0.0f)
+			{	// under water: the air, in blue
+				cg_dfFuelOverride = CG_AirLeftFrac() * PLAYER_FUEL_MAX;
+				CG_DrawDF_JetPackFuel();
+				cg_dfFuelOverride = -1.0f;
+			}
+			else if (cg.snap->ps.jetpackFuel < 100 && cg_SerenityJediEngineMode.integer)
 			{
 				if (cent->gent->client->NPC_class == CLASS_MANDALORIAN
 					|| cent->gent->client->NPC_class == CLASS_JANGO
@@ -5494,6 +5552,11 @@ static void CG_DrawDataPadAmmo(const centity_t* cent, const int x, const int y)
 			break;
 		case SS_DESANN:
 			CG_DrawPic(x, y, 80, 40, cgs.media.HUDSaberStyleDesann);
+			break;
+		case SS_BLASTER: // SS_BLASTER: the Desann icon tinted pink (placeholder)
+			cgi_R_SetColor(colorTable[CT_LTPINK]);
+			CG_DrawPic(x, y, 80, 40, cgs.media.HUDSaberStyleDesann);
+			cgi_R_SetColor(colorTable[CT_WHITE]);
 			break;
 		case SS_TAVION:
 			CG_DrawPic(x, y, 80, 40, cgs.media.HUDSaberStyleTavion);
@@ -9915,7 +9978,7 @@ The HUD (health / armor / force / ammo / saber style frames and the weapon, forc
 out when the player is not in action and comes back fast when he is: an enemy close by and in sight (or after him),
 damage or a health / armor / ammo pickup, the saber being ignited or used (swings, blocks, parries, putting it away),
 holding block, a gun being fired, charged or aimed, a weapon change, the Force being used, sprint / jetpack / cloak
-fuel being used, or a select bar being opened. The crosshair and the radar are not part of it.
+fuel being used, or a select bar being opened. The crosshair is not part of it; the radar fades with it.
 The renderer does the fading (r_hudAlpha scales the alpha of everything drawn in 2D while it is below 1), so the
 menu-built parts of the HUD fade with the rest; it is set back to 1 straight after the HUD is drawn.
 =====================
@@ -9954,7 +10017,7 @@ static qboolean CG_DynamicHudEnemyNear()
 {
 	const int player_num = cg.snap->ps.clientNum;
 	const gentity_t* player = &g_entities[player_num];
-	const float range = cg_dynamicHudRange.value > 0.0f ? cg_dynamicHudRange.value : 1024.0f;
+	const float range = cg_dynamicHudRange.value > 0.0f ? cg_dynamicHudRange.value : 700.0f;
 
 	if (!player->client)
 	{
@@ -10020,6 +10083,7 @@ static qboolean CG_DynamicHudWake()
 			|| ps->jetpackFuel < dynamicHud.jetpackFuel
 			|| ps->cloakFuel < dynamicHud.cloakFuel
 			|| ps->BarrierFuel < dynamicHud.barrierFuel
+			|| CG_AirLeftFrac() >= 0.0f // using up air under water
 			|| saber_on && !dynamicHud.saberOn) // the saber ignited
 		{
 			wake = qtrue;
@@ -10153,6 +10217,9 @@ static void CG_DynamicHudEnd(const float alpha)
 		cgi_R_SetColor(nullptr);
 	}
 }
+
+// the HUD's fade this frame (set in CG_Draw2D), for the radar, which is drawn later but fades with the HUD
+static float cg_dynamicHudFrameAlpha = 1.0f;
 
 static void CG_Draw2D()
 {
@@ -10327,6 +10394,7 @@ static void CG_Draw2D()
 	{
 		// the HUD: faded out when the player is not in action (cg_dynamicHud, as SJE)
 		const float hud_alpha = CG_DynamicHudAlpha();
+		cg_dynamicHudFrameAlpha = hud_alpha;
 
 		if (hud_alpha > 0.0f)
 		{
@@ -10390,6 +10458,17 @@ static void CG_Draw2D()
 
 			CG_DynamicHudEnd(hud_alpha);
 		}
+		// breath bar: the game's air timer (P_WorldEffects) while it is being used up - outside the dynamic HUD,
+		// so it shows even when the HUD has faded out
+		if (cg_drawAirBar.integer && g_entities[cg.snap->ps.clientNum].client
+			&& !(cg_SerenityJediEngineHudMode.integer == 4 || cg_SerenityJediEngineHudMode.integer == 5))	// MD left HUD: in its middle bar
+		{
+			const int airLeft = g_entities[cg.snap->ps.clientNum].client->airOutTime - level.time;
+			if (airLeft < 11900)
+			{
+				CG_DrawAirBar(airLeft / 12000.0f);
+			}
+		}
 		CG_DrawAmmoWarning();
 
 		CG_DrawCrosshairNames();
@@ -10444,9 +10523,22 @@ static void CG_Draw2D()
 		CG_DrawCenterString();
 	}
 
+	// the radar fades with the dynamic HUD (still drawn when fully faded, so its missile lock warnings keep sounding)
+	const float radar_alpha = cg_dynamicHudFrameAlpha;
+	cg_dynamicHudFrameAlpha = 1.0f;
 	if (cg_drawRadar.integer)
 	{
+		if (radar_alpha < 1.0f)
+		{
+			cgi_Cvar_Set("r_hudAlpha", va("%.3f", radar_alpha > 0.0f ? radar_alpha : 0.0f));
+			cgi_R_SetColor(nullptr);
+		}
 		cg_draw_radar(y);
+		if (radar_alpha < 1.0f)
+		{
+			cgi_Cvar_Set("r_hudAlpha", "1");
+			cgi_R_SetColor(nullptr);
+		}
 	}
 
 	if (missionInfo_Updated)

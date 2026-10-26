@@ -2367,8 +2367,8 @@ void UI_LoadMenus(const char* menuFile, const qboolean reset)
 	Com_Printf("----------------------- MovieDuels-SJE-MP -----------------------\n");
 	Com_Printf("-----------------------------------------------------------------\n");
 	Com_Printf("-------------------------- Update 9.0 ---------------------------\n");
-	Com_Printf("--------------------- Build Date 22/10/2026 ---------------------\n");// build date
-	Com_Printf("--------------------------- Build 03 ----------------------------\n");
+	Com_Printf("--------------------- Build Date 25/10/2026 ---------------------\n");// build date
+	Com_Printf("--------------------------- Build 05 ----------------------------\n");
 	Com_Printf("-----------------------------------------------------------------\n");
 	Com_Printf("-------------------------- Lightsaber ---------------------------\n");
 	Com_Printf("---------- An elegant weapon for a more civilized age -----------\n");
@@ -2854,9 +2854,9 @@ static qboolean UI_HasSetSaberOnly(const char* info, const int gametype)
 		wDisable = atoi(Info_ValueForKey(info, "g_weaponDisable"));
 	}
 
-	while (i < WP_NUM_WEAPONS)
+	while (i < WP_NUM_OWNABLE_WEAPONS)
 	{
-		if (!(wDisable & 1 << i) &&
+		if (!(WP_MASK_HAS(wDisable, i)) &&
 			i != WP_SABER && i != WP_NONE)
 		{
 			return qfalse;
@@ -7056,7 +7056,7 @@ static void UI_SiegeSetCvarsForClass(siegeClass_t* scl)
 	char shader[MAX_QPATH];
 
 	//let's clear the things out first
-	while (i < WP_NUM_WEAPONS)
+	while (i < WP_NUM_OWNABLE_WEAPONS)
 	{
 		trap->Cvar_Set(va("ui_class_weapon%i", i), "gfx/2d/select");
 		i++;
@@ -7091,9 +7091,9 @@ static void UI_SiegeSetCvarsForClass(siegeClass_t* scl)
 	//set cvars for which weaps we have
 	i = 0;
 	trap->Cvar_Set(va("ui_class_weapondesc%i", count), " "); // Blank it out to start with
-	while (i < WP_NUM_WEAPONS)
+	while (i < WP_NUM_OWNABLE_WEAPONS)
 	{
-		if (scl->weapons & 1 << i)
+		if (WP_MASK_HAS(scl->weapons, i))
 		{
 			if (i == WP_SABER)
 			{
@@ -7314,6 +7314,8 @@ static void UI_ViewWeaponWheel(void)
 	}
 	trap->Cvar_VariableStringBuffer("ui_wheelweapons", buf, sizeof buf);
 	const unsigned int have = (unsigned int)strtoul(buf, NULL, 10);
+	trap->Cvar_VariableStringBuffer("ui_wheelweapons2", buf, sizeof buf);
+	const unsigned int have2 = (unsigned int)strtoul(buf, NULL, 10); // weapons 32-63
 	trap->Cvar_VariableStringBuffer("cg_holsterHide", buf, sizeof buf);
 	const unsigned int hide = (unsigned int)strtoul(buf, NULL, 16);
 
@@ -7324,8 +7326,9 @@ static void UI_ViewWeaponWheel(void)
 		{
 			continue;
 		}
-		const unsigned int bit = 1u << wheelIcons[i].weapon;
-		if (have & bit)
+		const int w = wheelIcons[i].weapon;
+		const unsigned int bit = w < 32 ? 1u << w : 0; // the hide mask only holds weapons 0-31
+		if (w < 32 ? (have & 1u << w) != 0 : (have2 & 1u << (w - 32)) != 0)
 		{
 			item->disabled = qfalse;
 			item->window.foreColor[0] = 1.0f;
@@ -7712,7 +7715,7 @@ static void UI_RunMenuScript(char** args)
 			// normal weapon command and close the wheel, in "On Person" mode toggle whether it is drawn on the body when
 			// carried (cg_holsterHide: a hex mask of weapon numbers, a userinfo cvar, so the others see it too)
 			int weapon = 0;
-			if (Int_Parse(args, &weapon) && weapon > WP_NONE && weapon < WP_NUM_WEAPONS)
+			if (Int_Parse(args, &weapon) && weapon > WP_NONE && weapon < WP_NUM_OWNABLE_WEAPONS)
 			{
 				if (trap->Cvar_VariableValue("ui_wheelmode") == 0 || weapon == WP_THERMAL || weapon == WP_TRIP_MINE
 					|| weapon == WP_DET_PACK)
@@ -7728,7 +7731,7 @@ static void UI_RunMenuScript(char** args)
 				{
 					char hide[32];
 					trap->Cvar_VariableStringBuffer("cg_holsterHide", hide, sizeof hide);
-					const unsigned int mask = (unsigned int)strtoul(hide, NULL, 16) ^ 1u << weapon;
+					const unsigned int mask = (unsigned int)strtoul(hide, NULL, 16) ^ (weapon < 32 ? 1u << weapon : 0u); // the hide mask holds weapons 0-31
 					trap->Cvar_Set("cg_holsterHide", mask ? va("%x", mask) : "");
 					UI_ViewWeaponWheel();
 				}
@@ -8310,11 +8313,11 @@ static void UI_RunMenuScript(char** args)
 			// It was set to something, so might as well make sure it got all flags set.
 			if (weaponDisable)
 			{
-				for (i = 0; i < WP_NUM_WEAPONS; i++)
+				for (i = 0; i < WP_NUM_OWNABLE_WEAPONS; i++)
 				{
 					if (i != WP_SABER)
 					{
-						weaponDisable |= (1 << i);
+						WP_MASK_ADD(weaponDisable, i);
 					}
 				}
 
@@ -10162,9 +10165,9 @@ static const char* UI_FeederItemText(float feederID, int index, int column,
 					//check weaps
 					const int wDisable = atoi(Info_ValueForKey(info, "wdisable"));
 
-					while (i < WP_NUM_WEAPONS)
+					while (i < WP_NUM_OWNABLE_WEAPONS)
 					{
-						if (!(wDisable & 1 << i) && i != WP_SABER && i != WP_NONE)
+						if (!(WP_MASK_HAS(wDisable, i)) && i != WP_SABER && i != WP_NONE)
 						{
 							saberOnly = qfalse;
 						}

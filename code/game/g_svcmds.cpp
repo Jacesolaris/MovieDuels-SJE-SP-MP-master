@@ -41,6 +41,7 @@ extern void WP_RemoveSaber(gentity_t* ent, int saberNum);
 extern saber_colors_t TranslateSaberColor(const char* name);
 extern qboolean WP_SaberBladeUseSecondBladeStyle(const saberInfo_t* saber, int bladeNum);
 extern qboolean WP_UseFirstValidSaberStyle(const gentity_t* ent, int* saberAnimLevel);
+extern qboolean WP_SaberStyleValidForSaber(const gentity_t* ent, int saberAnimLevel); // SS_BLASTER
 extern void G_RemoveWeather();
 extern void RemoveBarrier(gentity_t* ent);
 extern cvar_t* g_SerenityJediEngineMode;
@@ -418,7 +419,7 @@ SetForceCmd SetForceTable[NUM_FORCE_POWERS] = {
 	{ "forceLightning", "setForceLightning", FORCE_LEVEL_3 },
 	{ "saberThrow", "setSaberThrow", FORCE_LEVEL_3 },
 	{ "saberDefense", "setSaberDefense", FORCE_LEVEL_3 },
-	{ "saberOffense", "setSaberOffense", SS_NUM_SABER_STYLES - 1 },
+	{ "saberOffense", "setSaberOffense", SS_STAFF }, // SS_BLASTER: keep the old bound
 	{ "forceRage", "setForceRage", FORCE_LEVEL_3 },
 	{ "forceProtect", "setForceProtect", FORCE_LEVEL_3 },
 	{ "forceAbsorb", "setForceAbsorb", FORCE_LEVEL_3 },
@@ -690,19 +691,27 @@ static void Svcmd_SaberAttackCycle_f()
 	if (!self->s.number)
 	{
 		saberAnimLevel = cg.saberAnimLevelPending;
+		// SS_BLASTER: a pending style he can't take (left over from an earlier character / map, or one this
+		// saber can't use) would make the cycle stop on his current style: cycle from his current style
+		if (saberAnimLevel <= SS_NONE || saberAnimLevel >= SS_NUM_SABER_STYLES
+			|| !(allowedStyles & 1 << saberAnimLevel)
+			|| !WP_SaberStyleValidForSaber(self, saberAnimLevel))
+		{
+			saberAnimLevel = self->client->ps.saberAnimLevel;
+		}
 	}
 	else
 	{
 		saberAnimLevel = self->client->ps.saberAnimLevel;
 	}
-	saberAnimLevel++;
+	saberAnimLevel = BG_NextSaberStyleInCycle(saberAnimLevel); // SS_BLASTER: explicit cycle order
 	int sanityCheck = 0;
 	while (self->client->ps.saberAnimLevel != saberAnimLevel
 		&& !(allowedStyles & 1 << saberAnimLevel)
 		&& sanityCheck < SS_NUM_SABER_STYLES + 1)
 	{
-		saberAnimLevel++;
-		if (saberAnimLevel > SS_STAFF)
+		saberAnimLevel = BG_NextSaberStyleInCycle(saberAnimLevel); // SS_BLASTER
+		if (saberAnimLevel >= SS_NUM_SABER_STYLES) // SS_BLASTER: past the end of the cycle
 		{
 			saberAnimLevel = SS_FAST;
 		}
@@ -775,6 +784,9 @@ static void Svcmd_SaberAttackCycle_f()
 	case SS_DESANN:
 		gi.Printf(S_COLOR_CYAN "Lightsaber Combat Style: Desann\n");
 		//LIGHTSABERCOMBATSTYLE_DESANN
+		break;
+	case SS_BLASTER: // SS_BLASTER
+		gi.Printf(S_COLOR_MAGENTA "Lightsaber Combat Style: Blaster\n");
 		break;
 	case SS_TAVION:
 		gi.Printf(S_COLOR_MAGENTA "Lightsaber Combat Style: Tavion\n");

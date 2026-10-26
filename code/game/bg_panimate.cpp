@@ -829,6 +829,7 @@ int PM_PowerLevelForSaberAnim(const playerState_t* ps, const int saberNum)
 		{
 		case SS_STRONG:
 		case SS_DESANN:
+		case SS_BLASTER: // SS_BLASTER
 			return FORCE_LEVEL_3;
 		case SS_TAVION:
 		case SS_STAFF:
@@ -2992,7 +2993,7 @@ qboolean PM_SaberKataDone(const int curmove = LS_NONE, const int newmove = LS_NO
 		return qfalse;
 	}
 
-	if (pm->ps->saberAnimLevel == SS_DESANN || pm->ps->saberAnimLevel == SS_TAVION)
+	if (pm->ps->saberAnimLevel == SS_DESANN || pm->ps->saberAnimLevel == SS_BLASTER || pm->ps->saberAnimLevel == SS_TAVION)
 	{
 		//desann and tavion can link up as many attacks as they want
 		return qfalse;
@@ -3146,7 +3147,7 @@ static saberMoveName_t PM_PickBackStab()
 	{
 		return LS_A_BACKSTAB;
 	}
-	if (pm->gent->client->ps.saberAnimLevel == SS_DESANN || pm->gent->client->ps.saberAnimLevel == SS_STRONG)
+	if (pm->gent->client->ps.saberAnimLevel == SS_DESANN || pm->gent->client->ps.saberAnimLevel == SS_BLASTER || pm->gent->client->ps.saberAnimLevel == SS_STRONG)
 	{
 		if (pm->ps->saberMove == LS_READY || !Q_irand(0, 3))
 		{
@@ -3616,6 +3617,8 @@ saberMoveName_t PM_SaberLungeAttackMove(const qboolean fallback_to_normal_lunge)
 			return LS_A_JUMP_T__B_;
 		}
 		break;
+	case SS_BLASTER: // SS_BLASTER
+		return LS_SPINATTACK;
 	default: //normal lunge
 		if (fallback_to_normal_lunge)
 		{
@@ -3673,6 +3676,7 @@ qboolean PM_CheckLungeAttackMove()
 		|| pm->ps->saberAnimLevel == SS_DUAL //dual
 		|| pm->ps->saberAnimLevel == SS_STAFF //staff
 		|| pm->ps->saberAnimLevel == SS_DESANN
+		|| pm->ps->saberAnimLevel == SS_BLASTER // SS_BLASTER
 		|| pm->ps->saberAnimLevel == SS_TAVION
 		|| pm->ps->dualSabers)
 	{
@@ -3857,7 +3861,7 @@ qboolean PM_CheckLungeAttackMove()
 						&& !Q_irand(0, 3 - g_spskill->integer))
 					{
 						//only fencer and higher can do this
-						if (pm->ps->saberAnimLevel == SS_DESANN)
+						if (pm->ps->saberAnimLevel == SS_DESANN || pm->ps->saberAnimLevel == SS_BLASTER) // SS_BLASTER
 						{
 							if (!Q_irand(0, 4))
 							{
@@ -4323,7 +4327,7 @@ static qboolean PM_CheckJumpForwardAttackMove()
 		}
 		//check strong
 		else if (pm->ps->saberAnimLevel == SS_STRONG //strong style
-			|| pm->ps->saberAnimLevel == SS_DESANN) //desann
+			|| pm->ps->saberAnimLevel == SS_DESANN || pm->ps->saberAnimLevel == SS_BLASTER) //desann
 		{
 			if (!pm->ps->dualSabers)
 			{
@@ -6629,6 +6633,7 @@ void PM_SaberStartTransAnim(const int saberAnimLevel,
 					break;
 
 				case SS_FAST:
+				case SS_BLASTER: // SS_BLASTER
 					*animSpeed *= 1.1f;
 					break;
 				case SS_MEDIUM:
@@ -6719,6 +6724,37 @@ float pm_get_time_scale_mod(const gentity_t* gent)
 PM_SetAnimFinal
 -------------------------
 */
+// The walk/run playback speed follows the measured move speed (g_noFootSlide), which changes a little
+// on every pmove. Re-setting the anim for every tiny change restarted it from its current frame with the
+// start time rounded to whole milliseconds: at high frame rates (300+ fps, one player pmove every 2-3 ms)
+// the player's walk/run anims crawled, jittered or stuck. Only a change of more than 5% re-sets it now.
+static bool PM_AnimSpeedUnchanged(const float playing, const float wanted)
+{
+	if (playing == wanted)
+	{
+		return true;
+	}
+	return fabsf(playing - wanted) <= 0.05f * fabsf(wanted);
+}
+
+
+// Dying in water (DH 2026-10-25): BOTH_DEATH19, played 25% slower (PM_SetAnimFinal); the body floats from its frame
+// 20 (bg_pmove PM_WaterMove) and ragdolls from its frame 45 (G_RagDoll). Returns how many of its frames have played,
+// or -1 when the legs are not in it.
+float PM_WaterDeathFrame(const gentity_t* gent)
+{
+	if (!gent || !gent->client || gent->client->ps.legsAnim != BOTH_DEATH19 || !ValidAnimFileIndex(gent->client->clientInfo.animFileIndex))
+	{
+		return -1.0f;
+	}
+	const animation_t& a = level.knownAnimFileSets[gent->client->clientInfo.animFileIndex].animations[BOTH_DEATH19];
+	const float msPerFrame = fabsf(a.frameLerp) / 0.75f;
+	if (msPerFrame <= 0.0f)
+	{
+		return -1.0f;
+	}
+	return (a.numFrames - 1) - gent->client->ps.legsAnimTimer / msPerFrame;
+}
 void PM_SetAnimFinal(int* torso_anim, int* legs_anim,
 	const int set_anim_parts, int anim, const int set_anim_flags,
 	int* torso_anim_timer, int* legs_anim_timer,
@@ -6801,6 +6837,13 @@ void PM_SetAnimFinal(int* torso_anim, int* legs_anim,
 	//--------------------------------------------------------------------
 
 	PM_SaberStartTransAnim(gent->client->ps.saberAnimLevel, anim, &time_scale_mod, gent, gent->userInt3);
+
+	// dying in water: the death anim plays 25% slower, then the body ragdolls and floats (DH 2026-10-25)
+	extern qboolean BG_InDeathAnim(int anim);
+	if (gent->health <= 0 && gent->waterlevel >= 2 && BG_InDeathAnim(anim))
+	{
+		time_scale_mod *= 0.75f;
+	}
 
 	// SETUP VALUES FOR INCOMMING ANIMATION
 	//======================================
@@ -6989,8 +7032,8 @@ void PM_SetAnimFinal(int* torso_anim, int* legs_anim,
 	//----------------------------------------------------------
 	if (!anim_restart)
 	{
-		tors_play &= !(tors_on_anim_now && tors_speed == animSpeed && !tors_match_body_frame);
-		body_play &= !(body_on_anim_now && body_speed == animSpeed && !body_match_tors_frame);
+		tors_play &= !(tors_on_anim_now && PM_AnimSpeedUnchanged(tors_speed, animSpeed) && !tors_match_body_frame);
+		body_play &= !(body_on_anim_now && PM_AnimSpeedUnchanged(body_speed, animSpeed) && !body_match_tors_frame);
 	}
 
 #ifndef FINAL_BUILD
@@ -7216,6 +7259,7 @@ static bool TorsoAgainstWindTest(gentity_t* ent)
 {
 	if (ent && //valid ent
 		ent->client && //a client
+		!in_camera && //not in a cutscene: the script's anim (sitting, talking) stays
 		ent->client->ps.groundEntityNum != ENTITYNUM_NONE &&
 		(ent->s.number < MAX_CLIENTS || G_ControlledByPlayer(ent)) &&
 		gi.WE_GetWindGusting(ent->currentOrigin) &&

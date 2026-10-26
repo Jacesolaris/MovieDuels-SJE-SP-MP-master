@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // tr_models.c -- model loading and caching
 
 #include "tr_local.h"
+#include "q_profile.h"
 #include "tr_cache.h"
 #include <qcommon/sstring.h>
 #include <qcommon/matcomp.h>
@@ -329,6 +330,7 @@ asked for again.
 */
 qhandle_t RE_RegisterModel(const char* name)
 {
+	PROFILE_ZONE("Load: model register");
 	model_t* mod = nullptr;
 	qhandle_t	hModel = 0;
 	qboolean	orgNameFailed = qfalse;
@@ -1195,6 +1197,7 @@ R_LoadMD3
 */
 static qboolean R_LoadMD3(model_t* mod, int lod, void* buffer, const char* modName)
 {
+	PROFILE_ZONE("Load: model .md3");
 	int             i = 0, j = 0;
 
 	md3Header_t* md3Model = nullptr;
@@ -2066,6 +2069,7 @@ static qboolean R_LoadMDR(model_t* mod, void* buffer, int filesize, const char* 
 ** RE_BeginRegistration
 */
 void RE_BeginRegistration(glconfig_t* glconfigOut) {
+	PROFILE_ZONE("Load: renderer begin registration");
 	R_Init();
 
 	*glconfigOut = glConfig;
@@ -2088,20 +2092,13 @@ void RE_BeginRegistration(glconfig_t* glconfigOut) {
 
 //=============================================================================
 
+// SV_SpawnServer, after CL_MapLoading shut the renderer down. SP used to set up only images, shaders and models here,
+// so everything the game's entities loaded (images, normal maps, models) was thrown away by the R_Init that
+// CL_InitRenderer does a moment later, and loaded again by the cgame - about half of a rend2 SP map load.
+// The full R_Init here (as SJE, and as MP always did) keeps it: CL_InitRenderer's R_Init then returns at once.
 void R_SVModelInit()
 {
-#ifdef REND2_SP
-	tr.numShaders = 0;
-	tr.numImages = 0;
-
-	R_InitImagesPool();
-	R_InitImages();
-	R_InitShaders(qfalse);
-
-	R_ModelInit();
-#else // !REND2_SP
 	R_Init();
-#endif // REND2_SP
 }
 
 /*

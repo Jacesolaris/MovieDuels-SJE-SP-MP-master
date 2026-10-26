@@ -46,6 +46,12 @@ void FX_BlasterAltFireThink(centity_t* cent, const struct weaponInfo_s* weapon);
 void FX_BlasterWeaponHitWall(vec3_t origin, vec3_t normal);
 void FX_BlasterWeaponHitPlayer(vec3_t origin, vec3_t normal, qboolean humanoid);
 void FX_DroidekaProjectileThink(centity_t* cent, const struct weaponInfo_s* weapon);
+void FX_NoghriShotProjectileThink(centity_t* cent, const struct weaponInfo_s* weapon); // the noghri stick's darts (from SJE SP)
+void FX_NoghriShotWeaponHitWall(vec3_t origin, vec3_t normal);
+void FX_NoghriShotWeaponHitPlayer(vec3_t origin, vec3_t normal);
+void FX_TuskenShotProjectileThink(centity_t* cent, const struct weaponInfo_s* weapon); // the tusken rifle's shot (from SJE SP)
+void FX_TuskenShotWeaponHitWall(vec3_t origin, vec3_t normal);
+void FX_TuskenShotWeaponHitPlayer(vec3_t origin, vec3_t normal);
 
 void FX_EwebProjectileThink(centity_t* cent, const struct weaponInfo_s* weapon);
 void FX_EwebAltFireThink(centity_t* cent, const struct weaponInfo_s* weapon);

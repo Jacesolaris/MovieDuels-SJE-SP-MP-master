@@ -361,12 +361,15 @@ using persEnum_t = enum
 	PERS_TEAM,
 	PERS_SPAWN_COUNT,
 	// incremented every respawn
-	//	PERS_REWARD_COUNT,				// incremented for each reward sound
+	PERS_PLAYEREVENTS,
+	// incremented for each reward sound
 	PERS_ATTACKER,
 	// clientNum of last damage inflicter
 	PERS_KILLED,
 	// count of the number of times you died
-
+	// these were added for single player awards tracking
+	PERS_GAUNTLET_FRAG_COUNT,
+	PERS_EXCELLENT_COUNT,
 	PERS_ACCURACY_SHOTS,
 	// scoreboard - number of player shots
 	PERS_ACCURACY_HITS,
@@ -374,7 +377,8 @@ using persEnum_t = enum
 	PERS_ENEMIES_KILLED,
 	// scoreboard - number of enemies player killed
 	PERS_TEAMMATES_KILLED, // scoreboard - number of teammates killed
-	PERS_CREDITS // player currency for betting
+	PERS_CREDITS, // player currency for betting
+	PERS_IMPRESSIVE_COUNT // award streaks: saber-3 kills (added at the end so nothing else moves, 2026-10-25)
 };
 
 // entityState_t->eFlags
@@ -476,6 +480,10 @@ using powerup_t = enum
 // entityState_t->event values
 // entity events are for effects that take place relative
 // to an existing entities origin.  Very network efficient.
+constexpr auto PLAYEREVENT_DENIEDREWARD = 0x0001;
+constexpr auto PLAYEREVENT_GAUNTLETREWARD = 0x0002;
+//OJKFIXME: add holy shit :D
+constexpr auto PLAYEREVENT_HOLYSHIT = 0x0004;
 
 // two bits at the top of the entityState->event field
 // will be incremented with each change in the event so
@@ -1058,5 +1066,16 @@ constexpr auto HYPERSPACE_TURN_RATE = 45.0f;
 qboolean PM_InLedgeMove(int anim);
 qboolean In_LedgeIdle(int anim);
 extern cvar_t* g_sentryexplode;
+
+// SS_BLASTER (ported from SJE): saber in the right hand, a bryar pistol (visual only, no inventory weapon) in the left
+constexpr auto SABERBLASTER_CLIP_SIZE = 20; // bryar shots per clip
+constexpr auto SABERBLASTER_RELOAD_TIME = 1000; // ms, Walk + Dash + attack
+// shots used from the clip (0 = full clip); MD's MAX_AMMO == AMMO_MAX, so the AMMO_NONE slot (unused by weapons)
+constexpr auto SABERBLASTER_CLIP_SLOT = AMMO_NONE;
+int BG_NextSaberStyleInCycle(int style);
+extern cvar_t* g_saberBlasterAimArc;
+extern cvar_t* g_saberBlasterAIFire;
+extern cvar_t* g_saberBlasterAimRange;
+extern cvar_t* g_saberBlasterLockCharge;
 
 #endif//#ifndef __BG_PUBLIC_H__

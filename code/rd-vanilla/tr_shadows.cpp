@@ -21,6 +21,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 ===========================================================================
 */
 #include "../server/exe_headers.h"
+#include "q_profile.h"
 
 #include "tr_local.h"
 
@@ -209,7 +210,7 @@ void RB_ShadowTessEnd()
 	dlight_t* dl;
 
 	R_TransformDlights(backEnd.refdef.num_dlights, backEnd.refdef.dlights, &backEnd.ori);
-	dl = &tr.refdef.dlights[0];
+	dl = &RB_SMP(refdef, tr.refdef).dlights[0];
 
 	RB_DoShadowTessEnd(dl->transformed);
 
@@ -433,6 +434,7 @@ overlap and double darken.
 =================
 */
 void RB_ShadowFinish() {
+	PROFILE_ZONE("Stencil shadows: darken");
 	if (r_shadows->integer != 2) {
 		return;
 	}
@@ -590,6 +592,7 @@ qboolean tr_distortionPrePost = qfalse; //capture before postrender phase?
 qboolean tr_distortionNegate = qfalse; //negative blend mode
 void RB_DistortionFill()
 {
+	PROFILE_ZONE("Distortion fill");
 	float alpha = tr_distortionAlpha;
 	float spost = 0.0f;
 	float spost2 = 0.0f;
@@ -628,14 +631,14 @@ void RB_DistortionFill()
 	}
 	else
 	{ //do slow stretchy effect
-		spost = sin(tr.refdef.time * 0.0005f);
+		spost = sin(RB_SMP(refdef, tr.refdef).time * 0.0005f);
 		if (spost < 0.0f)
 		{
 			spost = -spost;
 		}
 		spost *= 0.2f;
 
-		spost2 = sin(tr.refdef.time * 0.0005f);
+		spost2 = sin(RB_SMP(refdef, tr.refdef).time * 0.0005f);
 		if (spost2 < 0.0f)
 		{
 			spost2 = -spost2;
@@ -680,14 +683,14 @@ void RB_DistortionFill()
 			GL_State(GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_SRC_ALPHA);
 		}
 
-		spost = sin(tr.refdef.time * 0.0008f);
+		spost = sin(RB_SMP(refdef, tr.refdef).time * 0.0008f);
 		if (spost < 0.0f)
 		{
 			spost = -spost;
 		}
 		spost *= 0.08f;
 
-		spost2 = sin(tr.refdef.time * 0.0008f);
+		spost2 = sin(RB_SMP(refdef, tr.refdef).time * 0.0008f);
 		if (spost2 < 0.0f)
 		{
 			spost2 = -spost2;

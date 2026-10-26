@@ -54,6 +54,7 @@ option(BuildSPRend2 "Whether to create projects for the SP rend2 renderer (Movie
 option(BuildSPEngine "Whether to create projects for the SP engine (MovieDuels-SP.exe)" ON)
 option(BuildSPGame "Whether to create projects for the SP gamecode (MovieDuels-gamex86.dll)" ON)
 option(BuildSPRdVanilla "Whether to create projects for the SP default renderer (MovieDuels-rdsp_x86.dll)" ON)
+option(UseTracy "Build with the Tracy profiler (TracyClient.dll, lib/tracy). For profiling only, keep OFF for release builds" OFF)
 
 Include(CMakeDependentOption)
 CMAKE_DEPENDENT_OPTION(BuildSymbolServer "Build WIP Windows Symbol Server (experimental and unused)" OFF "NOT WIN32 OR NOT MSVC" OFF)
@@ -407,6 +408,11 @@ if(MSVC)
 	endforeach()
 endif()
 
+# Tracy profiler (lib/tracy): one TracyClient.dll that every project links to (see the end of this file).
+if(UseTracy)
+	add_subdirectory(lib/tracy)
+endif()
+
 # Add projects
 # SP and MP both build from the one shared\ folder. The few shared files that must differ between SP and MP
 # (keypad keys, window icon, MP-only maths helpers, MP net functions) check MD_SP_BUILD / MD_MP_BUILD.
@@ -427,3 +433,27 @@ if(BuildTests)
 	enable_testing()
 	add_subdirectory("tests")
 endif()
+
+# Threading helpers (shared/threads: q_jobs.h job system, q_profile.h profiler markers) and, with
+# UseTracy, the Tracy profiler, for every project. The projects set their include directories and
+# defines with set_target_properties, which replaces directory-level settings, so these are appended
+# to each target here, after all of them exist. Copy TracyClient.dll next to the exe when UseTracy is on.
+function(AddThreadingToTargets dir)
+	get_property(targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+	foreach(tgt IN LISTS targets)
+		get_target_property(tgtType ${tgt} TYPE)
+		if(tgtType MATCHES "^(EXECUTABLE|SHARED_LIBRARY|MODULE_LIBRARY|STATIC_LIBRARY)$" AND NOT tgt STREQUAL "TracyClient" AND NOT tgt MATCHES "^bundled_")
+			target_include_directories(${tgt} PRIVATE "${SharedDir}/threads")
+			if(UseTracy)
+				target_include_directories(${tgt} PRIVATE "${CMAKE_SOURCE_DIR}/lib/tracy/public")
+				target_compile_definitions(${tgt} PRIVATE TRACY_ENABLE TRACY_ON_DEMAND TRACY_IMPORTS)
+				target_link_libraries(${tgt} TracyClient)
+			endif()
+		endif()
+	endforeach()
+	get_property(subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+	foreach(sub IN LISTS subdirs)
+		AddThreadingToTargets("${sub}")
+	endforeach()
+endfunction()
+AddThreadingToTargets("${CMAKE_SOURCE_DIR}")

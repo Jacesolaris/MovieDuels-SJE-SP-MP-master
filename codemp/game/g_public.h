@@ -1122,6 +1122,9 @@ typedef struct gameImport_s {
 	void		(*G2API_CleanEntAttachments)			();
 	qboolean(*G2API_OverrideServer)					(void* serverInstance);
 	void		(*G2API_GetSurfaceName)					(void* ghoul2, int surfNumber, int modelIndex, char* fillBuf);
+	// BOTH_WIND (bg_pmove.c PM_TorsoAgainstWind): qtrue when a strong gust blows at pos and pos is outside,
+	// dir = where it blows to. qfalse on a dedicated server (no wind there). Kept last: the engine fills it in.
+	qboolean(*WE_GetWindGust)(vec3_t pos, vec3_t dir);
 } gameImport_t;
 
 typedef struct gameExport_s {

@@ -139,6 +139,8 @@ void RE_StretchRaw(const int x, const int y, const int w, const int h, int cols,
 
 void RE_UploadCinematic(const int cols, const int rows, const byte* data, const int client, const qboolean dirty)
 {
+	R_SyncRenderThread();	// r_smp: GL here on the main thread
+
 	GL_Bind(tr.scratchImage[client]);
 
 	// if the scratchImage isn't in the format we want, specify it as a new texture
@@ -169,6 +171,7 @@ void RE_GetScreenShot(byte* buffer, const int w, const int h)
 
 	int g = 0, b = 0;
 
+	R_SyncRenderThread();	// r_smp: GL here on the main thread
 	byte* source = RB_ReadPixels(0, 0, glConfig.vidWidth, glConfig.vidHeight, &offset, &padlen);
 	const size_t memcount = (glConfig.vidWidth * 3 + padlen) * glConfig.vidHeight;
 
@@ -440,6 +443,7 @@ static void RE_Blit(const float fX0, const float fY0, const float fX1, const flo
 
 static void RE_KillDissolve(void)
 {
+	R_SyncRenderThread();	// r_smp: may delete a texture
 	Dissolve.iStartTime = 0;
 
 	if (Dissolve.pImage)
@@ -457,6 +461,7 @@ qboolean RE_ProcessDissolve(void)
 {
 	if (Dissolve.iStartTime)
 	{
+		R_SyncRenderThread();	// r_smp: draws here on the main thread
 		if (Dissolve.bTouchNeeded)
 		{
 			// Stuff to avoid music stutter...

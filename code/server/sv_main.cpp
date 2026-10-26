@@ -22,6 +22,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "../server/exe_headers.h"
+#include "q_profile.h"
 
 #include "server.h"
 /*
@@ -501,6 +502,7 @@ extern void SE_CheckForLanguageUpdates();
 
 void SV_Frame(int msec, const float fraction_msec)
 {
+	PROFILE_ZONE("Server frame (game)");
 	int start_time = 0;
 
 	// the menu kills the server with this cvar

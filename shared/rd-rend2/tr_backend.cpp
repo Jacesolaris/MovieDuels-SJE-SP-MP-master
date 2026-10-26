@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 #include "tr_local.h"
+#include "q_profile.h"
 #include "tr_allocator.h"
 #include "glext.h"
 #include <algorithm>
@@ -619,6 +620,7 @@ to actually render the visible surfaces for this view
 =================
 */
 static void RB_BeginDrawingView(void) {
+	PROFILE_ZONE("View setup + clear");
 	int clearBits = 0;
 
 	// we will need to change the projection matrix before drawing
@@ -1252,11 +1254,26 @@ void RB_AddDrawItem(Pass* pass, uint32_t sortKey, const DrawItem& drawItem)
 	{
 		if (pass->numDrawItems >= pass->maxDrawItems)
 		{
-			// Replaces assert(!"Ran out of space for pass");
+			// The pass is sized from the number of draw surfaces (x 4 stages), but one surface can add more items
+			// than that: the weather surface adds one per weather type per 3x3 chunk (up to 45). In views with few
+			// surfaces (t3_byss with weather) the rest were dropped - weather chunks missing (and the debug spam
+			// "Ran out of space for pass"). Grow the pass instead: new arrays twice the size from the same per-frame
+			// memory (freed with the pass after it is drawn).
+			const int newMax = pass->maxDrawItems * 2 + 64;
+			DrawItem* newItems = ojkAllocArray<DrawItem>(*backEndData->perFrameMemory, newMax);
+			uint32_t* newKeys = newItems ? ojkAllocArray<uint32_t>(*backEndData->perFrameMemory, newMax) : nullptr;
+			if (!newItems || !newKeys)
+			{
 #ifdef _DEBUG
-			Com_Printf(S_COLOR_RED"RB_AddDrawItem: Ran out of space for pass (max=%d)\n" S_COLOR_WHITE, pass->maxDrawItems);
+				Com_Printf(S_COLOR_RED"RB_AddDrawItem: Ran out of space for pass (max=%d)\n" S_COLOR_WHITE, pass->maxDrawItems);
 #endif
-			return;
+				return;
+			}
+			memcpy(newItems, pass->drawItems, sizeof(DrawItem) * pass->numDrawItems);
+			memcpy(newKeys, pass->sortKeys, sizeof(uint32_t) * pass->numDrawItems);
+			pass->drawItems = newItems;
+			pass->sortKeys = newKeys;
+			pass->maxDrawItems = newMax;
 		}
 
 		pass->sortKeys[pass->numDrawItems] = sortKey;
@@ -1556,7 +1573,7 @@ static void RB_RenderDrawSurfList(drawSurf_t* drawSurfs, int numDrawSurfs)
 	void* allocMark = backEndData->perFrameMemory->Mark();
 	assert(backEndData->currentPass == nullptr);
 	backEndData->currentPass = RB_CreatePass(
-		*backEndData->perFrameMemory, numDrawSurfs * estimatedNumShaderStages);
+		*backEndData->perFrameMemory, numDrawSurfs * estimatedNumShaderStages + 64);	// + room for the weather surface's items
 
 	// save original time for entity shader offsets
 	float originalTime = backEnd.refdef.floatTime;
@@ -1826,6 +1843,13 @@ static const void* RB_SetColor(const void* data) {
 	backEnd.color2D[1] = cmd->color[1];
 	backEnd.color2D[2] = cmd->color[2];
 	backEnd.color2D[3] = cmd->color[3];
+	// the dynamic HUD fade is applied when a 2D batch is drawn (RB_HudFadeStage), so quads with a different fade
+	// must not share a batch (it only changes when cgame starts and ends the HUD, so this flushes twice a frame at most)
+	if (cmd->hudFade != backEnd.hudFade2D && tess.numIndexes)
+	{
+		RB_EndSurface();
+	}
+	backEnd.hudFade2D = cmd->hudFade;
 
 	return (const void*)(cmd + 1);
 }
@@ -2502,7 +2526,7 @@ static void RB_UpdateLightsConstants(gpuFrame_t* frame, const trRefdef_t* refdef
 			dlight->origin[0],
 			dlight->origin[1],
 			dlight->origin[2],
-			1.0f);
+			dlight->noShadow ? 0.0f : 1.0f);	// w: has a shadow map this frame (r_dlightShadowMax)
 		VectorCopy(dlight->color, lightData->color);
 		lightData->radius = dlight->radius;
 	}
@@ -3102,6 +3126,7 @@ RB_SwapBuffers
 =============
 */
 static const void* RB_SwapBuffers(const void* data) {
+	PROFILE_ZONE("Swap buffers command");
 	const swapBuffersCommand_t* cmd = nullptr;
 
 	// finish any 2D drawing if needed
@@ -3189,6 +3214,7 @@ RB_PostProcess
 */
 static const void* RB_PostProcess(const void* data)
 {
+	PROFILE_ZONE("Post process");
 	const postProcessCommand_t* cmd = (const postProcessCommand_t*)data;
 	FBO_t* srcFbo = nullptr;
 	vec4i_t srcBox{}, dstBox{};
@@ -3331,7 +3357,7 @@ static const void* RB_PostProcess(const void* data)
 		}
 	}
 
-	float exposure = r_cameraExposure->value + tr.overbrightBits;
+	float exposure = r_cameraExposure->value + tr.overbright;
 
 	if (srcFbo)
 	{
@@ -3531,15 +3557,28 @@ static const void* RB_DrawSurfs(const void* data) {
 	backEnd.refdef = cmd->refdef;
 	backEnd.viewParms = cmd->viewParms;
 
+	PROFILE_ZONE_IF("Draw surfs: shadow map view", (backEnd.viewParms.flags & VPF_DEPTHSHADOW) != 0);
+	PROFILE_ZONE_IF("Draw surfs: view", (backEnd.viewParms.flags & VPF_DEPTHSHADOW) == 0);
+
+	// simulate cloth on the job workers before anything is drawn (r_threads)
+	RB_G2PrepareDrawSurfs(cmd->drawSurfs, cmd->numDrawSurfs);
+
 	// clear the z buffer, set the modelview, etc
 	RB_BeginDrawingView();
 
 	if (cmd->numDrawSurfs > 0)
 	{
-		RB_RenderAllDepthRelatedPasses(cmd->drawSurfs, cmd->numDrawSurfs);
-
-		RB_RenderMainPass(cmd->drawSurfs, cmd->numDrawSurfs);
+		{
+			PROFILE_ZONE("Depth passes (prepass, shadows, SSAO)");
+			RB_RenderAllDepthRelatedPasses(cmd->drawSurfs, cmd->numDrawSurfs);
+		}
+		{
+			PROFILE_ZONE("Draw surfs: main pass");
+			RB_RenderMainPass(cmd->drawSurfs, cmd->numDrawSurfs);
+		}
 	}
+
+	RB_G2FinishDrawSurfs();
 
 	return (const void*)(cmd + 1);
 }
@@ -3550,6 +3589,7 @@ RB_ExecuteRenderCommands
 ====================
 */
 void RB_ExecuteRenderCommands(const void* data) {
+	PROFILE_ZONE("R back end");
 	int		t1 = 0, t2 = 0;
 
 #ifdef REND2_SP

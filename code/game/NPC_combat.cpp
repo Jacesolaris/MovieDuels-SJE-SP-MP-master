@@ -2281,10 +2281,13 @@ FIXME: this should go through the snapshot and find the closest enemy
 */
 gentity_t* NPC_PickEnemy(const gentity_t* closest_to,
 	const int enemy_team,
-	const qboolean check_vis,
+	const qboolean check_vis_in,
 	const qboolean find_players_first,
 	const qboolean find_closest)
 {
+	// only Force Sight 3 NPCs may pick an enemy they can't see (DH 2026-10-24)
+	const qboolean check_vis = (check_vis_in || !NPC_SeesThroughWalls(NPC)) ? qtrue : qfalse;
+
 	if (!NPC || !NPCInfo || !closest_to)
 	{
 		return nullptr;

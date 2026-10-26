@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 #include "tr_local.h"
+#include "q_profile.h"
 #ifdef REND2_SP
 #include <cassert>
 #endif // REND2_SP
@@ -306,7 +307,7 @@ static qboolean ParseVector(const char** text, const int count, float* v) {
 ParseAlphaTestFunc
 ===============
 */
-static void ParseAlphaTestFunc(shaderStage_t* stage, const char* funcname)
+static void ParseAlphaTestFunc(shaderStage_t * stage, const char* funcname)
 {
 	stage->alphaTestType = ALPHA_TEST_NONE;
 
@@ -503,7 +504,7 @@ static genFunc_t NameToGenFunc(const char* funcname)
 ParseWaveForm
 ===================
 */
-static void ParseWaveForm(const char** text, waveForm_t* wave)
+static void ParseWaveForm(const char** text, waveForm_t * wave)
 {
 	char* token = nullptr;
 
@@ -574,7 +575,7 @@ static void ParseWaveForm(const char** text, waveForm_t* wave)
 ParseTexMod
 ===================
 */
-static void ParseTexMod(const char* _text, shaderStage_t* stage)
+static void ParseTexMod(const char* _text, shaderStage_t * stage)
 {
 	const char* token = nullptr;
 	const char** text = &_text;
@@ -899,7 +900,7 @@ static const char* animMapNames[] = {
 	"oneshotanimMap"
 };
 
-static bool ParseSurfaceSprites(const char* buffer, shaderStage_t* stage)
+static bool ParseSurfaceSprites(const char* buffer, shaderStage_t * stage)
 {
 	const char* token = nullptr;
 	const char** text = &buffer;
@@ -1147,7 +1148,7 @@ static bool ParseSurfaceSprites(const char* buffer, shaderStage_t* stage)
 static bool ParseSurfaceSpritesOptional(
 	const char* param,
 	const char* buffer,
-	shaderStage_t* stage
+	shaderStage_t * stage
 )
 {
 	const char* token = nullptr;
@@ -1571,7 +1572,7 @@ static bool ParseSurfaceSpritesOptional(
 ParseStage
 ===================
 */
-static qboolean ParseStage(shaderStage_t* stage, const char** text)
+static qboolean ParseStage(shaderStage_t * stage, const char** text)
 {
 	char* token = nullptr;
 	unsigned depthMaskBits = GLS_DEPTHMASK_TRUE;
@@ -2556,6 +2557,27 @@ static qboolean ParseStage(shaderStage_t* stage, const char** text)
 		{
 			stage->cloth = qtrue;
 
+			continue;
+		}
+		//
+		// skin <r> <g> <b> <wrap>: cheap subsurface look for skin. Light wraps past the shadow
+		// edge, scaled per colour channel (red most), and diffuse uses a softened normal (lightall).
+		else if (Q_stricmp(token, "skin") == 0)
+		{
+			for (int k = 0; k < 4; k++)
+			{
+				token = COM_ParseExt(text, qfalse);
+				if (!token[0])
+				{
+#ifdef REND2_SP
+					ri.Printf(PRINT_WARNING, "WARNING: 'skin' needs r g b wrap in shader '%s'\n", shader.name);
+#else
+					ri->Printf(PRINT_WARNING, "WARNING: 'skin' needs r g b wrap in shader '%s'\n", shader.name);
+#endif
+					break;
+				}
+				stage->skinParams[k] = atof(token);
+			}
 			continue;
 		}
 		// surfaceSprites <type> ...
@@ -3728,7 +3750,7 @@ static void ComputeVertexAttribs(void)
 	}
 }
 
-static void CollapseStagesToLightall(shaderStage_t* stage, shaderStage_t* lightmap,
+static void CollapseStagesToLightall(shaderStage_t * stage, shaderStage_t * lightmap,
 	qboolean useLightVector, qboolean useLightVertex, qboolean tcgen)
 {
 	int defs = 0;
@@ -4524,7 +4546,7 @@ static shader_t* GeneratePermanentShader(void) {
 	newShader = (shader_t*)ri->Hunk_Alloc(sizeof(shader_t), h_low);
 #endif // REND2_SP
 
-	*newShader = shader;
+	* newShader = shader;
 
 	if (shader.sort <= SS_SEE_THROUGH) {
 		newShader->fogPass = FP_EQUAL;
@@ -4594,7 +4616,7 @@ static shader_t* GeneratePermanentShader(void) {
 #else // !REND2_SP
 		newShader->stages[i] = (shaderStage_t*)ri->Hunk_Alloc(sizeof(stages[i]), h_low);
 #endif // REND2_SP
-		*newShader->stages[i] = stages[i];
+		* newShader->stages[i] = stages[i];
 
 		for (b = 0; b < NUM_TEXTURE_BUNDLES; b++) {
 			size = newShader->stages[i]->bundle[b].numTexMods * sizeof(texModInfo_t);
@@ -4709,7 +4731,7 @@ static void VertexLightingCollapse(void) {
 	}
 }
 
-static int FindFirstLightmapStage(const shaderStage_t* stages, int numStages)
+static int FindFirstLightmapStage(const shaderStage_t * stages, int numStages)
 {
 	for (int i = 0; i < numStages; i++)
 	{
@@ -4723,7 +4745,7 @@ static int FindFirstLightmapStage(const shaderStage_t* stages, int numStages)
 	return numStages;
 }
 
-static int GetNumStylesInShader(const shader_t* shader)
+static int GetNumStylesInShader(const shader_t * shader)
 {
 	for (int i = 0; i < MAXLIGHTMAPS; i++)
 	{
@@ -5169,9 +5191,9 @@ shader_t* R_FindShaderByName(const char* name) {
 }
 
 #ifdef REND2_SP
-static qboolean IsShader(const shader_t* sh, const char* name, const int* lightmapIndex, const byte* styles)
+static qboolean IsShader(const shader_t * sh, const char* name, const int* lightmapIndex, const byte * styles)
 #else // !REND2_SP
-static qboolean IsShader(const shader_t* sh, const char* name, const int* lightmapIndexes, const byte* styles)
+static qboolean IsShader(const shader_t * sh, const char* name, const int* lightmapIndexes, const byte * styles)
 #endif // REND2_SP
 {
 	if (Q_stricmp(sh->name, name) != 0)
@@ -5270,21 +5292,25 @@ most world construction surfaces.
 ===============
 */
 #ifdef REND2_SP
-shader_t* R_FindShader(const char* name, const int* lightmapIndex, const byte* styles, const qboolean mip_raw_image)
+shader_t* R_FindShader(const char* name, const int* lightmapIndex, const byte * styles, const qboolean mip_raw_image)
 #else // !REND2_SP
-shader_t* R_FindShader(const char* name, const int* lightmapIndexes, const byte* styles, const qboolean mipRawImage)
+shader_t* R_FindShader(const char* name, const int* lightmapIndexes, const byte * styles, const qboolean mipRawImage)
 #endif // REND2_SP
 {
+	PROFILE_ZONE("Load: shader find/parse");
+
+	if (!name || !name[0])
+	{
+		return tr.defaultShader;
+	}
+
+	PROFILE_TEXT(name);
+
 	char		strippedName[MAX_QPATH];
 	int			hash = 0, flags = 0;
 	const char* shaderText = nullptr;
 	image_t* image = nullptr;
 	shader_t* sh = nullptr;
-
-	if (name[0] == 0)
-	{
-		return tr.defaultShader;
-	}
 
 	// use (fullbright) vertex lighting if the bsp file doesn't have
 	// lightmaps
@@ -5348,6 +5374,7 @@ shader_t* R_FindShader(const char* name, const int* lightmapIndexes, const byte*
 	Com_Memcpy(shader.lightmapIndex, lightmapIndexes, sizeof(shader.lightmapIndex));
 #endif // REND2_SP
 	Com_Memcpy(shader.styles, styles, sizeof(shader.styles));
+
 #ifdef REND2_SP
 	switch (lightmapIndex[0]) {
 #else // !REND2_SP
@@ -5372,7 +5399,9 @@ shader_t* R_FindShader(const char* name, const int* lightmapIndexes, const byte*
 #ifdef REND2_SP
 	COM_BeginParseSession();
 #endif // REND2_SP
+
 	shaderText = FindShaderInShaderText(strippedName);
+
 	if (shaderText) {
 		// enable this when building a pak file to get a global list
 		// of all explicit shaders
@@ -5388,12 +5417,16 @@ shader_t* R_FindShader(const char* name, const int* lightmapIndexes, const byte*
 			// had errors, so use default shader
 			shader.defaultShader = qtrue;
 		}
+
 		sh = FinishShader();
+
 #ifdef REND2_SP
 		COM_EndParseSession();
 #endif // REND2_SP
+
 		return sh;
 	}
+
 #ifdef REND2_SP
 	COM_EndParseSession();
 #endif // REND2_SP
@@ -5425,6 +5458,7 @@ shader_t* R_FindShader(const char* name, const int* lightmapIndexes, const byte*
 	}
 
 	image = R_FindImageFile(strippedName, IMGTYPE_COLORALPHA, flags);
+
 	if (!image) {
 #ifdef REND2_SP
 		ri.Printf(PRINT_DEVELOPER, "Couldn't find image file for shader %s\n", name);
@@ -5479,11 +5513,13 @@ shader_t* R_FindShader(const char* name, const int* lightmapIndexes, const byte*
 		// two pass lightmap
 		stages[0].bundle[0].image[0] = tr.lightmaps[shader.lightmapIndex[0]];
 		stages[0].bundle[0].isLightmap = qtrue;
+
 		if (r_deluxeMapping->integer && tr.worldDeluxeMapping)
-			stages[0].bundle[TB_DELUXEMAP].image[0] = tr.deluxemaps[shader.lightmapIndex[0]];
+			stages[0].bundle[TB_DELUXEMAP].image[0] =
+			tr.deluxemaps[shader.lightmapIndex[0]];
+
 		stages[0].active = qtrue;
 		stages[0].rgbGen = CGEN_IDENTITY;	// lightmaps are scaled on creation
-		// for identitylight
 		stages[0].stateBits = GLS_DEFAULT;
 
 		stages[1].bundle[0].image[0] = image;
@@ -5496,9 +5532,9 @@ shader_t* R_FindShader(const char* name, const int* lightmapIndexes, const byte*
 }
 
 #ifdef REND2_SP
-shader_t* R_FindServerShader(const char* name, const int* lightmapIndex, const byte* styles, qboolean mip_raw_image)
+shader_t* R_FindServerShader(const char* name, const int* lightmapIndex, const byte * styles, qboolean mip_raw_image)
 #else // !REND2_SP
-shader_t* R_FindServerShader(const char* name, const int* lightmapIndexes, const byte* styles, const qboolean mipRawImage)
+shader_t* R_FindServerShader(const char* name, const int* lightmapIndexes, const byte * styles, const qboolean mipRawImage)
 #endif // REND2_SP
 {
 	char		strippedName[MAX_QPATH];
@@ -5545,9 +5581,9 @@ shader_t* R_FindServerShader(const char* name, const int* lightmapIndexes, const
 }
 
 #ifdef REND2_SP
-static qhandle_t RE_RegisterShaderFromImage(const char* name, const int* lightmapIndex, const byte* styles, image_t* image, qboolean mip_raw_image) {
+static qhandle_t RE_RegisterShaderFromImage(const char* name, const int* lightmapIndex, const byte * styles, image_t * image, qboolean mip_raw_image) {
 #else // !REND2_SP
-qhandle_t RE_RegisterShaderFromImage(const char* name, const int* lightmapIndexes, const byte* styles, image_t* image)
+qhandle_t RE_RegisterShaderFromImage(const char* name, const int* lightmapIndexes, const byte * styles, image_t * image)
 {
 #endif // REND2_SP
 	int			hash = 0;
@@ -5670,9 +5706,9 @@ way to ask for different implicit lighting modes (vertex, lightmap, etc)
 ====================
 */
 #ifdef REND2_SP
-qhandle_t RE_RegisterShaderLightMap(const char* name, const int* lightmapIndex, const byte* styles) {
+qhandle_t RE_RegisterShaderLightMap(const char* name, const int* lightmapIndex, const byte * styles) {
 #else // !REND2_SP
-qhandle_t RE_RegisterShaderLightMap(const char* name, const int* lightmapIndexes, const byte* styles) {
+qhandle_t RE_RegisterShaderLightMap(const char* name, const int* lightmapIndexes, const byte * styles) {
 #endif // REND2_SP
 	shader_t* sh = nullptr;
 
@@ -5942,6 +5978,7 @@ static char* s_shaderBuffers[MAX_SHADER_FILES] = { nullptr };
 
 static void ScanAndLoadShaderFiles(void)
 {
+	PROFILE_ZONE("Load: scan .shader files");
 	char** shaderFiles = nullptr;
 	const char* p = nullptr;
 	int         numShaderFiles = 0;
@@ -6279,7 +6316,7 @@ static void ScanAndLoadShaderFiles(void)
 }
 
 #else // !REND2_SP
-}
+			}
 
 /*
 ====================
@@ -6289,7 +6326,7 @@ R_CreateShaderFromTextureBundle
 #endif // REND2_SP
 shader_t* R_CreateShaderFromTextureBundle(
 	const char* name,
-	const textureBundle_t* bundle,
+	const textureBundle_t * bundle,
 	uint32_t stateBits)
 {
 	shader_t* result = R_FindShaderByName(name);

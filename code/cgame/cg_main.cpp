@@ -325,6 +325,9 @@ vmCvar_t cg_saberEntMarks;
 vmCvar_t cg_paused;
 vmCvar_t cg_drawTimer;
 vmCvar_t cg_drawFPS;
+vmCvar_t cg_clothForcePush;
+vmCvar_t cg_clothExplosion;
+vmCvar_t cg_traceCull;
 vmCvar_t cg_drawSnapshot;
 vmCvar_t cg_drawAmmoWarning;
 vmCvar_t cg_drawCrosshair;
@@ -367,6 +370,7 @@ vmCvar_t cg_updatedDataPadForcePower2;
 vmCvar_t cg_updatedDataPadForcePower3;
 vmCvar_t cg_updatedDataPadObjective;
 vmCvar_t cg_drawBreath;
+vmCvar_t cg_drawAirBar;
 vmCvar_t cg_roffdebug;
 #ifndef FINAL_BUILD
 vmCvar_t	cg_roffval1;
@@ -480,6 +484,7 @@ vmCvar_t cg_drawSelectionScrollBar;
 vmCvar_t cg_trueguns;
 vmCvar_t cg_holsteredweapons; // cg_holster.cpp: 0 = off, 1 = the player only, 2 = everyone
 vmCvar_t cg_holsterHide; // cg_holster.cpp: the guns the player doesn't carry on his body (hex mask of weapon numbers; weapon wheel "On Person")
+vmCvar_t cg_blasterHipPullIn; // SS_BLASTER: how far the left hip blaster style pistol moves in towards the body
 vmCvar_t cg_holsterdebug;
 vmCvar_t cg_holsterdebug_boneindex;
 vmCvar_t cg_holsterdebug_posoffset;
@@ -495,6 +500,7 @@ vmCvar_t cg_trueeyeposition;
 vmCvar_t cg_trueinvertsaber;
 vmCvar_t cg_truefov;
 vmCvar_t cg_truebobbing;
+vmCvar_t cg_awardsounds;
 
 vmCvar_t cg_weaponBob;
 vmCvar_t cg_fallingBob;
@@ -565,6 +571,9 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_drawHUD, "cg_drawHUD", "1", 0 },
 	{ &cg_drawTimer, "cg_drawTimer", "0", CVAR_ARCHIVE },
 	{ &cg_drawFPS, "cg_drawFPS", "0", CVAR_ARCHIVE },
+	{ &cg_clothForcePush, "cg_clothForcePush", "1", CVAR_ARCHIVE },	// force push/pull blows capes and robes (0 = off, 2 = twice as strong)
+	{ &cg_clothExplosion, "cg_clothExplosion", "1", CVAR_ARCHIVE },	// explosions blow capes and robes (0 = off, 2 = twice as strong)
+	{ &cg_traceCull, "cg_traceCull", "1", CVAR_ARCHIVE },	// cgame traces skip entities their move can't reach (0 = test them all, as before)
 	{ &cg_drawSnapshot, "cg_drawSnapshot", "0", CVAR_ARCHIVE },
 	{ &cg_drawAmmoWarning, "cg_drawAmmoWarning", "1", CVAR_ARCHIVE },
 	{ &cg_drawCrosshair, "cg_drawCrosshair", "1", CVAR_ARCHIVE },
@@ -612,6 +621,7 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_errorDecay, "cg_errordecay", "100", 0 },
 
 	{ &cg_drawBreath, "cg_drawBreath", "0", CVAR_ARCHIVE }, // Added 11/07/02
+	{ &cg_drawAirBar, "cg_drawAirBar", "1", CVAR_ARCHIVE }, // blue breath bar above the HUD while air runs out under water (DH 2026-10-25)
 	{ &cg_roffdebug, "cg_roffdebug", "0" },
 #ifndef FINAL_BUILD
 	{ &cg_roffval1, "cg_roffval1", "0" },
@@ -716,9 +726,9 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_IsSaberDoingAttackDamage, "g_IsSaberDoingAttackDamage", "0", CVAR_ARCHIVE },
 
 	{ &cg_drawRadar, "cg_drawRadar", "0", CVAR_ARCHIVE },
-	{ &cg_dynamicHud, "cg_dynamicHud", "1", CVAR_ARCHIVE },
-	{ &cg_dynamicHudTime, "cg_dynamicHudTime", "15000", CVAR_ARCHIVE },
-	{ &cg_dynamicHudRange, "cg_dynamicHudRange", "1024", CVAR_ARCHIVE },
+	{ &cg_dynamicHud, "cg_dynamicHud", "0", CVAR_ARCHIVE },
+	{ &cg_dynamicHudTime, "cg_dynamicHudTime", "3000", CVAR_ARCHIVE },
+	{ &cg_dynamicHudRange, "cg_dynamicHudRange", "700", CVAR_ARCHIVE },
 	{ &cg_drawVehLeadIndicator, "cg_drawVehLeadIndicator", "1", CVAR_ARCHIVE },
 
 	{ &cg_drawSelectionScrollBar, "cg_drawSelectionScrollBar", "0", CVAR_ARCHIVE },
@@ -726,6 +736,7 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_trueguns, "cg_trueguns", "1", CVAR_ARCHIVE },
 	{ &cg_holsteredweapons, "cg_holsteredweapons", "2", CVAR_ARCHIVE },
 	{ &cg_holsterHide, "cg_holsterHide", "", CVAR_ARCHIVE },
+	{ &cg_blasterHipPullIn, "cg_blasterHipPullIn", "2.5", 0 }, // SS_BLASTER, not archived
 	{ &cg_holsterdebug, "cg_holsterdebug", "0", 0 },
 	{ &cg_holsterdebug_boneindex, "cg_holsterdebug_boneindex", "0", 0 },
 	{ &cg_holsterdebug_posoffset, "cg_holsterdebug_posoffset", "0.0 0.0 0.0", 0 },
@@ -743,6 +754,7 @@ static cvarTable_t cvarTable[] = {
 
 	{ &cg_weaponBob, "cg_weaponBob", "1", CVAR_ARCHIVE },
 	{ &cg_fallingBob, "cg_fallingBob", "1", CVAR_ARCHIVE },
+	{ &cg_awardsounds, "cg_awardsounds", "0", CVAR_ARCHIVE },
 
 	{ &cg_gunMomentumDamp, "cg_gunMomentumDamp", "0.001", CVAR_ARCHIVE },
 	{ &cg_gunMomentumFall, "cg_gunMomentumFall", "0.5", CVAR_ARCHIVE },
@@ -1082,6 +1094,17 @@ static void CG_RegisterSounds()
 	cgs.media.watrInSound = cgi_S_RegisterSound("sound/player/watr_in.wav");
 	cgs.media.watrOutSound = cgi_S_RegisterSound("sound/player/watr_out.wav");
 	cgs.media.watrUnSound = cgi_S_RegisterSound("sound/player/watr_un.wav");
+
+	cgs.media.impressiveSound = cgi_S_RegisterSound("sound/player/impressiveSound.mp3");
+	cgs.media.excellentSound = cgi_S_RegisterSound("sound/player/excellentSound.mp3");
+	cgs.media.deniedSound = cgi_S_RegisterSound("sound/chars/protocol/misc/40MOM017");
+	cgs.media.humiliationSound = cgi_S_RegisterSound("sound/player/humiliationSound.mp3");
+	cgs.media.defendSound = cgi_S_RegisterSound("sound/chars/protocol/misc/40MOM024");
+
+	cgs.media.atstWaterInSound[0] = cgi_S_RegisterSound("sound/chars/atst/atst_water_in1.wav");
+	cgs.media.atstWaterInSound[1] = cgi_S_RegisterSound("sound/chars/atst/atst_water_in2.wav");
+	cgs.media.atstWaterOutSound[0] = cgi_S_RegisterSound("sound/chars/atst/atst_water_out1.wav");
+	cgs.media.atstWaterOutSound[1] = cgi_S_RegisterSound("sound/chars/atst/atst_water_out2.wav");
 
 	if (gi.totalMapContents() & CONTENTS_LAVA)
 	{

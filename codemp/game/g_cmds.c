@@ -111,6 +111,7 @@ const gbuyable_t bg_buylist[] =
 	{ "Boba", WP_BOBA, IT_WEAPON, 200, 1, WC_PISTOL }, // pistol
 	{ "ClonePistol", WP_CLONEPISTOL, IT_WEAPON, 200, 1, WC_PISTOL }, // pistol
 	{ "Droideka", WP_DROIDEKA, IT_WEAPON, 350, 2, WC_RIFLE }, // the droideka's arm blasters
+	{ "NoghriStick", WP_NOGHRI_STICK, IT_WEAPON, 350, 2, WC_RIFLE }, // the noghri stick (from SJE)
 
 	{ "energy", AMMO_BLASTER, IT_AMMO, 999, 0, WC_AMMO },
 	{ "powercells", AMMO_POWERCELL, IT_AMMO, 999, 0, WC_AMMO },
@@ -449,10 +450,10 @@ static void G_GiveWeaponsByClass(gentity_t* ent, qboolean give_all)
 	const int botClass = ent->client->pers.botclass;
 
 	// Clear all weapons first
-	ent->client->ps.stats[STAT_WEAPONS] = 0;
+	BG_ClearWeapons(ent->client->ps.stats);
 
 	// Always give melee
-	ent->client->ps.stats[STAT_WEAPONS] |= (1 << WP_MELEE);
+	BG_GiveWeapon(ent->client->ps.stats, WP_MELEE);
 
 	// Helper flags
 	const qboolean isSaberClass = (Bot_Is_Saber_Class(ent) == qtrue) ? qtrue : qfalse;
@@ -468,7 +469,7 @@ static void G_GiveWeaponsByClass(gentity_t* ent, qboolean give_all)
 	// --- Jawa: melee + stun baton only (unless cheats)
 	if (isJawa == qtrue)
 	{
-		ent->client->ps.stats[STAT_WEAPONS] |= (1 << WP_STUN_BATON);
+		BG_GiveWeapon(ent->client->ps.stats, WP_STUN_BATON);
 
 		if (give_all == qtrue)
 		{
@@ -481,7 +482,7 @@ static void G_GiveWeaponsByClass(gentity_t* ent, qboolean give_all)
 				if (w == WP_BRYAR_OLD || w == WP_DROIDEKA) // SBD / droideka only
 					continue;
 
-				ent->client->ps.stats[STAT_WEAPONS] |= (1 << w);
+				BG_GiveWeapon(ent->client->ps.stats, w);
 			}
 		}
 
@@ -492,7 +493,7 @@ static void G_GiveWeaponsByClass(gentity_t* ent, qboolean give_all)
 	// --- SBD: melee + bryar_old only (even with cheats)
 	if (isSBD == qtrue)
 	{
-		ent->client->ps.stats[STAT_WEAPONS] |= (1 << WP_BRYAR_OLD);
+		BG_GiveWeapon(ent->client->ps.stats, WP_BRYAR_OLD);
 
 		// SBD NEVER gets saber or guns, even with cheats
 		G_AddEvent(ent, EV_WEAPINVCHANGE, ent->client->ps.stats[STAT_WEAPONS]);
@@ -502,7 +503,7 @@ static void G_GiveWeaponsByClass(gentity_t* ent, qboolean give_all)
 	// --- Saber classes: melee + saber (unless cheats)
 	if (isSaberClass == qtrue)
 	{
-		ent->client->ps.stats[STAT_WEAPONS] |= (1 << WP_SABER);
+		BG_GiveWeapon(ent->client->ps.stats, WP_SABER);
 
 		if (give_all == qtrue)
 		{
@@ -515,7 +516,7 @@ static void G_GiveWeaponsByClass(gentity_t* ent, qboolean give_all)
 				if (w == WP_BRYAR_OLD || w == WP_DROIDEKA) // SBD / droideka only
 					continue;
 
-				ent->client->ps.stats[STAT_WEAPONS] |= (1 << w);
+				BG_GiveWeapon(ent->client->ps.stats, w);
 			}
 		}
 
@@ -533,7 +534,7 @@ static void G_GiveWeaponsByClass(gentity_t* ent, qboolean give_all)
 		if (w == WP_BRYAR_OLD || w == WP_DROIDEKA) // SBD / droideka only
 			continue;
 
-		ent->client->ps.stats[STAT_WEAPONS] |= (1 << w);
+		BG_GiveWeapon(ent->client->ps.stats, w);
 	}
 
 	G_AddEvent(ent, EV_WEAPINVCHANGE, ent->client->ps.stats[STAT_WEAPONS]);
@@ -720,7 +721,7 @@ static void G_Give(gentity_t* ent, const char* name, const char* args, const int
 	if (give_all == qfalse && Q_stricmp(name, "weaponnum") == 0)
 	{
 		const int w = atoi(args);
-		ent->client->ps.stats[STAT_WEAPONS] |= (1 << w);
+		BG_GiveWeapon(ent->client->ps.stats, w);
 
 		G_AddEvent(ent, EV_WEAPINVCHANGE, ent->client->ps.stats[STAT_WEAPONS]);
 		return;
@@ -3852,8 +3853,43 @@ void Cmd_ToggleSaber_f(gentity_t* ent)
 	}
 }
 
+// SS_BLASTER is Kyle Katarn's style only: his model folders (kyle, kylejk2, kyle_jedimaster, DarkKyle, ...).
+// Players and bots: their model from the userinfo; NPCs: from the NPC file (NPC_stats.c).
+qboolean G_SaberBlasterKyleModel(const gentity_t* ent)
+{
+	char model[MAX_QPATH];
+	if (!ent->client)
+	{
+		return qfalse;
+	}
+	if (ent->s.number < MAX_CLIENTS)
+	{
+		// players and bots: the model they picked (MD only keeps client->modelname up to date for some models)
+		char userinfo[MAX_INFO_STRING];
+		trap->GetUserinfo(ent->s.number, userinfo, sizeof userinfo);
+		Q_strncpyz(model, Info_ValueForKey(userinfo, "model"), sizeof model);
+	}
+	else
+	{
+		Q_strncpyz(model, ent->client->modelname, sizeof model);
+	}
+	Q_strlwr(model);
+	return strstr(model, "kyle") ? qtrue : qfalse;
+}
+
 qboolean G_ValidSaberStyle(const gentity_t* ent, const int saber_style)
 {
+	if (saber_style == SS_BLASTER && !G_SaberBlasterKyleModel(ent))
+	{
+		return qfalse;	// even with give all / setforceall
+	}
+	// SS_BLASTER: an NPC / bot with a set of known styles that holds SS_BLASTER (NPC file saberStyle lines, bot class)
+	// only uses those
+	if (ent->client->saberStylesKnown & 1 << SS_BLASTER && !(ent->client->saberStylesKnown & 1 << saber_style))
+	{
+		return qfalse;
+	}
+
 	if (saber_style == SS_MEDIUM
 		&& !(ent->client->saber[0].type == SABER_SINGLE_BACKHAND
 			|| ent->client->saber[0].type == SABER_SINGLE_ASBACKHAND))
@@ -4100,11 +4136,12 @@ void Cmd_SaberAttackCycle_f(gentity_t* ent)
 	}
 	else
 	{
-		select_level++;
+		// SS_BLASTER: explicit cycle order, single saber styles FAST..TAVION then BLASTER
+		select_level = BG_NextSaberStyleInCycle(select_level);
 
-		for (int attempts = 0; attempts < SS_TAVION; attempts++)
+		for (int attempts = 0; attempts < SS_TAVION + 1; attempts++)
 		{
-			if (select_level > SS_TAVION)
+			if (select_level >= SS_NUM_SABER_STYLES || select_level == SS_DUAL || select_level == SS_STAFF)
 			{
 				if ((ent->client->saber[0].type == SABER_SINGLE_BACKHAND))
 				{
@@ -4120,13 +4157,20 @@ void Cmd_SaberAttackCycle_f(gentity_t* ent)
 				}
 			}
 
-			if (G_ValidSaberStyle(ent, select_level))
+			const qboolean styleValid = G_ValidSaberStyle(ent, select_level);
+
+			if (d_saberStanceDebug.integer)
+			{
+				Com_Printf("SABERSTANCEDEBUG: style %d valid %d (Kyle %d)\n", select_level, styleValid,
+					G_SaberBlasterKyleModel(ent));
+			}
+			if (styleValid)
 			{
 				break;
 			}
 
 			//no dice, keep looking
-			select_level++;
+			select_level = BG_NextSaberStyleInCycle(select_level); // SS_BLASTER
 		}
 
 		if (d_saberStanceDebug.integer)
@@ -4139,6 +4183,11 @@ void Cmd_SaberAttackCycle_f(gentity_t* ent)
 	{
 		//make sure it's valid, change it if not
 		WP_UseFirstValidSaberStyle(&ent->client->saber[0], &ent->client->saber[1], ent->client->ps.saberHolstered, &select_level);
+	}
+
+	if (d_saberStanceDebug.integer)
+	{
+		Com_Printf("SABERSTANCEDEBUG: picked style %d (weaponTime %d)\n", select_level, ent->client->ps.weaponTime);
 	}
 
 	if (ent->client->ps.weaponTime <= 0)

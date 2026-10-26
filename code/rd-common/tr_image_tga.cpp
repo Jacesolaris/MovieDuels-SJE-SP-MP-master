@@ -23,6 +23,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "../server/exe_headers.h"
+#include "q_profile.h"
 
 #include "tr_common.h"
 
@@ -56,6 +57,7 @@ typedef struct TGAHeader_s {
 
 void LoadTGA(const char* name, byte** pic, int* width, int* height)
 {
+	PROFILE_ZONE("Load: decode TGA");
 	char sErrorString[1024];
 	bool bFormatErrors = false;
 

@@ -674,6 +674,17 @@ using cgMedia_t = struct
 	//	sfxHandle_t	useNothingSound;
 	sfxHandle_t footsteps[FOOTSTEP_TOTAL][4];
 
+	sfxHandle_t hitsound;
+	sfxHandle_t hitTeamSound;
+	sfxHandle_t impressiveSound;
+	sfxHandle_t excellentSound;
+	sfxHandle_t deniedSound;
+	sfxHandle_t humiliationSound;
+	sfxHandle_t defendSound;
+
+	sfxHandle_t atstWaterInSound[2];
+	sfxHandle_t atstWaterOutSound[2];
+
 	//	sfxHandle_t talkSound;
 	sfxHandle_t noAmmoSound;
 

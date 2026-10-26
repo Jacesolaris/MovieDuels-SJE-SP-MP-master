@@ -3029,6 +3029,9 @@ static qboolean Holding_Gun_And_Walking(void)
 		case WP_CLONERIFLE:
 		case WP_CLONECOMMANDO:
 		case WP_Z6_ROTARY_CANNON:
+		case WP_NOGHRI_STICK:
+		case WP_TUSKEN_RIFLE:
+		case WP_TUSKEN_STAFF:
 		case WP_REBELRIFLE:
 		case WP_REY:
 		case WP_JANGO:
@@ -3081,6 +3084,9 @@ static qboolean Holding_Gun_And_Walking_And_Blocking(void)
 		case WP_CLONERIFLE:
 		case WP_CLONECOMMANDO:
 		case WP_Z6_ROTARY_CANNON:
+		case WP_NOGHRI_STICK:
+		case WP_TUSKEN_RIFLE:
+		case WP_TUSKEN_STAFF:
 		case WP_REBELRIFLE:
 		case WP_REY:
 		case WP_JANGO:
@@ -3161,10 +3167,13 @@ void CG_DrawActiveFrame(const int serverTime, const stereoFrame_t stereoView, co
 	if (cg.snap)
 	{
 		static int wheelWeapons = -1;
-		if (wheelWeapons != cg.snap->ps.stats[STAT_WEAPONS])
+		static int wheelWeapons2 = -1; // weapons 32-63 (STAT_WEAPONS2)
+		if (wheelWeapons != cg.snap->ps.stats[STAT_WEAPONS] || wheelWeapons2 != cg.snap->ps.stats[STAT_WEAPONS2])
 		{
 			wheelWeapons = cg.snap->ps.stats[STAT_WEAPONS];
+			wheelWeapons2 = cg.snap->ps.stats[STAT_WEAPONS2];
 			trap->Cvar_Set("ui_wheelweapons", va("%i", wheelWeapons));
+			trap->Cvar_Set("ui_wheelweapons2", va("%i", wheelWeapons2));
 		}
 	}
 	static centity_t* veh = NULL;

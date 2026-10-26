@@ -1982,7 +1982,7 @@ static qboolean CG_WeaponSelectable(const int i)
 		return qfalse;
 	}
 
-	if (!(cg.predictedPlayerState.stats[STAT_WEAPONS] & 1 << i))
+	if (!(BG_HasWeapon(cg.predictedPlayerState.stats, i)))
 	{
 		return qfalse;
 	}
@@ -2043,12 +2043,11 @@ void CG_DrawWeaponSelect(void)
 	// Clear pickup display
 	cg.itemPickupTime = 0;
 
-	const int bits = cg.predictedPlayerState.stats[STAT_WEAPONS];
 
 	// Count selectable weapons
 	for (i = FIRST_SELECTABLE_WEAPON; i <= LAST_SELECTABLE_WEAPON; i++)
 	{
-		if ((bits & (1 << i)) && CG_WeaponSelectable(i))
+		if (BG_HasWeapon(cg.predictedPlayerState.stats, i) && CG_WeaponSelectable(i))
 		{
 			count++;
 		}
@@ -2108,7 +2107,7 @@ void CG_DrawWeaponSelect(void)
 			i = LAST_SELECTABLE_WEAPON;
 		}
 
-		if ((bits & (1 << i)) && CG_WeaponSelectable(i))
+		if (BG_HasWeapon(cg.predictedPlayerState.stats, i) && CG_WeaponSelectable(i))
 		{
 			CG_RegisterWeapon(i);
 
@@ -2179,7 +2178,7 @@ void CG_DrawWeaponSelect(void)
 			i = FIRST_SELECTABLE_WEAPON;
 		}
 
-		if ((bits & (1 << i)) && CG_WeaponSelectable(i))
+		if (BG_HasWeapon(cg.predictedPlayerState.stats, i) && CG_WeaponSelectable(i))
 		{
 			CG_RegisterWeapon(i);
 
@@ -2354,7 +2353,7 @@ void CG_NextWeapon_f(void)
 		}
 
 		// Skip weapons the player does not own
-		if ((cg.snap->ps.stats[STAT_WEAPONS] & (1 << cg.weaponSelect)) == 0)
+		if ((BG_HasWeapon(cg.snap->ps.stats, cg.weaponSelect)) == 0)
 		{
 			continue;
 		}
@@ -2449,7 +2448,7 @@ void CG_PrevWeapon_f(void)
 		}
 
 		// Skip weapons the player does not own
-		if ((cg.snap->ps.stats[STAT_WEAPONS] & (1 << cg.weaponSelect)) == 0)
+		if ((BG_HasWeapon(cg.snap->ps.stats, cg.weaponSelect)) == 0)
 		{
 			continue;
 		}
@@ -2555,7 +2554,7 @@ void CG_Weapon_f(void)
 	}
 	else
 	{
-		if (cg.snap->ps.stats[STAT_WEAPONS] & 1 << WP_SABER)
+		if (BG_HasWeapon(cg.snap->ps.stats, WP_SABER))
 		{
 			num = WP_SABER;
 		}
@@ -2613,14 +2612,14 @@ void CG_Weapon_f(void)
 
 	cg.weaponSelectTime = cg.time;
 
-	if (!(cg.snap->ps.stats[STAT_WEAPONS] & 1 << num))
+	if (!(BG_HasWeapon(cg.snap->ps.stats, num)))
 	{
 		if (num == WP_SABER)
 		{
 			//don't have saber, try melee on the same slot
 			num = WP_MELEE;
 
-			if (!(cg.snap->ps.stats[STAT_WEAPONS] & 1 << num))
+			if (!(BG_HasWeapon(cg.snap->ps.stats, num)))
 			{
 				return;
 			}
@@ -2717,7 +2716,7 @@ void CG_WeaponClean_f(void)
 
 	if (num == WP_STUN_BATON)
 	{
-		if (cg.snap->ps.stats[STAT_WEAPONS] & 1 << WP_SABER)
+		if (BG_HasWeapon(cg.snap->ps.stats, WP_SABER))
 		{
 			num = WP_SABER;
 		}
@@ -2740,14 +2739,14 @@ void CG_WeaponClean_f(void)
 
 	cg.weaponSelectTime = cg.time;
 
-	if (!(cg.snap->ps.stats[STAT_WEAPONS] & 1 << num))
+	if (!(BG_HasWeapon(cg.snap->ps.stats, num)))
 	{
 		if (num == WP_SABER)
 		{
 			//don't have saber, try melee on the same slot
 			num = WP_MELEE;
 
-			if (!(cg.snap->ps.stats[STAT_WEAPONS] & 1 << num))
+			if (!(BG_HasWeapon(cg.snap->ps.stats, num)))
 			{
 				return;
 			}
@@ -3292,6 +3291,14 @@ void cg_missile_hit_wall(const int weapon, vec3_t origin, vec3_t dir, const qboo
 		FX_CloneWeaponHitWall(origin, dir);
 		break;
 
+	case WP_NOGHRI_STICK:
+		FX_NoghriShotWeaponHitWall(origin, dir);
+		break;
+
+	case WP_TUSKEN_RIFLE:
+		FX_TuskenShotWeaponHitWall(origin, dir);
+		break;
+
 	case WP_REY:
 		if (alt_fire)
 		{
@@ -3445,6 +3452,14 @@ void cg_missile_hit_player(const int weapon, vec3_t origin, vec3_t dir, const qb
 		FX_CloneWeaponHitPlayer(origin, dir, humanoid);
 		break;
 
+	case WP_NOGHRI_STICK:
+		FX_NoghriShotWeaponHitPlayer(origin, dir);
+		break;
+
+	case WP_TUSKEN_RIFLE:
+		FX_TuskenShotWeaponHitPlayer(origin, dir);
+		break;
+
 	case WP_REY:
 		if (alt_fire)
 		{
@@ -3593,9 +3608,9 @@ qboolean CG_CalcmuzzlePoint(const int entityNum, vec3_t muzzle)
 }
 
 // create one instance of all the weapons we are going to use so we can just copy this info into each clients gun ghoul2 object in fast way
-static void* g2WeaponInstances[MAX_WEAPONS];
-static void* g2WeaponInstances2[MAX_WEAPONS];
-void* g2HolsterWeaponInstances[MAX_WEAPONS];
+static void* g2WeaponInstances[WP_NUM_WEAPONS]; // indexed by weapon number: WP_TURRET is 32
+static void* g2WeaponInstances2[WP_NUM_WEAPONS];
+void* g2HolsterWeaponInstances[WP_NUM_WEAPONS];
 
 void CG_InitG2Weapons(void)
 {
@@ -3607,7 +3622,7 @@ void CG_InitG2Weapons(void)
 	{
 		if (item->giType == IT_WEAPON)
 		{
-			assert(item->giTag < MAX_WEAPONS);
+			assert(item->giTag < WP_NUM_WEAPONS);
 
 			// initialise model (the Z6 rotary cannon in the hand: its model with a barrel bone, which
 			// CG_Z6SpinBarrel spins, instead of rotary_cannon_w.glm, whose barrels are fixed to the gun)
@@ -3647,25 +3662,20 @@ void CG_InitG2Weapons(void)
 				i++;
 			}
 
-			i++;
-
-			if (i == MAX_WEAPONS)
-			{
-				assert(0);
-				break;
-			}
+			i++; // (no stop at MAX_WEAPONS: this counts instances, not weapons, and there are more than 32 weapons)
 		}
 	}
 }
 
 void CG_ShutDownG2Weapons(void)
 {
-	for (int i = 0; i < MAX_WEAPONS; i++)
+	for (int i = 0; i < WP_NUM_WEAPONS; i++)
 	{
 		trap->G2API_CleanGhoul2Models(&g2WeaponInstances[i]);
 		trap->G2API_CleanGhoul2Models(&g2WeaponInstances2[i]);
 		trap->G2API_CleanGhoul2Models(&g2HolsterWeaponInstances[i]);
 	}
+	CG_ScepterShutdown();
 }
 
 void* CG_G2WeaponInstance(const centity_t* cent, const int weapon)
@@ -3814,7 +3824,7 @@ void CG_CopyG2WeaponInstance(const centity_t* cent, const int weapon_num, void* 
 		return;
 	}
 
-	if (weapon_num < 0 || weapon_num >= MAX_WEAPONS)
+	if (weapon_num < 0 || weapon_num >= WP_NUM_WEAPONS)
 	{
 		trap->Print("CG_CopyG2WeaponInstance: invalid weapon_num %d\n", weapon_num);
 		return;
@@ -4200,10 +4210,9 @@ static void CG_MDWheel_BuildItems(void)
 	mdWheel.numItems = 0;
 	if (mdWheel.ring == 0)
 	{
-		const int bits = cg.predictedPlayerState.stats[STAT_WEAPONS];
 		for (int i = FIRST_SELECTABLE_WEAPON; i <= LAST_SELECTABLE_WEAPON && mdWheel.numItems < MDW_MAX_ITEMS; i++)
 		{
-			const qboolean owned = bits & 1 << i ? qtrue : qfalse;
+			const qboolean owned = BG_HasWeapon(cg.predictedPlayerState.stats, i) ? qtrue : qfalse;
 			if (owned || CG_MDWheel_PlayerWeapon(i))
 			{
 				mdWheel.avail[mdWheel.numItems] = owned;

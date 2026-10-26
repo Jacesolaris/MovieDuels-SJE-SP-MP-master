@@ -23,6 +23,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "tr_common.h"
+#include "q_profile.h"
 
 // My TGA loader...
 //
@@ -54,6 +55,7 @@ typedef struct TGAHeader_s {
 
 void LoadTGA(const char* name, byte** pic, int* width, int* height)
 {
+	PROFILE_ZONE("Load: decode TGA");
 	char sErrorString[1024];
 	bool bFormatErrors = false;
 

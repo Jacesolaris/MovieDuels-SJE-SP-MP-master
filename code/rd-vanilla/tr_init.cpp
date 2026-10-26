@@ -126,6 +126,9 @@ cvar_t* r_meshCloth;
 cvar_t* r_meshClothGravity;
 cvar_t* r_meshClothDrag;
 cvar_t* r_meshClothIter;
+cvar_t* r_meshClothLodNear;
+cvar_t* r_meshClothLodFar;
+cvar_t* r_threads;
 cvar_t* r_meshClothShape;
 cvar_t* r_meshClothInertia;
 cvar_t* r_meshClothMaxAccel;
@@ -879,6 +882,7 @@ Return value must be freed with Hunk_FreeTempMemory()
 
 byte* RB_ReadPixels(const int x, const int y, const int width, const int height, size_t* offset, int* padlen)
 {
+	R_SyncRenderThread();	// r_smp: GL here on the main thread (nothing on the render thread)
 	GLint pack_align = 0;
 
 	qglGetIntegerv(GL_PACK_ALIGNMENT, &pack_align);
@@ -1008,6 +1012,7 @@ const void* RB_TakeVideoFrameCmd(const void* data)
 // SP: every frame still being compressed is written (the client calls it before closing the AVI file)
 static void RE_FlushVideoFrames(void)
 {
+	R_SyncRenderThread();	// r_smp: reads the capture buffers with GL here
 	R_VideoCaptureFlush(R_VideoReadbackGL(), ri.CL_WriteAVIVideoFrame); // the last captured frame first
 	R_VideoEncoderFlush(ri.CL_WriteAVIVideoFrame, qtrue);
 }
@@ -1389,15 +1394,15 @@ void GfxInfo_f()
 	}
 	if (glConfigExt.doGammaCorrectionWithShaders)
 	{
-		ri.Printf(PRINT_ALL, "GAMMA: shader w/ %d overbright bits\n", tr.overbrightBits);
+		ri.Printf(PRINT_ALL, "GAMMA: shader w/ %g overbright bits\n", tr.overbright);
 	}
 	else if (glConfig.deviceSupportsGamma)
 	{
-		ri.Printf(PRINT_ALL, "GAMMA: hardware w/ %d overbright bits\n", tr.overbrightBits);
+		ri.Printf(PRINT_ALL, "GAMMA: hardware w/ %g overbright bits\n", tr.overbright);
 	}
 	else
 	{
-		ri.Printf(PRINT_ALL, "GAMMA: software w/ %d overbright bits\n", tr.overbrightBits);
+		ri.Printf(PRINT_ALL, "GAMMA: software w/ %g overbright bits\n", tr.overbright);
 	}
 
 	// rendering primitives
@@ -1593,13 +1598,37 @@ using consoleCommand_t = struct consoleCommand_s {
 
 void R_ReloadFonts_f();
 
+bool R_MeshClothVisible(const float from[3], const float to[3]);	// tr_ghoul2.cpp
 // meshcloth_blast [strength] [radius]: test explosion 96 units in front of the camera
+// meshcloth_blast x y z strength radius: an explosion there (sent by the cgame for splash weapons, cg_clothExplosion)
 static void R_MeshClothBlast_f(void) {
+	if (ri.Cmd_Argc() >= 6) {
+		float o[3];
+		for (int k = 0; k < 3; k++) o[k] = (float)atof(ri.Cmd_Argv(1 + k));
+		MC_Blast(o, (float)atof(ri.Cmd_Argv(4)), (float)atof(ri.Cmd_Argv(5)), R_MeshClothVisible);	// walls stop it
+		return;
+	}
 	const float strength = ri.Cmd_Argc() > 1 ? (float)atof(ri.Cmd_Argv(1)) : 600.0f;
 	const float radius = ri.Cmd_Argc() > 2 ? (float)atof(ri.Cmd_Argv(2)) : 200.0f;
-	float c[3];
+	float c[3]{};
 	for (int k = 0; k < 3; k++) c[k] = tr.refdef.vieworg[k] + tr.refdef.viewaxis[0][k] * 96.0f;
 	MC_Blast(c, strength, radius);
+}
+
+// meshcloth_push x y z dirx diry dirz strength radius [coneDot] - sent by the cgame when someone uses force push
+// (strength > 0) or pull (< 0), so the capes and robes in front of them are blown about
+static void R_MeshClothPush_f(void) {
+	if (ri.Cmd_Argc() < 9) return;
+	float c[3], d[3];
+	for (int k = 0; k < 3; k++) {
+		c[k] = (float)atof(ri.Cmd_Argv(1 + k));
+		d[k] = (float)atof(ri.Cmd_Argv(4 + k));
+	}
+	const float len = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+	if (len < 1e-3f) return;
+	for (int k = 0; k < 3; k++) d[k] /= len;
+	const float coneDot = ri.Cmd_Argc() > 9 ? (float)atof(ri.Cmd_Argv(9)) : 0.4f;
+	MC_Push(c, d, (float)atof(ri.Cmd_Argv(7)), (float)atof(ri.Cmd_Argv(8)), coneDot);
 }
 
 static consoleCommand_t	commands[] = {
@@ -1616,6 +1645,7 @@ static consoleCommand_t	commands[] = {
 	{ "imagecacheinfo",		RE_RegisterImages_Info_f },
 	{ "modellist",			R_Modellist_f },
 	{ "meshcloth_blast",	R_MeshClothBlast_f },
+	{ "meshcloth_push",	R_MeshClothPush_f },
 	{ "modelcacheinfo",		RE_RegisterModels_Info_f },
 	{ "r_fogDistance",		R_FogDistance_f },
 	{ "r_fogColor",			R_FogColor_f },
@@ -1677,8 +1707,8 @@ static void R_Register()
 	r_detailTextures = ri.Cvar_Get("r_detailtextures", "1", CVAR_ARCHIVE_ND | CVAR_LATCH);
 	r_texturebits = ri.Cvar_Get("r_texturebits", "0", CVAR_ARCHIVE_ND | CVAR_LATCH);
 	r_texturebitslm = ri.Cvar_Get("r_texturebitslm", "0", CVAR_ARCHIVE_ND | CVAR_LATCH);
-	r_overBrightBits = ri.Cvar_Get("r_overBrightBits", "0", CVAR_ARCHIVE_ND | CVAR_LATCH);
-	r_mapOverBrightBits = ri.Cvar_Get("r_mapOverBrightBits", "0", CVAR_ARCHIVE_ND | CVAR_LATCH);
+	r_overBrightBits = ri.Cvar_Get("r_overBrightBits", "0.2", CVAR_ARCHIVE_ND | CVAR_LATCH);
+	r_mapOverBrightBits = ri.Cvar_Get("r_mapOverBrightBits", "0.2", CVAR_ARCHIVE_ND | CVAR_LATCH);
 	r_simpleMipMaps = ri.Cvar_Get("r_simpleMipMaps", "1", CVAR_ARCHIVE_ND | CVAR_LATCH);
 	r_vertexLight = ri.Cvar_Get("r_vertexLight", "0", CVAR_ARCHIVE | CVAR_LATCH);
 	r_subdivisions = ri.Cvar_Get("r_subdivisions", "4", CVAR_ARCHIVE_ND | CVAR_LATCH);
@@ -1688,7 +1718,7 @@ static void R_Register()
 	//
 	// temporary latched variables that can only change over a restart
 	//
-	r_fullbright = ri.Cvar_Get("r_fullbright", "0", CVAR_LATCH);
+	r_fullbright = ri.Cvar_Get("r_fullbright", "0.2", CVAR_LATCH);
 	r_singleShader = ri.Cvar_Get("r_singleShader", "0", CVAR_CHEAT | CVAR_LATCH);
 
 	//
@@ -1771,9 +1801,13 @@ static void R_Register()
 	r_noportals = ri.Cvar_Get("r_noportals", "0", CVAR_CHEAT);
 	r_shadows = ri.Cvar_Get("cg_shadows", "1", 0);
 	r_meshCloth = ri.Cvar_Get("r_meshCloth", "1", CVAR_ARCHIVE);
-	r_meshClothGravity = ri.Cvar_Get("r_meshClothGravity", "650", CVAR_ARCHIVE);
+	r_meshClothGravity = ri.Cvar_Get("r_meshClothGravity", "700", CVAR_ARCHIVE);
 	r_meshClothDrag = ri.Cvar_Get("r_meshClothDrag", "1.4", CVAR_ARCHIVE);
 	r_meshClothIter = ri.Cvar_Get("r_meshClothIter", "6", CVAR_ARCHIVE);
+	r_meshClothLodNear = ri.Cvar_Get("r_meshClothLodNear", "600", CVAR_ARCHIVE);
+	r_meshClothLodFar = ri.Cvar_Get("r_meshClothLodFar", "1800", CVAR_ARCHIVE);
+	r_threads = ri.Cvar_Get("r_threads", "-1", CVAR_ARCHIVE_ND);
+	r_smp = ri.Cvar_Get("r_smp", "0", CVAR_ARCHIVE_ND | CVAR_LATCH);	// render thread (tr_smp.cpp): 1 on, takes effect at the next vid_restart or map load
 	r_meshClothShape = ri.Cvar_Get("r_meshClothShape", "1", CVAR_ARCHIVE);
 	r_meshClothInertia = ri.Cvar_Get("r_meshClothInertia", "1", CVAR_ARCHIVE);
 	r_meshClothMaxAccel = ri.Cvar_Get("r_meshClothMaxAccel", "0", CVAR_ARCHIVE);
@@ -1933,6 +1967,8 @@ void R_Init(void)
 	if (err != GL_NO_ERROR)
 		ri.Printf(PRINT_ALL, "glGetError() = 0x%x\n", err);
 
+	R_SmpInit();	// r_smp: the render thread, now that the GL context and backEndData exist
+
 	RestoreGhoul2InfoArray();
 	// print info
 	GfxInfo_f();
@@ -1945,6 +1981,25 @@ void R_Init(void)
 	ri.Printf(PRINT_ALL, "-----SP Performance Mode loaded-----\n");
 }
 
+// r_smp (tr_smp.cpp): the second frame buffer, the same kind of memory as backEndData
+backEndData_t* R_SmpAllocBackEndData()
+{
+	return static_cast<backEndData_t*>(R_Hunk_Alloc(sizeof(backEndData_t), qtrue));
+}
+
+// r_smp: the front end state the back end reads, copied when a frame is handed over
+void R_SmpCaptureFrameState(smpFrameState_t* fs)
+{
+	extern int skyboxportal;
+	extern int drawskyboxportal;
+	fs->refdef = tr.refdef;
+	fs->frameCount = tr.frameCount;
+	fs->sceneCount = tr.sceneCount;
+	fs->skyboxportal = skyboxportal;
+	fs->drawskyboxportal = drawskyboxportal;
+	memcpy(fs->styleColors, styleColors, sizeof(fs->styleColors));
+}
+
 /*
 ===============
 RE_Shutdown
@@ -1954,6 +2009,9 @@ extern void R_ShutdownWorldEffects();
 
 void RE_Shutdown(qboolean destroyWindow, qboolean restarting)
 {
+	R_SmpShutdown();	// r_smp: render thread stopped first, the GL context back on this thread
+	R_ShutdownRenderJobs();	// job workers first: they may be using cloth state
+	R_ImagePrefetch_RendererShutdown(static_cast<qboolean>(!destroyWindow && !restarting));	// a map load's flush keeps its prefetch
 	R_MeshClothShutdown();
 	R_ShutdownFlarePbos(); // flare depth-read buffers (the GL context may go away below)
 	R_VideoCaptureShutdown(R_VideoReadbackGL()); // its pixel buffer objects (the GL context may go away below)
@@ -2051,6 +2109,7 @@ Touch all images to make sure they are resident
 =============
 */
 static void	RE_EndRegistration() {
+	R_ImagePrefetch_End(qtrue);	// map loaded: save its JPG list for the next load, free what is left
 	R_IssuePendingRenderCommands();
 }
 

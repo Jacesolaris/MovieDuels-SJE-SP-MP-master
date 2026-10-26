@@ -2390,52 +2390,53 @@ static qboolean HasValidWeaponThatUsesAmmo(const gentity_t* ent, const int ammot
 	switch (ammotype)
 	{
 	case AMMO_BLASTER:
-		if (ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_BLASTER ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_BATTLEDROID ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_THEFIRSTORDER ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_REBELBLASTER ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_REY ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_JANGO ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_DROIDEKA)
+		if (BG_HasWeapon(ent->client->ps.stats, WP_BLASTER) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_BATTLEDROID) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_THEFIRSTORDER) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_REBELBLASTER) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_REY) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_JANGO) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_DROIDEKA))
 			return qtrue;
 		break;
 	case AMMO_POWERCELL:
-		if (ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_DISRUPTOR ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_BOWCASTER ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_DEMP2 ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_REBELRIFLE ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_BOBA)
+		if (BG_HasWeapon(ent->client->ps.stats, WP_DISRUPTOR) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_BOWCASTER) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_DEMP2) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_TUSKEN_RIFLE) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_REBELRIFLE) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_BOBA))
 			return qtrue;
 
 		break;
 	case AMMO_METAL_BOLTS:
-		if (ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_REPEATER ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_FLECHETTE ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_CONCUSSION ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_CLONECARBINE ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_CLONERIFLE ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_CLONECOMMANDO ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_Z6_ROTARY_CANNON ||
-			ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_CLONEPISTOL)
+		if (BG_HasWeapon(ent->client->ps.stats, WP_REPEATER) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_FLECHETTE) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_CONCUSSION) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_CLONECARBINE) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_CLONERIFLE) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_CLONECOMMANDO) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_Z6_ROTARY_CANNON) ||
+			BG_HasWeapon(ent->client->ps.stats, WP_CLONEPISTOL))
 			return qtrue;
 
 		break;
 	case AMMO_ROCKETS:
-		if (ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_ROCKET_LAUNCHER)
+		if (BG_HasWeapon(ent->client->ps.stats, WP_ROCKET_LAUNCHER))
 			return qtrue;
 		break;
 	case AMMO_THERMAL:
-		if (ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_THERMAL ||
+		if (BG_HasWeapon(ent->client->ps.stats, WP_THERMAL) ||
 			ent->client->ps.ammo[AMMO_THERMAL] > 0)
 			return qtrue;
 		break;
 	case AMMO_TRIPMINE:
-		if (ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_TRIP_MINE ||
+		if (BG_HasWeapon(ent->client->ps.stats, WP_TRIP_MINE) ||
 			ent->client->ps.ammo[AMMO_TRIPMINE] > 0)
 			return qtrue;
 		break;
 	case AMMO_DETPACK:
-		if (ent->client->ps.stats[STAT_WEAPONS] & 1 << WP_DET_PACK ||
+		if (BG_HasWeapon(ent->client->ps.stats, WP_DET_PACK) ||
 			ent->client->ps.ammo[AMMO_DETPACK] > 0)
 			return qtrue;
 		break;

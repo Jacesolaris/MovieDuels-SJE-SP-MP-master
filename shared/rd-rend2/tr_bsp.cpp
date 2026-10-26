@@ -22,6 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // tr_map.c
 
 #include "tr_local.h"
+#include "q_profile.h"
 
 #define JSON_IMPLEMENTATION
 #include "json.h"
@@ -109,15 +110,16 @@ R_ColorShiftLightingBytes
 ===============
 */
 static	void R_ColorShiftLightingBytes(byte in[4], byte out[4]) {
-	int		shift = 0, r = 0, g = 0, b = 0;
+	float	scale = 1.0f;
+	int		r = 0, g = 0, b = 0;
 
 	// shift the color data based on overbright range
-	shift = Q_max(0, r_mapOverBrightBits->integer - tr.overbrightBits);
+	scale = powf(2.0f, Q_max(0.0f, r_mapOverBrightBits->value - tr.overbright));
 
 	// shift the data based on overbright range
-	r = in[0] << shift;
-	g = in[1] << shift;
-	b = in[2] << shift;
+	r = static_cast<int>(in[0] * scale);
+	g = static_cast<int>(in[1] * scale);
+	b = static_cast<int>(in[2] * scale);
 
 	// normalize by color instead of saturating to white
 	if ((r | g | b) > 255) {
@@ -130,6 +132,13 @@ static	void R_ColorShiftLightingBytes(byte in[4], byte out[4]) {
 		b = b * 255 / max;
 	}
 
+	// r_fullbright between 0 and 1: the lighting goes that far towards full bright (1 = white, as before)
+	const float fb = r_fullbright->value > 0.0f ? (r_fullbright->value < 1.0f ? r_fullbright->value : 1.0f) : 0.0f;
+	if (fb > 0.0f) {
+		r = r + static_cast<int>((255 - r) * fb);
+		g = g + static_cast<int>((255 - g) * fb);
+		b = b + static_cast<int>((255 - b) * fb);
+	}
 	out[0] = r;
 	out[1] = g;
 	out[2] = b;
@@ -147,7 +156,7 @@ static void R_ColorShiftLightingFloats(float in[4], float out[4], float scale, b
 	float r = 0.0f, g = 0.0f, b = 0.0f;
 
 	if (overbrightBits)
-		scale *= pow(2.0f, r_mapOverBrightBits->integer - tr.overbrightBits);
+		scale *= powf(2.0f, r_mapOverBrightBits->value - tr.overbright);
 
 	r = in[0] * scale;
 	g = in[1] * scale;
@@ -165,6 +174,13 @@ static void R_ColorShiftLightingFloats(float in[4], float out[4], float scale, b
 		}
 	}
 
+	// r_fullbright between 0 and 1: the lighting goes that far towards full bright (1 = white, as before)
+	const float fb = r_fullbright->value > 0.0f ? (r_fullbright->value < 1.0f ? r_fullbright->value : 1.0f) : 0.0f;
+	if (fb > 0.0f) {
+		if (r < 1.0f) r += (1.0f - r) * fb;
+		if (g < 1.0f) g += (1.0f - g) * fb;
+		if (b < 1.0f) b += (1.0f - b) * fb;
+	}
 	out[0] = r;
 	out[1] = g;
 	out[2] = b;
@@ -190,6 +206,7 @@ R_LoadLightmaps
 
 static	void R_LoadLightmaps(world_t* worldData, lump_t* l, lump_t* surfs)
 {
+	PROFILE_ZONE("Load: BSP lightmaps");
 #ifdef REND2_SP
 	byte* buf = nullptr, * buf_p = nullptr;
 #else // !REND2_SP
@@ -2200,6 +2217,7 @@ R_CreateWorldVBOs
 */
 static void R_CreateWorldVBOs(world_t* worldData)
 {
+	PROFILE_ZONE("Load: world VBOs");
 	int             i = 0, j = 0, k = 0;
 
 	int             numVerts = 0;
@@ -2482,6 +2500,7 @@ R_LoadSurfaces
 ===============
 */
 static	void R_LoadSurfaces(world_t* worldData, lump_t* surfs, lump_t* verts, lump_t* indexLump) {
+	PROFILE_ZONE("Load: BSP surfaces");
 	dsurface_t* in = nullptr;
 	msurface_t* out = nullptr;
 	drawVert_t* dv = nullptr;
@@ -2904,6 +2923,7 @@ R_LoadShaders
 =================
 */
 static	void R_LoadShaders(world_t* worldData, lump_t* l) {
+	PROFILE_ZONE("Load: BSP shaders");
 	int		i = 0, count = 0;
 	dshader_t* in = nullptr, * out = nullptr;
 
@@ -3960,6 +3980,7 @@ static void R_AssignCubemapsToWorldSurfaces(world_t* worldData)
 
 static void R_RenderAllCubemaps()
 {
+	PROFILE_ZONE("Load: render cubemaps");
 	R_IssuePendingRenderCommands();
 	R_InitNextFrame();
 
@@ -5238,6 +5259,12 @@ Called directly from cgame
 =================
 */
 void RE_LoadWorldMap(const char* name) {
+	PROFILE_ZONE("Load: world map (BSP)");
+#ifdef REND2_SP
+	R_ImagePrefetch_Begin(name, "r2_sp");	// this map's JPGs decoded ahead on the job workers
+#else
+	R_ImagePrefetch_Begin(name, "r2_mp");
+#endif
 	if (tr.worldMapLoaded)
 	{
 #ifdef REND2_SP
@@ -5291,6 +5318,7 @@ void RE_LoadWorldMap(const char* name) {
 	R_PushDebugGroup(AL_SCENE, "World loading");
 	R_PushDebugGroup(AL_VIEW, "Weather depth");
 	R_InitWeatherForMap();
+	R_GradeLoadForMap();	// colour grading: maps/<map>.grade
 
 	// Render all cubemaps
 	if (r_cubeMapping->integer && tr.numCubemaps)

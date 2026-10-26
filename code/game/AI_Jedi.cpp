@@ -513,6 +513,12 @@ static qboolean npc_is_staff_style(const gentity_t* self)
 
 static qboolean npc_is_dual_style(const gentity_t* self)
 {
+	// holding two sabers (an NPC file's saber2, or a script's SET_SABER2 - e.g. Barriss in the Clone Wars
+	// mission): dual, whatever the NPC type. The names below are only the NPCs that start with two.
+	if (self->client && self->client->ps.dualSabers)
+	{
+		return qtrue;
+	}
 	if (!Q_stricmp("md_grievous", self->NPC_type)
 		|| !Q_stricmp("md_grievous4", self->NPC_type)
 		|| !Q_stricmp("md_grievous_robed", self->NPC_type)
@@ -2148,13 +2154,15 @@ static void Jedi_AdjustSaberAnimLevel(const gentity_t* self, const int new_level
 		}
 		else if (npc_is_dual_style(self))
 		{
-			//dual only
+			//dual only (and stay: the random style picked below used to replace it)
 			self->client->ps.saberAnimLevel = SS_DUAL;
+			return;
 		}
 		else if (npc_is_staff_style(self))
 		{
-			//staff only
+			//staff only (and stay: the random style picked below used to replace it)
 			self->client->ps.saberAnimLevel = SS_STAFF;
+			return;
 		}
 		else
 		{
@@ -2190,13 +2198,15 @@ static void Jedi_AdjustSaberAnimLevel(const gentity_t* self, const int new_level
 		}
 		else if (npc_is_dual_style(self))
 		{
-			//dual only
+			//dual only (and stay: the random style picked below used to replace it)
 			self->client->ps.saberAnimLevel = SS_DUAL;
+			return;
 		}
 		else if (npc_is_staff_style(self))
 		{
-			//staff only
+			//staff only (and stay: the random style picked below used to replace it)
 			self->client->ps.saberAnimLevel = SS_STAFF;
+			return;
 		}
 		else
 		{
@@ -2207,7 +2217,7 @@ static void Jedi_AdjustSaberAnimLevel(const gentity_t* self, const int new_level
 	{
 		Jedi_AdjustSaberAnimLevel(NPC, Q_irand(SS_FAST, SS_STAFF));
 	}
-	else if (new_level > SS_STAFF)
+	else if (new_level > SS_BLASTER) // SS_BLASTER
 	{
 		Jedi_AdjustSaberAnimLevel(NPC, Q_irand(SS_FAST, SS_STAFF));
 	}
@@ -2234,6 +2244,7 @@ static void Jedi_AdjustSaberAnimLevel(const gentity_t* self, const int new_level
 			gi.Printf(S_COLOR_RED"%s Saber Attack Set: strong\n", self->NPC_type);
 			break;
 		case SS_DESANN:
+		case SS_BLASTER: // SS_BLASTER
 			gi.Printf(S_COLOR_RED"%s Saber Attack Set: desann\n", self->NPC_type);
 			break;
 		case SS_TAVION:
@@ -2264,7 +2275,7 @@ static void jedi_check_decrease_saberAnimLevel()
 		{
 			if ((NPC->client->ps.saberAnimLevel == SS_STRONG
 				|| NPC->client->ps.saberAnimLevel == SS_MEDIUM
-				|| NPC->client->ps.saberAnimLevel == SS_DESANN
+				|| (NPC->client->ps.saberAnimLevel == SS_DESANN || NPC->client->ps.saberAnimLevel == SS_BLASTER) // SS_BLASTER
 				|| NPC->client->ps.saberAnimLevel == SS_FAST
 				|| NPC->client->ps.saberAnimLevel == SS_TAVION)
 				&& NPC->client->ps.saberAnimLevel != SS_STAFF
@@ -2851,7 +2862,7 @@ static void Jedi_CombatDistance(const int enemy_dist)
 				ps->forcePowerLevel[FP_SABER_OFFENSE] > FORCE_LEVEL_2)
 			{
 				if (ps->saberAnimLevel != SS_STRONG &&
-					ps->saberAnimLevel != SS_DESANN &&
+					(ps->saberAnimLevel != SS_DESANN && ps->saberAnimLevel != SS_BLASTER) && // SS_BLASTER
 					NPC->saberPower)
 				{
 					Jedi_AdjustSaberAnimLevel(NPC, Q_irand(SS_DESANN, SS_STRONG));
@@ -7812,7 +7823,7 @@ static void jedi_combat_timers_update(const int enemy_dist)
 
 				if ((NPC->client->ps.saberAnimLevel == SS_STRONG
 					|| NPC->client->ps.saberAnimLevel == SS_MEDIUM
-					|| NPC->client->ps.saberAnimLevel == SS_DESANN
+					|| (NPC->client->ps.saberAnimLevel == SS_DESANN || NPC->client->ps.saberAnimLevel == SS_BLASTER) // SS_BLASTER
 					|| NPC->client->ps.saberAnimLevel == SS_FAST
 					|| NPC->client->ps.saberAnimLevel == SS_TAVION)
 					&& npc_is_staff_style(NPC) == qfalse
@@ -7833,7 +7844,7 @@ static void jedi_combat_timers_update(const int enemy_dist)
 				{
 					if ((NPC->client->ps.saberAnimLevel == SS_STRONG
 						|| NPC->client->ps.saberAnimLevel == SS_MEDIUM
-						|| NPC->client->ps.saberAnimLevel == SS_DESANN
+						|| (NPC->client->ps.saberAnimLevel == SS_DESANN || NPC->client->ps.saberAnimLevel == SS_BLASTER) // SS_BLASTER
 						|| NPC->client->ps.saberAnimLevel == SS_FAST
 						|| NPC->client->ps.saberAnimLevel == SS_TAVION)
 						&& npc_is_staff_style(NPC) == qfalse
@@ -7881,7 +7892,7 @@ static void jedi_combat_timers_update(const int enemy_dist)
 			{
 				if ((NPC->client->ps.saberAnimLevel == SS_STRONG
 					|| NPC->client->ps.saberAnimLevel == SS_MEDIUM
-					|| NPC->client->ps.saberAnimLevel == SS_DESANN
+					|| (NPC->client->ps.saberAnimLevel == SS_DESANN || NPC->client->ps.saberAnimLevel == SS_BLASTER) // SS_BLASTER
 					|| NPC->client->ps.saberAnimLevel == SS_FAST
 					|| NPC->client->ps.saberAnimLevel == SS_TAVION)
 					&& npc_is_staff_style(NPC) == qfalse
@@ -7913,7 +7924,7 @@ static void jedi_combat_timers_update(const int enemy_dist)
 
 				if ((NPC->client->ps.saberAnimLevel == SS_STRONG
 					|| NPC->client->ps.saberAnimLevel == SS_MEDIUM
-					|| NPC->client->ps.saberAnimLevel == SS_DESANN
+					|| (NPC->client->ps.saberAnimLevel == SS_DESANN || NPC->client->ps.saberAnimLevel == SS_BLASTER) // SS_BLASTER
 					|| NPC->client->ps.saberAnimLevel == SS_FAST
 					|| NPC->client->ps.saberAnimLevel == SS_TAVION)
 					&& npc_is_staff_style(NPC) == qfalse
@@ -7945,7 +7956,7 @@ static void jedi_combat_timers_update(const int enemy_dist)
 				{
 					if ((NPC->client->ps.saberAnimLevel == SS_STRONG
 						|| NPC->client->ps.saberAnimLevel == SS_MEDIUM
-						|| NPC->client->ps.saberAnimLevel == SS_DESANN
+						|| (NPC->client->ps.saberAnimLevel == SS_DESANN || NPC->client->ps.saberAnimLevel == SS_BLASTER) // SS_BLASTER
 						|| NPC->client->ps.saberAnimLevel == SS_FAST
 						|| NPC->client->ps.saberAnimLevel == SS_TAVION)
 						&& npc_is_staff_style(NPC) == qfalse
@@ -7968,7 +7979,7 @@ static void jedi_combat_timers_update(const int enemy_dist)
 			{
 				if ((NPC->client->ps.saberAnimLevel == SS_STRONG
 					|| NPC->client->ps.saberAnimLevel == SS_MEDIUM
-					|| NPC->client->ps.saberAnimLevel == SS_DESANN
+					|| (NPC->client->ps.saberAnimLevel == SS_DESANN || NPC->client->ps.saberAnimLevel == SS_BLASTER) // SS_BLASTER
 					|| NPC->client->ps.saberAnimLevel == SS_FAST
 					|| NPC->client->ps.saberAnimLevel == SS_TAVION)
 					&& npc_is_staff_style(NPC) == qfalse
@@ -7992,7 +8003,7 @@ static void jedi_combat_timers_update(const int enemy_dist)
 			{
 				if ((NPC->client->ps.saberAnimLevel == SS_STRONG
 					|| NPC->client->ps.saberAnimLevel == SS_MEDIUM
-					|| NPC->client->ps.saberAnimLevel == SS_DESANN
+					|| (NPC->client->ps.saberAnimLevel == SS_DESANN || NPC->client->ps.saberAnimLevel == SS_BLASTER) // SS_BLASTER
 					|| NPC->client->ps.saberAnimLevel == SS_FAST
 					|| NPC->client->ps.saberAnimLevel == SS_TAVION)
 					&& npc_is_staff_style(NPC) == qfalse
@@ -9609,7 +9620,7 @@ void NPC_Jedi_Pain(gentity_t* self, gentity_t* inflictor, gentity_t* attacker, c
 			//ouch... maybe switch up which saber power level we're using
 			if ((self->client->ps.saberAnimLevel == SS_STRONG
 				|| self->client->ps.saberAnimLevel == SS_MEDIUM
-				|| self->client->ps.saberAnimLevel == SS_DESANN
+				|| (self->client->ps.saberAnimLevel == SS_DESANN || self->client->ps.saberAnimLevel == SS_BLASTER) // SS_BLASTER
 				|| self->client->ps.saberAnimLevel == SS_FAST
 				|| self->client->ps.saberAnimLevel == SS_TAVION)
 				&& !npc_is_staff_style(self)
@@ -10929,8 +10940,8 @@ static void JediHandleSpacing(gentity_t* self)
 					// Only allow this special if kata is allowed
 					if (Jedi_CanUseKata(self))
 					{
-						self->client->ps.saberMove = BOTH_LUNGE2_B__T_;
-						self->client->ps.weaponTime = level.time + 400;
+						self->client->ps.saberMove = LS_A_LUNGE; // was BOTH_LUNGE2_B__T_ (an anim number, out of range as a saber move)
+						self->client->ps.weaponTime = 400; // weaponTime counts down, it is not a time stamp
 						TIMER_Set(NPC, "noKata", jedi_get_kata_cooldown_duration());
 					}
 				}
@@ -11219,6 +11230,7 @@ static saberCombo_t JediChooseCombo(gentity_t* self)
 
 		case SS_STRONG:
 		case SS_DESANN:
+		case SS_BLASTER: // SS_BLASTER
 			chosen = s_strongSignatureCombos[Q_irand(0, ARRAY_LEN(s_strongSignatureCombos) - 1)];
 			maxLen = 4;
 			break;
@@ -12068,6 +12080,7 @@ static void Jedi_Attack(void)
 					case SS_MEDIUM:
 					case SS_STRONG:
 					case SS_DESANN:
+					case SS_BLASTER: // SS_BLASTER
 						if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
 						{
 							if (Jedi_Animationstyletable(NPC).isCountDooku == qtrue)

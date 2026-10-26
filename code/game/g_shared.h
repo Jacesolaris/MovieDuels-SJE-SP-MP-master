@@ -748,8 +748,11 @@ public:
 	// timers
 	int respawnTime; // can respawn when time > this, force after g_forcerespwan
 	int idleTime; // for playing idleAnims
+	int rewardTime; // clear the EF_AWARD_IMPRESSIVE, etc when time > this
 
 	int airOutTime;
+
+	int lastKillTime; // for multiple kill rewards
 
 	// timeResidual is used to handle events that happen every second
 	// like health / armor countdowns and regeneration
@@ -928,7 +931,9 @@ public:
 		saved_game.write<int8_t>(forced_rightmove);
 		saved_game.write<int32_t>(respawnTime);
 		saved_game.write<int32_t>(idleTime);
+		saved_game.write<int32_t>(rewardTime);
 		saved_game.write<int32_t>(airOutTime);
+		saved_game.write<int32_t>(lastKillTime);
 		saved_game.write<int32_t>(timeResidual);
 		saved_game.write<float>(facial_blink);
 		saved_game.write<float>(facial_timer);
@@ -1059,7 +1064,9 @@ public:
 		saved_game.read<int8_t>(forced_rightmove);
 		saved_game.read<int32_t>(respawnTime);
 		saved_game.read<int32_t>(idleTime);
+		saved_game.read<int32_t>(rewardTime);
 		saved_game.read<int32_t>(airOutTime);
+		saved_game.read<int32_t>(lastKillTime);
 		saved_game.read<int32_t>(timeResidual);
 		saved_game.read<float>(facial_blink);
 		saved_game.read<float>(facial_timer);

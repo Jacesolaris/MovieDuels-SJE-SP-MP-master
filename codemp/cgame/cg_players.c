@@ -3748,6 +3748,12 @@ static void CG_SetLerpFrameAnimation(centity_t* cent, clientInfo_t* ci, lerpFram
 
 		animSpeed *= anim_speed_mult;
 
+		// dying in water: the death anim plays 25% slower, then the body ragdolls and floats (DH 2026-10-25)
+		if (BG_InDeathAnim(new_animation) && (CG_PointContents(cent->lerpOrigin, -1) & CONTENTS_WATER))
+		{
+			animSpeed *= 0.75f;
+		}
+
 		PM_SaberStartTransAnim(cent->currentState.number, cent->currentState.fireflag, cent->currentState.weapon, new_animation, &animSpeed, cent->currentState.userInt3);
 
 		if (cg_debugAnim.integer == 5 && cent->currentState.number == cg.predictedPlayerState.clientNum)
@@ -6095,6 +6101,34 @@ static void CG_PlayerSplash(const centity_t* cent)
 }
 
 #define REFRACT_EFFECT_DURATION		500
+
+// A force push / pull just started (PW_DISINT_4 came on, PW_PULL with it for a pull; not grip, which also uses it):
+// tell the renderer, whose mesh cloth then blows the capes and robes in front of the user (renderer command
+// meshcloth_push). Each client works it out from the snapshot, so nothing new is sent over the network.
+// cg_clothForcePush scales it, 0 = off.
+static void CG_ClothForcePush(const centity_t* cent)
+{
+	static qboolean wasOn[MAX_GENTITIES];
+	const int num = cent->currentState.number;
+	if (num < 0 || num >= MAX_GENTITIES)
+	{
+		return;
+	}
+	const qboolean on = (cent->currentState.powerups & 1 << PW_DISINT_4) && !(cent->currentState.forcePowersActive & 1 << FP_GRIP) ? qtrue : qfalse;
+	const qboolean started = on && !wasOn[num] ? qtrue : qfalse;
+	wasOn[num] = on;
+	if (!started || cg_clothForcePush.value <= 0.0f)
+	{
+		return;
+	}
+	vec3_t fwd, org;
+	AngleVectors(cent->lerpAngles, fwd, NULL, NULL);
+	VectorCopy(cent->lerpOrigin, org);
+	org[2] += 32.0f;
+	const float strength = (cent->currentState.powerups & 1 << PW_PULL ? -500.0f : 800.0f) * cg_clothForcePush.value;
+	trap->SendConsoleCommand(va("meshcloth_push %.0f %.0f %.0f %.3f %.3f %.3f %.0f 400\n",
+		org[0], org[1], org[2], fwd[0], fwd[1], fwd[2], strength));
+}
 
 static void CG_ForcePushBlur(vec3_t org, centity_t* cent)
 {
@@ -16938,7 +16972,7 @@ static void SmoothTrueView(vec3_t eye_angles)
 	}
 }
 
-extern void* g2HolsterWeaponInstances[MAX_WEAPONS];
+extern void* g2HolsterWeaponInstances[WP_NUM_WEAPONS];
 void* CG_G2HolsterWeaponInstance(const centity_t* cent, int weapon, qboolean second_saber);
 
 static void ApplyAxisRotation(vec3_t axis[3], const int rot_type, const float value)
@@ -17221,6 +17255,340 @@ static void CG_HolsteredWeaponRender(centity_t* cent, const clientInfo_t* ci, co
 #define		G2MODEL_BLASTER2_HOLSTERED		8
 #define		G2MODEL_LAUNCHER_HOLSTERED		9
 #define		G2MODEL_GOLAN_HOLSTERED			10
+#define		SABERBLASTER_HIP_HOLSTERED		(WP_NUM_WEAPONS + 1) // SS_BLASTER: blaster2_holstered marker
+
+// SS_BLASTER is Kyle Katarn's style only (game: G_SaberBlasterKyleModel): his model folders contain "kyle"
+static qboolean CG_SaberBlasterKyleModel(const clientInfo_t* ci)
+{
+	char model[MAX_QPATH];
+	Q_strncpyz(model, ci->modelName, sizeof model);
+	Q_strlwr(model);
+	return strstr(model, "kyle") ? qtrue : qfalse;
+}
+
+// SS_BLASTER: the blaster saber style holds a bryar pistol in the left hand (visual only): the left hand
+// pistol instance (bolted to *l_hand) goes into ghoul2 slot 2, which single saber users do not use
+static void CG_SaberBlasterPistolUpdate(centity_t* cent, const clientInfo_t* ci)
+{
+	if (!cent->ghoul2 || !ci)
+	{
+		return;
+	}
+	if (cent->currentState.weapon != WP_SABER)
+	{
+		// the weapon change code clears slot 2 itself
+		cent->saberBlasterPistol = qfalse;
+		return;
+	}
+	if (cent->currentState.eFlags2 & EF2_SCEPTER)
+	{
+		// Ragnos' scepter has her left hand (CG_ScepterUpdate): no pistol, and one still there goes
+		if (cent->saberBlasterPistol && !cent->scepterModel && !ci->saber[1].model[0]
+			&& trap->G2API_HasGhoul2ModelOnIndex(&cent->ghoul2, 2))
+		{
+			trap->G2API_RemoveGhoul2Model(&cent->ghoul2, 2);
+		}
+		cent->saberBlasterPistol = qfalse;
+		return;
+	}
+	if (cent->currentState.fireflag == SS_BLASTER
+		&& !ci->saber[1].model[0]
+		&& !(cent->currentState.eFlags & EF_DEAD))
+	{
+		if (!trap->G2API_HasGhoul2ModelOnIndex(&cent->ghoul2, 2))
+		{
+			void* pistol = CG_G2WeaponInstance2(cent, WP_BRYAR_PISTOL);
+
+			if (!pistol)
+			{
+				return;
+			}
+			trap->G2API_CopySpecificGhoul2Model(pistol, 0, cent->ghoul2, 2);
+		}
+		cent->saberBlasterPistol = qtrue;
+	}
+	else if (cent->saberBlasterPistol)
+	{
+		if (!ci->saber[1].model[0] && trap->G2API_HasGhoul2ModelOnIndex(&cent->ghoul2, 2))
+		{
+			trap->G2API_RemoveGhoul2Model(&cent->ghoul2, 2);
+		}
+		cent->saberBlasterPistol = qfalse;
+	}
+}
+
+// Ragnos' scepter (2026-10-23): EF2_SCEPTER (the Possessed Tavion bot, game/ai_main.c) puts SP's WP_SCEPTER model in her
+// left hand, in ghoul2 slot 2, which single saber users do not use (bolted to *l_hand, bolt 1, like the left hand
+// pistol). Its effects are SP's, on the scepter's tip ("*flash"): beam_warmup when BOTH_SCEPTER_START begins,
+// slam_warmup when BOTH_TAVION_SCEPTERGROUND begins, and the beam while BOTH_SCEPTER_HOLD plays (SP looped it on the
+// tip from the start of the hold to its end; here it is kept going 300 ms at a time, so it stops with the hold).
+// The server does the damage, the slam and impact effects and the sounds.
+
+// the scepter model: SP's WP_SCEPTER world model, models/weapons2/sith_scepter/sith_scepter_w.glm (its *weapon and *flash
+// tags are the handle and the tip). weapons.dat's sith_scepter.md3 is the first person (view) model: an .md3 is not a
+// Ghoul2 model, so it can't be bolted to her hand or carry the beam effects (MP's rule, as for every weapon: the world
+// model is the .md3's name with _w.glm). If that file is not there, the scepter folders are searched for a .glm, a
+// world model (_w) before others, never sith_scepter_only.glm (an unused model on its own skeleton) (2026-10-24)
+static const char* CG_ScepterModelPath(void)
+{
+	static char path[MAX_QPATH];
+	static qboolean searched = qfalse;
+	static const char* const worldModel = "models/weapons2/sith_scepter/sith_scepter_w.glm";
+	char list[4096];
+	char dirList[8192];
+	fileHandle_t f = 0;
+
+	if (searched)
+	{
+		return path[0] ? path : NULL;
+	}
+	searched = qtrue;
+	path[0] = '\0';
+
+	if (trap->FS_Open(worldModel, &f, FS_READ) > 0)
+	{
+		Q_strncpyz(path, worldModel, sizeof path);
+	}
+	if (f)
+	{
+		trap->FS_Close(f);
+	}
+
+	for (int pass = 0; pass < 2 && !path[0]; pass++)
+	{
+		const int numDirs = pass ? trap->FS_GetFileList("models/weapons2", "/", dirList, sizeof dirList) : 1;
+		const char* dirName = dirList;
+
+		for (int d = 0; d < numDirs && !path[0]; d++)
+		{
+			char dir[MAX_QPATH];
+
+			if (pass)
+			{
+				const char* name = dirName;
+				dirName += strlen(dirName) + 1;
+				if (!Q_stristr(name, "scepter") || !Q_stricmp(name, "sith_scepter"))
+				{
+					continue; // sith_scepter itself was the first pass
+				}
+				Com_sprintf(dir, sizeof dir, "models/weapons2/%s", name);
+			}
+			else
+			{
+				Q_strncpyz(dir, "models/weapons2/sith_scepter", sizeof dir);
+			}
+
+			const int numFiles = trap->FS_GetFileList(dir, ".glm", list, sizeof list);
+			const char* file = list;
+			const char* pick = NULL;
+			int pickScore = -1;
+
+			for (int i = 0; i < numFiles; i++, file += strlen(file) + 1)
+			{
+				if (Q_stristr(file, "_only"))
+				{
+					continue;
+				}
+				const int score = (Q_stristr(file, "_w.glm") ? 2 : 0) + (Q_stristr(file, "scepter") ? 1 : 0);
+				if (score > pickScore)
+				{
+					pick = file;
+					pickScore = score;
+				}
+			}
+			if (pick)
+			{
+				Com_sprintf(path, sizeof path, "%s/%s", dir, pick);
+			}
+		}
+	}
+
+	if (path[0])
+	{
+		Com_Printf("sith_scepter: %s\n", path);
+		return path;
+	}
+	Com_Printf(S_COLOR_YELLOW "sith_scepter: no scepter model found (%s)\n", worldModel);
+	return NULL;
+}
+
+static void* cg_scepterG2 = NULL;
+static qboolean cg_scepterTried = qfalse;
+static int cg_scepterFlashBolt = -1;
+static int cg_scepterFxBeamWarmup = 0;
+static int cg_scepterFxBeam = 0;
+static int cg_scepterFxSlamWarmup = 0;
+
+static void* CG_ScepterInstance(void)
+{
+	if (!cg_scepterTried)
+	{
+		cg_scepterTried = qtrue;
+		const char* model = CG_ScepterModelPath();
+		if (model)
+		{
+			trap->G2API_InitGhoul2Model(&cg_scepterG2, model, 0, 0, 0, 0, 0);
+		}
+		if (cg_scepterG2)
+		{
+			trap->G2API_SetBoltInfo(cg_scepterG2, 0, 1); // the player model's *l_hand
+			cg_scepterFlashBolt = trap->G2API_AddBolt(cg_scepterG2, 0, "*flash");
+		}
+		cg_scepterFxBeamWarmup = trap->FX_RegisterEffect("scepter/beam_warmup.efx");
+		cg_scepterFxBeam = trap->FX_RegisterEffect("scepter/beam.efx");
+		cg_scepterFxSlamWarmup = trap->FX_RegisterEffect("scepter/slam_warmup.efx");
+	}
+	return cg_scepterG2;
+}
+
+void CG_ScepterShutdown(void)
+{
+	if (cg_scepterG2)
+	{
+		trap->G2API_CleanGhoul2Models(&cg_scepterG2);
+	}
+	cg_scepterG2 = NULL;
+	cg_scepterTried = qfalse;
+	cg_scepterFlashBolt = -1;
+	cg_scepterFxBeamWarmup = cg_scepterFxBeam = cg_scepterFxSlamWarmup = 0;
+}
+
+// the beam: SP loops scepter/beam.efx on the scepter's tip, along the staff. Here it is aimed where she looks (her
+// view follows her enemy, and the server's damage aims the same way, bot_scepter_bolt), because MD's hold anim
+// points the staff up and away in MP (DH 2026-10-24). beam.efx draws along -axis[1]; it is replayed every 45 ms, as
+// its own 50 ms repeat with 50 ms lines
+static void CG_ScepterBeam(centity_t* cent)
+{
+	mdxaBone_t bolt;
+	vec3_t tip, eye, fwd, end, dir;
+	matrix3_t axis;
+	trace_t tr;
+
+	if (cg.time < cent->scepterFxTime)
+	{
+		return;
+	}
+	cent->scepterFxTime = cg.time + 45;
+
+	if (!trap->G2API_GetBoltMatrix(cent->ghoul2, 2, cg_scepterFlashBolt, &bolt, cent->turAngles, cent->lerpOrigin,
+		cg.time, cgs.game_models, cent->modelScale))
+	{
+		return;
+	}
+	BG_GiveMeVectorFromMatrix(&bolt, ORIGIN, tip);
+
+	VectorCopy(cent->lerpOrigin, eye);
+	eye[2] += DEFAULT_VIEWHEIGHT;
+	AngleVectors(cent->lerpAngles, fwd, NULL, NULL);
+	VectorMA(eye, 2048.0f, fwd, end);
+	CG_Trace(&tr, eye, NULL, NULL, end, cent->currentState.number, MASK_SHOT);
+	VectorSubtract(tr.endpos, tip, dir);
+	if (VectorNormalize(dir) < 1.0f)
+	{
+		VectorCopy(fwd, dir);
+	}
+
+	VectorScale(dir, -1.0f, axis[1]);
+	PerpendicularVector(axis[0], axis[1]);
+	CrossProduct(axis[0], axis[1], axis[2]);
+	trap->FX_PlayEntityEffectID(cg_scepterFxBeam, tip, axis, -1, -1, -1, -1);
+}
+
+static void CG_ScepterEffects(centity_t* cent)
+{
+	const int anim = cent->currentState.torsoAnim;
+
+	if (cent->scepterFxTime > cg.time + 60000)
+	{
+		// cg.time restarted (new map)
+		cent->scepterFxTime = 0;
+	}
+
+	if (anim == cent->scepterAnim)
+	{
+		if (anim == BOTH_SCEPTER_HOLD && cg_scepterFlashBolt >= 0 && cg_scepterFxBeam)
+		{
+			CG_ScepterBeam(cent);
+		}
+		return;
+	}
+	cent->scepterAnim = anim;
+	cent->scepterFxTime = 0;
+
+	if (cg_scepterFlashBolt < 0)
+	{
+		return;
+	}
+
+	// SP: the warmups play once on the tip; the beam plays for the whole hold (CG_ScepterBeam)
+	if (anim == BOTH_SCEPTER_START && cg_scepterFxBeamWarmup)
+	{
+		trap->FX_PlayBoltedEffectID(cg_scepterFxBeamWarmup, cent->lerpOrigin, cent->ghoul2, cg_scepterFlashBolt,
+			cent->currentState.number, 2, 0, qtrue);
+	}
+	else if (anim == BOTH_TAVION_SCEPTERGROUND && cg_scepterFxSlamWarmup)
+	{
+		trap->FX_PlayBoltedEffectID(cg_scepterFxSlamWarmup, cent->lerpOrigin, cent->ghoul2, cg_scepterFlashBolt,
+			cent->currentState.number, 2, 0, qtrue);
+	}
+	else if (anim == BOTH_SCEPTER_HOLD && cg_scepterFxBeam)
+	{
+		CG_ScepterBeam(cent);
+	}
+}
+
+static void CG_ScepterUpdate(centity_t* cent, const clientInfo_t* ci)
+{
+	if (!cent->ghoul2 || !ci)
+	{
+		return;
+	}
+
+	if (cent->currentState.weapon != WP_SABER)
+	{
+		// the weapon change code clears slot 2 itself (and the dual pistols use it)
+		cent->scepterModel = qfalse;
+		cent->scepterAnim = 0;
+		return;
+	}
+
+	if (cent->currentState.eFlags2 & EF2_SCEPTER
+		&& !ci->saber[1].model[0]
+		&& !(cent->currentState.eFlags & EF3_DUAL_WEAPONS)
+		&& !cent->saberBlasterPistol)
+	{
+		const qboolean inSlot = trap->G2API_HasGhoul2ModelOnIndex(&cent->ghoul2, 2) ? qtrue : qfalse;
+
+		if (!inSlot || !cent->scepterModel)
+		{
+			void* scepter;
+
+			if (inSlot)
+			{
+				// slot 2 has something else in it
+				return;
+			}
+			scepter = CG_ScepterInstance();
+			if (!scepter)
+			{
+				return;
+			}
+			trap->G2API_CopySpecificGhoul2Model(scepter, 0, cent->ghoul2, 2);
+			cent->scepterModel = qtrue;
+			cent->scepterAnim = 0;
+		}
+		CG_ScepterEffects(cent);
+	}
+	else if (cent->scepterModel)
+	{
+		if (!ci->saber[1].model[0] && trap->G2API_HasGhoul2ModelOnIndex(&cent->ghoul2, 2))
+		{
+			trap->G2API_RemoveGhoul2Model(&cent->ghoul2, 2);
+		}
+		cent->scepterModel = qfalse;
+		cent->scepterAnim = 0;
+	}
+}
 
 static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 {
@@ -17229,6 +17597,8 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 	//used to make sure that
 	qboolean back_in_use = cent->currentState.eFlags & EF_JETPACK ? qtrue : qfalse;
 	int weap_inv = 0;
+	int weap_inv2 = 0; // weapons 32-63 (STAT_WEAPONS2)
+#define CG_HOLSTER_HAS(w) ((w) < 32 ? (weap_inv & 1 << ((w) & 31)) != 0 : (weap_inv2 & 1 << ((w) & 31)) != 0)
 
 	if (cg.snap && cg.snap->ps.clientNum == cent->currentState.number)
 	{
@@ -17240,6 +17610,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 		}
 
 		weap_inv = cg.snap->ps.stats[STAT_WEAPONS];
+		weap_inv2 = cg.snap->ps.stats[STAT_WEAPONS2];
 		// the guns set to "not on person" in the weapon wheel are not drawn
 		weap_inv &= ~(int)strtoul(cg_holsterHide.string, NULL, 16);
 	}
@@ -17279,7 +17650,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 		int right_hip_in_use = 0;
 		//this player can have holstered weapons
 		//sabers
-		if (weap_inv & 1 << WP_SABER)
+		if (CG_HOLSTER_HAS(WP_SABER))
 		{
 			//have saber in inventory
 			if (cent->currentState.weapon != WP_SABER)
@@ -17431,7 +17802,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//Handle Blaster Holster on right hip
 		if (right_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_BLASTER) //don't have blaster
+			|| !(CG_HOLSTER_HAS(WP_BLASTER)) //don't have blaster
 			|| cent->currentState.weapon == WP_BLASTER) //or are currently using blaster
 		{
 			//don't need holstered blaster rendered
@@ -17482,7 +17853,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//Handle Blaster Holster on right hip
 		if (right_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_BATTLEDROID) //don't have blaster
+			|| !(CG_HOLSTER_HAS(WP_BATTLEDROID)) //don't have blaster
 			|| cent->currentState.weapon == WP_BATTLEDROID) //or are currently using blaster
 		{
 			//don't need holstered blaster rendered
@@ -17531,7 +17902,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//Handle Blaster Holster on right hip
 		if (right_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_THEFIRSTORDER) //don't have blaster
+			|| !(CG_HOLSTER_HAS(WP_THEFIRSTORDER)) //don't have blaster
 			|| cent->currentState.weapon == WP_THEFIRSTORDER) //or are currently using blaster
 		{
 			//don't need holstered blaster rendered
@@ -17580,7 +17951,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//Handle Blaster Holster on right hip
 		if (right_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_CLONECARBINE) //don't have blaster
+			|| !(CG_HOLSTER_HAS(WP_CLONECARBINE)) //don't have blaster
 			|| cent->currentState.weapon == WP_CLONECARBINE) //or are currently using blaster
 		{
 			//don't need holstered blaster rendered
@@ -17629,7 +18000,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//Handle Blaster Holster on right hip
 		if (right_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_REBELBLASTER) //don't have blaster
+			|| !(CG_HOLSTER_HAS(WP_REBELBLASTER)) //don't have blaster
 			|| cent->currentState.weapon == WP_REBELBLASTER) //or are currently using blaster
 		{
 			//don't need holstered blaster rendered
@@ -17678,7 +18049,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle rendering WP_BRYAR_PISTOL on right hip holster
 		if (right_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_BRYAR_PISTOL) //don't have the WP_BRYAR_PISTOL
+			|| !(CG_HOLSTER_HAS(WP_BRYAR_PISTOL)) //don't have the WP_BRYAR_PISTOL
 			|| cent->currentState.weapon == WP_BRYAR_PISTOL) //currently using WP_BRYAR_PISTOL
 		{
 			//don't render WP_BRYAR_PISTOL on right hip.
@@ -17727,7 +18098,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle rendering WP_BRYAR_PISTOL on right hip holster
 		if (right_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_REY) //don't have the WP_BRYAR_PISTOL
+			|| !(CG_HOLSTER_HAS(WP_REY)) //don't have the WP_BRYAR_PISTOL
 			|| cent->currentState.weapon == WP_REY) //currently using WP_BRYAR_PISTOL
 		{
 			//don't render WP_BRYAR_PISTOL on right hip.
@@ -17776,7 +18147,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle rendering WP_BRYAR_PISTOL on right hip holster
 		if (right_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_JANGO) //don't have the WP_BRYAR_PISTOL
+			|| !(CG_HOLSTER_HAS(WP_JANGO)) //don't have the WP_BRYAR_PISTOL
 			|| cent->currentState.weapon == WP_JANGO) //currently using WP_BRYAR_PISTOL
 		{
 			//don't render WP_BRYAR_PISTOL on right hip.
@@ -17825,7 +18196,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle rendering WP_BRYAR_PISTOL on right hip holster
 		if (right_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_BOBA) //don't have the WP_BRYAR_PISTOL
+			|| !(CG_HOLSTER_HAS(WP_BOBA)) //don't have the WP_BRYAR_PISTOL
 			|| cent->currentState.weapon == WP_BOBA) //currently using WP_BRYAR_PISTOL
 		{
 			//don't render WP_BRYAR_PISTOL on right hip.
@@ -17874,7 +18245,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle rendering WP_BRYAR_PISTOL on right hip holster
 		if (right_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_CLONEPISTOL) //don't have the WP_BRYAR_PISTOL
+			|| !(CG_HOLSTER_HAS(WP_CLONEPISTOL)) //don't have the WP_BRYAR_PISTOL
 			|| cent->currentState.weapon == WP_CLONEPISTOL) //currently using WP_BRYAR_PISTOL
 		{
 			//don't render WP_BRYAR_PISTOL on right hip.
@@ -17923,7 +18294,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle old school pistol
 		if (right_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_BRYAR_OLD) //don't have the WP_BRYAR_OLD
+			|| !(CG_HOLSTER_HAS(WP_BRYAR_OLD)) //don't have the WP_BRYAR_OLD
 			|| cent->currentState.weapon == WP_BRYAR_OLD) //currently using WP_BRYAR_OLD
 		{
 			//don't render WP_BRYAR_OLD on right hip.
@@ -17974,9 +18345,61 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 		* Start Left Hip Holster code
 		*============================
 		*/
+		// SS_BLASTER: someone who can use the blaster saber style (Kyle Katarn's model, single one-blade saber that does
+		// not forbid it) but does not use it right now carries its bryar pistol on the left hip; it takes the left hip
+		// before any other gun. With the style active the pistol is in his left hand (CG_SaberBlasterPistolUpdate).
+		if (CG_HOLSTER_HAS(WP_SABER)
+			&& CG_SaberBlasterKyleModel(ci)
+			&& ci->saber[0].model[0] && !ci->saber[1].model[0]
+			&& ci->saber[0].numBlades == 1
+			&& !(ci->saber[0].saberFlags & SFL_TWO_HANDED)
+			&& !(ci->saber[0].stylesForbidden & 1 << SS_BLASTER))
+		{
+			if (!(cent->currentState.weapon == WP_SABER && cent->currentState.fireflag == SS_BLASTER))
+			{
+				if (ci->holster_blaster2 != -1)
+				{
+					if (ci->blaster2_holstered != SABERBLASTER_HIP_HOLSTERED)
+					{
+						if (ci->blaster2_holstered != 0
+							&& trap->G2API_HasGhoul2ModelOnIndex(&cent->ghoul2, G2MODEL_BLASTER2_HOLSTERED))
+						{
+							trap->G2API_RemoveGhoul2Model(&cent->ghoul2, G2MODEL_BLASTER2_HOLSTERED);
+						}
+						trap->G2API_CopySpecificGhoul2Model(CG_G2WeaponInstance(cent, WP_BRYAR_PISTOL), 0, cent->ghoul2,
+							G2MODEL_BLASTER2_HOLSTERED);
+						trap->G2API_SetBoltInfo(cent->ghoul2, G2MODEL_BLASTER2_HOLSTERED, ci->holster_blaster2);
+						ci->blaster2_holstered = SABERBLASTER_HIP_HOLSTERED;
+					}
+				}
+				else
+				{
+					CG_HolsteredWeaponRender(cent, ci, HLR_PISTOL_L, WP_BRYAR_PISTOL);
+				}
+			}
+			else if (ci->holster_blaster2 != -1 && ci->blaster2_holstered == SABERBLASTER_HIP_HOLSTERED)
+			{
+				// the pistol is in his hand now
+				if (trap->G2API_HasGhoul2ModelOnIndex(&cent->ghoul2, G2MODEL_BLASTER2_HOLSTERED))
+				{
+					trap->G2API_RemoveGhoul2Model(&cent->ghoul2, G2MODEL_BLASTER2_HOLSTERED);
+				}
+				ci->blaster2_holstered = 0;
+			}
+			left_hip_in_use = SABERBLASTER_HIP_HOLSTERED; // the left hip stays reserved for the pistol
+		}
+		else if (ci->holster_blaster2 != -1 && ci->blaster2_holstered == SABERBLASTER_HIP_HOLSTERED)
+		{
+			if (trap->G2API_HasGhoul2ModelOnIndex(&cent->ghoul2, G2MODEL_BLASTER2_HOLSTERED))
+			{
+				trap->G2API_RemoveGhoul2Model(&cent->ghoul2, G2MODEL_BLASTER2_HOLSTERED);
+			}
+			ci->blaster2_holstered = 0;
+		}
+
 		//Handle Blaster Holster on left hip
 		if (left_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_BLASTER) //don't have blaster
+			|| !(CG_HOLSTER_HAS(WP_BLASTER)) //don't have blaster
 			|| cent->currentState.weapon == WP_BLASTER //or are currently using blaster
 			|| right_hip_in_use == WP_BLASTER) //or the blaster is already on the right hip.
 
@@ -18027,7 +18450,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 		}
 		//Handle Blaster Holster on left hip
 		if (left_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_BATTLEDROID) //don't have blaster
+			|| !(CG_HOLSTER_HAS(WP_BATTLEDROID)) //don't have blaster
 			|| cent->currentState.weapon == WP_BATTLEDROID //or are currently using blaster
 			|| right_hip_in_use == WP_BATTLEDROID) //or the blaster is already on the right hip.
 
@@ -18078,7 +18501,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 		}
 		//Handle Blaster Holster on left hip
 		if (left_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_THEFIRSTORDER) //don't have blaster
+			|| !(CG_HOLSTER_HAS(WP_THEFIRSTORDER)) //don't have blaster
 			|| cent->currentState.weapon == WP_THEFIRSTORDER //or are currently using blaster
 			|| right_hip_in_use == WP_THEFIRSTORDER) //or the blaster is already on the right hip.
 
@@ -18129,7 +18552,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 		}
 		//Handle Blaster Holster on left hip
 		if (left_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_CLONECARBINE) //don't have blaster
+			|| !(CG_HOLSTER_HAS(WP_CLONECARBINE)) //don't have blaster
 			|| cent->currentState.weapon == WP_CLONECARBINE //or are currently using blaster
 			|| right_hip_in_use == WP_CLONECARBINE) //or the blaster is already on the right hip.
 
@@ -18180,7 +18603,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 		}
 		//Handle Blaster Holster on left hip
 		if (left_hip_in_use //hip in use already
-			|| !(weap_inv & 1 << WP_REBELBLASTER) //don't have blaster
+			|| !(CG_HOLSTER_HAS(WP_REBELBLASTER)) //don't have blaster
 			|| cent->currentState.weapon == WP_REBELBLASTER //or are currently using blaster
 			|| right_hip_in_use == WP_REBELBLASTER) //or the blaster is already on the right hip.
 
@@ -18231,7 +18654,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 		}
 		//Handle pistol Holster on left hip
 		if (left_hip_in_use
-			|| !(weap_inv & 1 << WP_BRYAR_PISTOL) //don't have pistol
+			|| !(CG_HOLSTER_HAS(WP_BRYAR_PISTOL)) //don't have pistol
 			|| cent->currentState.weapon == WP_BRYAR_PISTOL //or are currently using pistol
 			|| right_hip_in_use == WP_BRYAR_PISTOL) //or the pistol is already on the right hip.
 		{
@@ -18282,7 +18705,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//Handle pistol Holster on left hip
 		if (left_hip_in_use
-			|| !(weap_inv & 1 << WP_REY) //don't have pistol
+			|| !(CG_HOLSTER_HAS(WP_REY)) //don't have pistol
 			|| cent->currentState.weapon == WP_REY //or are currently using pistol
 			|| right_hip_in_use == WP_REY) //or the pistol is already on the right hip.
 		{
@@ -18333,7 +18756,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//Handle pistol Holster on left hip
 		if (left_hip_in_use
-			|| !(weap_inv & 1 << WP_JANGO) //don't have pistol
+			|| !(CG_HOLSTER_HAS(WP_JANGO)) //don't have pistol
 			|| cent->currentState.weapon == WP_JANGO //or are currently using pistol
 			|| right_hip_in_use == WP_JANGO) //or the pistol is already on the right hip.
 		{
@@ -18384,7 +18807,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//Handle pistol Holster on left hip
 		if (left_hip_in_use
-			|| !(weap_inv & 1 << WP_BOBA) //don't have pistol
+			|| !(CG_HOLSTER_HAS(WP_BOBA)) //don't have pistol
 			|| cent->currentState.weapon == WP_BOBA //or are currently using pistol
 			|| right_hip_in_use == WP_BOBA) //or the pistol is already on the right hip.
 		{
@@ -18435,7 +18858,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//Handle pistol Holster on left hip
 		if (left_hip_in_use
-			|| !(weap_inv & 1 << WP_CLONEPISTOL) //don't have pistol
+			|| !(CG_HOLSTER_HAS(WP_CLONEPISTOL)) //don't have pistol
 			|| cent->currentState.weapon == WP_CLONEPISTOL //or are currently using pistol
 			|| right_hip_in_use == WP_CLONEPISTOL) //or the pistol is already on the right hip.
 		{
@@ -18486,7 +18909,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//Handle pistol Holster on left hip
 		if (left_hip_in_use
-			|| !(weap_inv & 1 << WP_BRYAR_OLD) //don't have pistol
+			|| !(CG_HOLSTER_HAS(WP_BRYAR_OLD)) //don't have pistol
 			|| cent->currentState.weapon == WP_BRYAR_OLD //or are currently using pistol
 			|| right_hip_in_use == WP_BRYAR_OLD) //or the pistol is already on the right hip.
 		{
@@ -18552,7 +18975,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 		*/
 
 		//Golan Rocket Launcher
-		if (weap_inv & 1 << WP_ROCKET_LAUNCHER)
+		if (CG_HOLSTER_HAS(WP_ROCKET_LAUNCHER))
 		{
 			//have launcher
 			if (cent->currentState.weapon != WP_ROCKET_LAUNCHER && !back_in_use)
@@ -18595,7 +19018,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle concussion on back
 		if (back_in_use //back in use already
-			|| !(weap_inv & 1 << WP_CONCUSSION) //don't have the concussion
+			|| !(CG_HOLSTER_HAS(WP_CONCUSSION)) //don't have the concussion
 			|| cent->currentState.weapon == WP_CONCUSSION) //currently using concussion
 		{
 			//don't render weapon on back
@@ -18644,7 +19067,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle repeater on back
 		if (back_in_use //back in use already
-			|| !(weap_inv & 1 << WP_REPEATER) //don't have weapon
+			|| !(CG_HOLSTER_HAS(WP_REPEATER)) //don't have weapon
 			|| cent->currentState.weapon == WP_REPEATER) //currently using weapon
 		{
 			//don't render weapon on back
@@ -18693,7 +19116,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle flechette on back
 		if (back_in_use //back in use already
-			|| !(weap_inv & 1 << WP_FLECHETTE) //don't have weapon
+			|| !(CG_HOLSTER_HAS(WP_FLECHETTE)) //don't have weapon
 			|| cent->currentState.weapon == WP_FLECHETTE) //currently using weapon
 		{
 			//don't render weapon on back
@@ -18742,7 +19165,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle disruptor on back
 		if (back_in_use //back in use already
-			|| !(weap_inv & 1 << WP_DISRUPTOR) //don't have weapon
+			|| !(CG_HOLSTER_HAS(WP_DISRUPTOR)) //don't have weapon
 			|| cent->currentState.weapon == WP_DISRUPTOR) //currently using weapon
 		{
 			//don't render weapon on back
@@ -18791,7 +19214,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle bowcaster on back
 		if (back_in_use //back in use already
-			|| !(weap_inv & 1 << WP_BOWCASTER) //don't have weapon
+			|| !(CG_HOLSTER_HAS(WP_BOWCASTER)) //don't have weapon
 			|| cent->currentState.weapon == WP_BOWCASTER) //currently using weapon
 		{
 			//don't render weapon on back
@@ -18840,7 +19263,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle demp 2 on back
 		if (back_in_use //back in use already
-			|| !(weap_inv & 1 << WP_DEMP2) //don't have the demp2
+			|| !(CG_HOLSTER_HAS(WP_DEMP2)) //don't have the demp2
 			|| cent->currentState.weapon == WP_DEMP2) //currently using Demp2
 		{
 			//don't render Demp2 on right hip.
@@ -18889,7 +19312,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle repeater on back
 		if (back_in_use //back in use already
-			|| !(weap_inv & 1 << WP_Z6_ROTARY_CANNON) //don't have weapon
+			|| !(CG_HOLSTER_HAS(WP_Z6_ROTARY_CANNON)) //don't have weapon
 			|| cent->currentState.weapon == WP_Z6_ROTARY_CANNON) //currently using weapon
 		{
 			//don't render weapon on back
@@ -18938,7 +19361,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle the DC-17m on back (too long for a hip)
 		if (back_in_use //back in use already
-			|| !(weap_inv & 1 << WP_CLONECOMMANDO) //don't have weapon
+			|| !(CG_HOLSTER_HAS(WP_CLONECOMMANDO)) //don't have weapon
 			|| cent->currentState.weapon == WP_CLONECOMMANDO) //currently using weapon
 		{
 			//don't render weapon on back
@@ -18987,7 +19410,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle the DC-15A on back (too long for a hip)
 		if (back_in_use //back in use already
-			|| !(weap_inv & 1 << WP_CLONERIFLE) //don't have weapon
+			|| !(CG_HOLSTER_HAS(WP_CLONERIFLE)) //don't have weapon
 			|| cent->currentState.weapon == WP_CLONERIFLE) //currently using weapon
 		{
 			//don't render weapon on back
@@ -19036,7 +19459,7 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 
 		//handle the A280 on back (too long for a hip)
 		if (back_in_use //back in use already
-			|| !(weap_inv & 1 << WP_REBELRIFLE) //don't have weapon
+			|| !(CG_HOLSTER_HAS(WP_REBELRIFLE)) //don't have weapon
 			|| cent->currentState.weapon == WP_REBELRIFLE) //currently using weapon
 		{
 			//don't render weapon on back
@@ -19926,6 +20349,8 @@ void CG_Player(centity_t* cent)
 	}
 
 	CG_VisualWeaponsUpdate(cent, ci);
+	CG_SaberBlasterPistolUpdate(cent, ci); // SS_BLASTER
+	CG_ScepterUpdate(cent, ci); // Ragnos' scepter in the left hand (EF2_SCEPTER, 2026-10-23)
 
 	if (cent->saberWasInFlight && g2_has_weapon && cent->ghoul2weapon == CG_G2WeaponInstance(cent, WP_SABER))
 	{
@@ -20682,6 +21107,8 @@ SkipTrueView:
 			CG_ForcePushBodyBlur(cent);
 		}
 	}
+
+	CG_ClothForcePush(cent);
 
 	if (cent->currentState.powerups & 1 << PW_DISINT_4)
 	{

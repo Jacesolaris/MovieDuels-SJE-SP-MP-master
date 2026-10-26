@@ -3429,6 +3429,7 @@ int pm_power_level_for_saber_anims(const playerState_t* ps)
 		{
 		case SS_STRONG:
 		case SS_DESANN:
+		case SS_BLASTER: // SS_BLASTER
 			return FORCE_LEVEL_3;
 		case SS_TAVION:
 		case SS_STAFF:
@@ -7345,6 +7346,7 @@ void PM_SaberStartTransAnim(const int clientNum, const int saberAnimLevel, const
 				break;
 
 			case SS_FAST:
+			case SS_BLASTER: // SS_BLASTER
 				*animSpeed *= 1.1f;
 				break;
 			case SS_MEDIUM:
@@ -7528,6 +7530,23 @@ setAnimDone:
 	return;
 }
 
+
+// Dying in water (DH 2026-10-25): BOTH_DEATH19, played 25% slower (cg_players.c, g_combat.c); the body floats from
+// its frame 20 (bg_pmove PM_WaterMove) and ragdolls from its frame 45 (g_active.c, g_client.c BodyFloat). Returns how
+// many of its frames have played, or -1 when the legs are not in it.
+float BG_WaterDeathFrame(const playerState_t* ps, const animation_t* anims)
+{
+	if (!ps || !anims || ps->legsAnim != BOTH_DEATH19)
+	{
+		return -1.0f;
+	}
+	const float msPerFrame = fabs(anims[BOTH_DEATH19].frameLerp) / 0.75f;
+	if (msPerFrame <= 0.0f)
+	{
+		return -1.0f;
+	}
+	return (anims[BOTH_DEATH19].numFrames - 1) - ps->legsTimer / msPerFrame;
+}
 static void PM_SetAnimFinal(const int setAnimParts, const int anim, const int setAnimFlags)
 {
 	BG_SetAnimFinal(pm->ps, pm->animations, setAnimParts, anim, setAnimFlags);

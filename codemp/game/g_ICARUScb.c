@@ -4484,10 +4484,10 @@ static void SetSpawnWeapon(const int weap)
 		//reset SpawnWeapons
 		SpawnWeapons = WP_NONE;
 	}
-	else
+	else if (weap < WP_NUM_OWNABLE_WEAPONS)
 	{
 		//add weapon
-		SpawnWeapons |= 1 << weap;
+		WP_MASK_ADD(SpawnWeapons, weap);
 	}
 	UseSpawnWeapons = qtrue;
 }
@@ -4518,28 +4518,35 @@ static void G_SetWeapon(gentity_t* self, const int wp)
 			//make sure the cgame-side knows this
 			self->client->ps.weapon = WP_MELEE;
 			self->client->ps.stats[STAT_WEAPONS] = WP_MELEE; //remove all the player's weapons.
+		self->client->ps.stats[STAT_WEAPONS2] = 0;
 			SetSpawnWeapon(WP_MELEE);
 		}
 		else
 		{
 			self->client->ps.weapon = WP_NONE;
 			self->client->ps.stats[STAT_WEAPONS] = WP_NONE; // remove all the npc's weapons.
+		self->client->ps.stats[STAT_WEAPONS2] = 0;
 			SetSpawnWeapon(WP_NONE);
 		}
 		return;
 	}
 
+	if (wp >= WP_NUM_OWNABLE_WEAPONS)
+	{
+		return; // the turret: never owned (STAT_WEAPONS is 32 bits)
+	}
+
 	const gitem_t* item = BG_FindItemForWeapon(wp);
 	RegisterItem(item); //make sure the weapon is cached in case this runs at startup
 
-	if (self->client->ps.stats[STAT_WEAPONS] & 1 << wp)
+	if (BG_HasWeapon(self->client->ps.stats, wp))
 	{
 		had_weapon = qtrue;
 	}
 	if (self->NPC)
 	{
 		//Should NPCs have only 1 weapon at a time?
-		self->client->ps.stats[STAT_WEAPONS] = 1 << wp;
+		BG_SetOnlyWeapon(self->client->ps.stats, wp);
 		self->client->ps.ammo[weaponData[wp].ammoIndex] = 999;
 
 		ChangeWeapon(self, wp);
@@ -4549,7 +4556,7 @@ static void G_SetWeapon(gentity_t* self, const int wp)
 	}
 	else
 	{
-		self->client->ps.stats[STAT_WEAPONS] |= 1 << wp;
+		BG_GiveWeapon(self->client->ps.stats, wp);
 		self->client->ps.ammo[weaponData[wp].ammoIndex] = ammoData[weaponData[wp].ammoIndex].max;
 
 		G_AddEvent(self, EV_ITEM_PICKUP, item - bg_itemlist);
@@ -5180,7 +5187,7 @@ static void Q3_SetForcePowerLevel(const int entID, const int forcePower, const i
 
 	if (forceLevel < 0 || forceLevel >= NUM_FORCE_POWER_LEVELS)
 	{
-		if (forcePower != FP_SABER_OFFENSE || forceLevel >= SS_NUM_SABER_STYLES)
+		if (forcePower != FP_SABER_OFFENSE || forceLevel > SS_STAFF) // SS_BLASTER: keep the old bound
 		{
 			G_DebugPrint(WL_ERROR, "Q3_SetForcePowerLevel: Force power setting %d out of range (0-3)\n", forceLevel);
 			return;
@@ -7496,7 +7503,7 @@ static void Q3_SetSaberActive(const int entID, const qboolean active)
 	if (ent->client->ps.weapon != WP_SABER)
 	{
 		// Check if the entity actually HAS a saber
-		if ((ent->client->ps.stats[STAT_WEAPONS] & (1 << WP_SABER)) != 0)
+		if ((BG_HasWeapon(ent->client->ps.stats, WP_SABER)) != 0)
 		{
 			// NPCs switch immediately
 			if (ent->NPC != NULL)

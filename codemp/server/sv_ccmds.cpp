@@ -1482,11 +1482,16 @@ const char* weaponToggleNamePrints[WP_NUM_WEAPONS] =
 	"REBELBLASTER",
 	"CLONERIFLE",
 	"CLONECOMMANDO",
+	"Z-6 ROTARY CANNON",
 	"REBELRIFLE",
 	"REY",
 	"JANGO",
 	"BOBA",
 	"CLONEPISTOL",
+	"DROIDEKA",
+	"NOGHRI STICK",
+	"TUSKEN RIFLE",
+	"TUSKEN STAFF",
 
 	"BRYAR OLD",
 	"EMPLACED GUN",
@@ -1519,7 +1524,7 @@ static void SV_WeaponToggle_f(void)
 
 	if (Cmd_Argc() != 2)
 	{
-		for (i = 0; i < WP_NUM_WEAPONS; i++)
+		for (i = 0; i < WP_NUM_OWNABLE_WEAPONS && i < 32; i++) // g_weaponDisable is a 32 bit mask
 		{
 			if (bits & 1 << i) Com_Printf("%2d [X] %s\n", i, weaponToggleNamePrints[i]);
 			else Com_Printf("%2d [ ] %s\n", i, weaponToggleNamePrints[i]);
@@ -1533,7 +1538,7 @@ static void SV_WeaponToggle_f(void)
 	if (Q_isanumber(s))
 	{
 		const int val = atoi(s);
-		if (val >= 0 && val < WP_NUM_WEAPONS)
+		if (val >= 0 && val < WP_NUM_OWNABLE_WEAPONS && val < 32)
 		{
 			bits ^= 1 << val;
 			Cvar_SetValue(cvar_str, bits);
@@ -1541,7 +1546,7 @@ static void SV_WeaponToggle_f(void)
 		}
 		else
 		{
-			for (i = 0; i < WP_NUM_WEAPONS; i++)
+			for (i = 0; i < WP_NUM_OWNABLE_WEAPONS && i < 32; i++) // g_weaponDisable is a 32 bit mask
 			{
 				if (bits & 1 << i) Com_Printf("%2d [X] %s\n", i, weaponToggleNamePrints[i]);
 				else Com_Printf("%2d [ ] %s\n", i, weaponToggleNamePrints[i]);
@@ -1551,7 +1556,7 @@ static void SV_WeaponToggle_f(void)
 	}
 	else
 	{
-		for (i = 0; i < WP_NUM_WEAPONS; i++)
+		for (i = 0; i < WP_NUM_OWNABLE_WEAPONS && i < 32; i++) // g_weaponDisable is a 32 bit mask
 		{
 			if (bits & 1 << i) Com_Printf("%2d [X] %s\n", i, weaponToggleNamePrints[i]);
 			else Com_Printf("%2d [ ] %s\n", i, weaponToggleNamePrints[i]);

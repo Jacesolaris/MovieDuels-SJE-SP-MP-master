@@ -26,6 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 // this line must stay at top so the whole PCH thing works...
 #include "cg_headers.h"
+#include "q_profile.h"
 
 #include "cg_media.h"
 #include "FxScheduler.h"
@@ -2842,6 +2843,7 @@ extern vec3_t serverViewOrg;
 static qboolean cg_rangedFogging = qfalse; //so we know if we should go back to normal fog
 void CG_DrawActiveFrame(const int server_time, const stereoFrame_t stereo_view)
 {
+	PROFILE_ZONE("cgame DrawActiveFrame");
 	// Tracks whether the view is considered "in water" for audio and fog.
 	qboolean inwater = qfalse;
 

@@ -223,6 +223,7 @@ typedef struct
 	const int* dual;
 	const int* staff;
 	int count;
+	qboolean blasterUsesDual; // SS_BLASTER: blocking reactions use the SS_DUAL set
 } saberReactionSet_t;
 
 static QINLINE void G_PlayReaction(
@@ -239,10 +240,11 @@ static QINLINE void G_PlayReaction(
 
 	const int* anims =
 		(style == SS_DUAL) ? set->dual :
+		(style == SS_BLASTER && set->blasterUsesDual) ? set->dual : // SS_BLASTER
 		(style == SS_STAFF) ? set->staff :
 		(style == SS_MEDIUM) ? set->medium :
 		(style == SS_STRONG) ? set->strong :
-		(style == SS_DESANN) ? set->desann :
+		((style == SS_DESANN || style == SS_BLASTER)) ? set->desann : // SS_BLASTER
 		(style == SS_TAVION) ? set->tavion :
 		set->fast; // fallback for SS_NONE + SS_FAST
 
@@ -352,7 +354,8 @@ static const int knock_fast[6] = {
 static const saberReactionSet_t REACT_KNOCKAWAY = {
 	knock_fast, knock_fast, knock_fast, knock_fast, knock_fast,
 	knock_dual, knock_staff,
-	6
+	6,
+	qtrue // SS_BLASTER
 };
 
 static const int stag_hit[7] = {
@@ -561,6 +564,11 @@ static QINLINE int g_saber_attack_power(gentity_t* ent, const qboolean attacking
 	assert(ent && ent->client);
 
 	int base_level = ent->client->ps.fd.saberAnimLevel;
+
+	if (base_level == SS_BLASTER)
+	{
+		base_level = SS_DESANN; // SS_BLASTER: Desann's power
+	}
 
 	//Give "medium" strength for the two special stances.
 	if (base_level == SS_DUAL)
@@ -1542,10 +1550,13 @@ typedef enum
 #define LOCK_IDEAL_DIST_TOP 32.0f
 #define LOCK_IDEAL_DIST_CIRCLE 48.0f
 
-static int G_SaberLockAnim(const int attacker_saber_style, const int defender_saber_style, const int top_or_side,
+static int G_SaberLockAnim(const int attacker_saber_style_in, const int defender_saber_style_in, const int top_or_side,
 	const int lock_or_break_or_super_break,
 	const int win_or_lose)
 {
+	// SS_BLASTER: saberlocks use the dual saber lock anims (BOTH_LK_DL_*)
+	const int attacker_saber_style = attacker_saber_style_in == SS_BLASTER ? SS_DUAL : attacker_saber_style_in;
+	const int defender_saber_style = defender_saber_style_in == SS_BLASTER ? SS_DUAL : defender_saber_style_in;
 	int base_anim = -1;
 	if (lock_or_break_or_super_break == SABER_LOCK_LOCK)
 	{
@@ -2892,6 +2903,7 @@ static int BasicSaberBlockCost(const int attackerStyle)
 	case SS_MEDIUM:
 		return 15;
 	case SS_DESANN:
+	case SS_BLASTER: // SS_BLASTER
 		return 16;
 	case SS_STRONG:
 		return 17;
@@ -3297,6 +3309,20 @@ static int wp_saber_must_block(gentity_t* self, const gentity_t* atk, const qboo
 
 	if (!(((self->client->ps.ManualBlockingFlags & 1 << MBF_HOLDINGBLOCK) != 0)))
 	{
+		// NPCs never hold the block button: as SP (wp_saber_must_block), they parry any hit they can
+		if (self->s.number >= MAX_CLIENTS && !G_ControlledByPlayer(self))
+		{
+			if (PM_SaberInMassiveBounce(self->client->ps.torsoAnim)
+				|| PM_SaberInBashedAnim(self->client->ps.torsoAnim)
+				|| PM_InGrappleMove(self->client->ps.torsoAnim)
+				|| PM_SaberInBrokenParry(self->client->ps.saberMove)
+				|| PM_KickMove(self->client->ps.saberMove)
+				|| BG_FullBodyTauntAnim(self->client->ps.torsoAnim))
+			{
+				return 0;
+			}
+			return self->client->ps.saberHolstered < 2 ? 1 : 0;
+		}
 		// Bots cheat-block here
 		if (self->r.svFlags & SVF_BOT)
 		{// 20% chance to check blocking, 80% is blocking
@@ -8779,18 +8805,38 @@ void WP_saberReactivate(gentity_t* saberent, gentity_t* saber_owner)
 	}
 	else
 	{
-		switch (saber_owner->client->ps.fd.forcePowerLevel[FP_SABERTHROW])
+
+		if (g_overpoweredsaberthrow.integer == 1)// this is normal saberthrow jka style, where the saber spins on the Y axis as it flies.
 		{
-		default:
-		case FORCE_LEVEL_1:
-			saberent->s.apos.trDelta[0] = 600;
-			break;
-		case FORCE_LEVEL_2:
-			saberent->s.apos.trDelta[0] = 800;
-			break;
-		case FORCE_LEVEL_3:
-			saberent->s.apos.trDelta[0] = 1000;
-			break;
+			switch (saber_owner->client->ps.fd.forcePowerLevel[FP_SABERTHROW])
+			{// this is the old style, where the saber spins on the X axis as it flies.
+			default:
+			case FORCE_LEVEL_1:
+				saberent->s.apos.trDelta[1] = 600;
+				break;
+			case FORCE_LEVEL_2:
+				saberent->s.apos.trDelta[1] = 800;
+				break;
+			case FORCE_LEVEL_3:
+				saberent->s.apos.trDelta[1] = 1000;
+				break;
+			}
+		}
+		else
+		{// this is the new style, where the saber spins on the Z axis as it flies.
+			switch (saber_owner->client->ps.fd.forcePowerLevel[FP_SABERTHROW])
+			{
+			default:
+			case FORCE_LEVEL_1:
+				saberent->s.apos.trDelta[0] = 600;
+				break;
+			case FORCE_LEVEL_2:
+				saberent->s.apos.trDelta[0] = 800;
+				break;
+			case FORCE_LEVEL_3:
+				saberent->s.apos.trDelta[0] = 1000;
+				break;
+			}
 		}
 		saberent->s.apos.trDelta[1] = 0;
 		saberent->s.apos.trDelta[2] = 0;
@@ -10200,7 +10246,7 @@ static void WP_KnockdownAndDrain(gentity_t* hit_ent, gentity_t* pusher, int knoc
 	}
 }
 
-static qboolean WP_AbsorbKick(gentity_t* hit_ent, gentity_t* pusher, vec3_t push_dir)
+qboolean WP_AbsorbKick(gentity_t* hit_ent, gentity_t* pusher, vec3_t push_dir)
 {
 	if (!hit_ent || !hit_ent->client || !pusher || !pusher->client)
 	{
@@ -10632,7 +10678,7 @@ static gentity_t* G_KickTrace(gentity_t* ent, vec3_t kick_dir, const float kick_
 								}
 							}
 						}
-						else if (ent->client->ps.fd.saberAnimLevel == SS_DESANN
+						else if ((ent->client->ps.fd.saberAnimLevel == SS_DESANN || ent->client->ps.fd.saberAnimLevel == SS_BLASTER) // SS_BLASTER
 							&& (hit_ent->client->ps.saberFatigueChainCount >= MISHAPLEVEL_HEAVY ||
 								hit_ent->client->ps.BlasterAttackChainCount >= BLASTERMISHAPLEVEL_HEAVY)
 							&& !((hit_ent->client->ps.ManualBlockingFlags & 1 << MBF_HOLDINGBLOCK) != 0))
@@ -11960,7 +12006,7 @@ void WP_SaberPositionUpdate(gentity_t* self, usercmd_t* ucmd)
 	{
 		//player wants to snap throw a grenade
 		if (self->client->ps.weaponTime <= 0 //not currently using a weapon
-			&& self->client->ps.stats[STAT_WEAPONS] & 1 << WP_THERMAL && self->client->ps.ammo[AMMO_THERMAL] > 0)
+			&& BG_HasWeapon(self->client->ps.stats, WP_THERMAL) && self->client->ps.ammo[AMMO_THERMAL] > 0)
 			//have a thermal
 		{
 			//throw!
@@ -18102,9 +18148,9 @@ qboolean HasSetSaberOnly(void)
 		w_disable = g_weaponDisable.integer;
 	}
 
-	while (i < WP_NUM_WEAPONS)
+	while (i < WP_NUM_OWNABLE_WEAPONS)
 	{
-		if (!(w_disable & 1 << i) &&
+		if (!(WP_MASK_HAS(w_disable, i)) &&
 			i != WP_SABER && i != WP_NONE)
 		{
 			return qfalse;

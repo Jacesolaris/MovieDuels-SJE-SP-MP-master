@@ -23,6 +23,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "../server/exe_headers.h"
+#include "q_profile.h"
 
 #include "tr_local.h"
 
@@ -263,6 +264,7 @@ to handle mirrors,
 */
 extern int	recursivePortalCount;
 void RE_RenderScene(const refdef_t* fd) {
+	PROFILE_ZONE("R front end: RenderScene");
 	viewParms_t		parms;
 	static int		last_time = 0;
 

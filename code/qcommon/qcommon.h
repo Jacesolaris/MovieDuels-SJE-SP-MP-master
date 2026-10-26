@@ -441,8 +441,11 @@ constexpr auto MAX_FILE_HANDLES = 64;
 
 qboolean FS_Initialized();
 
-void FS_InitFilesystem();
+void FS_InitFilesystem();
 void FS_Shutdown();
+void FS_LookupCacheBegin();	// files.cpp: missing-file lookups during a map load
+void FS_LookupCacheEnd();
+void FS_LookupCacheFlush();
 
 qboolean FS_ConditionalRestart();
 

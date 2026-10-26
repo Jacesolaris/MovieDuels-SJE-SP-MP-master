@@ -1117,12 +1117,12 @@ static void NPC_SetWeapons(gentity_t* ent)
 	int bestWeap = WP_NONE;
 	const int weapons = NPC_WeaponsForTeam(ent->client->playerTeam, ent->spawnflags, ent->NPC_type);
 
-	ent->client->ps.stats[STAT_WEAPONS] = 0;
-	for (int curWeap = WP_SABER; curWeap < WP_NUM_WEAPONS; curWeap++)
+	BG_ClearWeapons(ent->client->ps.stats);
+	for (int curWeap = WP_SABER; curWeap < WP_NUM_OWNABLE_WEAPONS; curWeap++)
 	{
-		if (weapons & 1 << curWeap)
+		if (WP_MASK_HAS(weapons, curWeap))
 		{
-			ent->client->ps.stats[STAT_WEAPONS] |= 1 << curWeap;
+			BG_GiveWeapon(ent->client->ps.stats, curWeap);
 			RegisterItem(BG_FindItemForWeapon(curWeap)); //precache the weapon
 			//rwwFIXMEFIXME: Precache
 			ent->NPC->currentAmmo = ent->client->ps.ammo[weaponData[curWeap].ammoIndex] = 100; //FIXME: max ammo
@@ -1569,6 +1569,27 @@ void NPC_Begin(gentity_t* ent)
 		&& WP_SaberCanTurnOffSomeBlades(&ent->client->saber[0]))
 	{
 		ent->client->ps.fd.saber_anim_levelBase = ent->client->ps.fd.saberAnimLevel = SS_STAFF;
+	}
+	else if (ent->client->saberStylesKnown & 1 << SS_BLASTER)
+	{
+		// SS_BLASTER: the NPC file gave it its styles: start in the one it set last (NPC_ParseParms), else the first known
+		int newLevel = ent->client->ps.fd.saberAnimLevel;
+
+		if (!G_ValidSaberStyle(ent, newLevel))
+		{
+			for (newLevel = SS_FAST; newLevel < SS_NUM_SABER_STYLES; newLevel++)
+			{
+				if (G_ValidSaberStyle(ent, newLevel))
+				{
+					break;
+				}
+			}
+			if (newLevel >= SS_NUM_SABER_STYLES)
+			{
+				newLevel = SS_MEDIUM;
+			}
+		}
+		ent->client->ps.fd.saber_anim_levelBase = ent->client->ps.fd.saberAnimLevel = newLevel;
 	}
 	else
 	{

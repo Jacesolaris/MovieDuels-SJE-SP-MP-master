@@ -59,7 +59,7 @@ cvar_t* com_maxfpsUnfocused;
 Sys_SetBinaryPath
 =================
 */
-void Sys_SetBinaryPath(const char* path)
+static void Sys_SetBinaryPath(const char* path)
 {
 	Q_strncpyz(binaryPath, path, sizeof(binaryPath));
 }
@@ -69,7 +69,7 @@ void Sys_SetBinaryPath(const char* path)
 Sys_BinaryPath
 =================
 */
-char* Sys_BinaryPath()
+static char* Sys_BinaryPath()
 {
 	return binaryPath;
 }
@@ -175,9 +175,9 @@ void Sys_Init()
 	com_unfocused = Cvar_Get("com_unfocused", "0", CVAR_ROM);
 	com_minimized = Cvar_Get("com_minimized", "0", CVAR_ROM);
 #ifdef _JK2EXE
-	com_maxfps = Cvar_Get("com_maxfps", "125", CVAR_ARCHIVE);
+	com_maxfps = Cvar_Get("com_maxfps", "200", CVAR_ARCHIVE);
 #else
-	com_maxfps = Cvar_Get("com_maxfps", "125", CVAR_ARCHIVE, "Maximum frames per second");
+	com_maxfps = Cvar_Get("com_maxfps", "200", CVAR_ARCHIVE, "Maximum frames per second");
 #endif
 	com_maxfpsUnfocused = Cvar_Get("com_maxfpsUnfocused", "0", CVAR_ARCHIVE_ND);
 	com_maxfpsMinimized = Cvar_Get("com_maxfpsMinimized", "50", CVAR_ARCHIVE_ND);
@@ -731,7 +731,7 @@ void Sys_SigHandler(const int signal)
  the result is returned. If not, dir is returned untouched.
  =================
  */
-char* Sys_StripAppBundle(char* dir)
+static char* Sys_StripAppBundle(char* dir)
 {
 	static char cwd[MAX_OSPATH];
 

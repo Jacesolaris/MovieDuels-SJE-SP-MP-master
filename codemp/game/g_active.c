@@ -34,6 +34,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 /// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// ///
 
 #include "g_local.h"
+extern float BG_WaterDeathFrame(const playerState_t* ps, const animation_t* anims);	// bg_panimate.c
 #include "bg_saga.h"
 #include "g_pazaak.h"
 #include <qcommon/q_shared.h>
@@ -300,6 +301,22 @@ static void P_WorldEffects(gentity_t* ent)
 				ent->pain_debounce_time = level.time + 200;
 
 				G_Damage(ent, NULL, NULL, NULL, NULL, ent->damage, DAMAGE_NO_ARMOR, MOD_WATER);
+				if (ent->health > 0)
+				{	// the last 4 hits before drowning: BOTH_PAIN16, 17, 18, then BOTH_CHOKE3 (then BOTH_DEATH19) (DH 2026-10-25)
+					static const int drownPain[4] = { BOTH_PAIN16, BOTH_PAIN17, BOTH_PAIN18, BOTH_CHOKE3 };
+					int hitsLeft = 0, dmg = ent->damage, total = 0;
+
+					while (total < ent->health && hitsLeft < 5)
+					{	// each hit does 2 more, at most 15
+						dmg = dmg + 2 < 15 ? dmg + 2 : 15;
+						total += dmg;
+						hitsLeft++;
+					}
+					if (hitsLeft >= 1 && hitsLeft <= 4)
+					{
+						G_SetAnim(ent, NULL, SETANIM_TORSO, drownPain[4 - hitsLeft], SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
+					}
+				}
 			}
 		}
 	}
@@ -913,6 +930,12 @@ static void G_SetClientSound(gentity_t* ent)
 		ent->client->ps.loopSound = G_SoundIndex("sound/weapons/force/protectloop.mp3");
 		ent->s.loopIsSoundset = qfalse;
 	}
+	else if (ent->client && ent->client->ps.eFlags2 & EF2_SCEPTER && ent->client->ps.torsoAnim == BOTH_SCEPTER_HOLD)
+	{
+		// Ragnos' scepter beam (the Possessed Tavion bot, ai_main.c): SP's loop while it fires
+		ent->client->ps.loopSound = G_SoundIndex("sound/weapons/scepter/loop.wav");
+		ent->s.loopIsSoundset = qfalse;
+	}
 	else if (ent->client)
 	{
 		ent->client->ps.loopSound = 0;
@@ -1337,10 +1360,10 @@ static void ClientTimerActions(gentity_t* ent, const int msec)
 		// WEAPON REMOVAL WHEN OUT OF AMMO
 		// -----------------------------------------------------
 		if (ps->ammo[AMMO_THERMAL] == 0)
-			ps->stats[STAT_WEAPONS] &= ~(1 << WP_THERMAL);
+			BG_TakeWeapon(ps->stats, WP_THERMAL);
 
 		if (ps->ammo[AMMO_TRIPMINE] == 0)
-			ps->stats[STAT_WEAPONS] &= ~(1 << WP_TRIP_MINE);
+			BG_TakeWeapon(ps->stats, WP_TRIP_MINE);
 
 		// -----------------------------------------------------
 		// PASSIVE HEALING + ARMOR REGEN (PLAYERS ONLY)
@@ -1855,6 +1878,18 @@ static void ClientEvents(gentity_t* ent, int old_event_sequence)
 			ent->client->dangerTime = level.time;
 			ent->client->ps.eFlags &= ~EF_INVULNERABLE;
 			ent->client->invulnerableTimer = 0;
+			break;
+
+		case EV_SABERBLASTER: // SS_BLASTER: the left hand pistol shot (anim / clip predicted in bg)
+			if (Client->ps.eventParms[index] == SBE_FIRE)
+			{
+				G_SaberBlasterFire(ent, qfalse, NULL);
+			}
+			else if (Client->ps.eventParms[index] == SBE_LOCKSHOT)
+			{
+				const int lock_enemy = Client->saberBlasterLockEnemy;
+				G_SaberBlasterFire(ent, qtrue, lock_enemy >= 0 && lock_enemy < ENTITYNUM_WORLD ? &g_entities[lock_enemy] : NULL);
+			}
 			break;
 
 			// Items 1–16 unchanged
@@ -2398,6 +2433,8 @@ static qboolean GunisLong(const gentity_t* ent)
 {
 	switch (ent->s.weapon)
 	{
+	case WP_NOGHRI_STICK:
+	case WP_TUSKEN_RIFLE:
 	case WP_BLASTER:
 	case WP_BOWCASTER:
 	case WP_REPEATER:
@@ -3077,6 +3114,7 @@ void G_SetTauntAnim(gentity_t* ent, int taunt)
 				case SS_MEDIUM:
 				case SS_STRONG:
 				case SS_DESANN:
+				case SS_BLASTER: // SS_BLASTER
 					G_TauntAnim(ent, SETANIM_TORSO, G_TauntEngageAnim(&flags));
 					break;
 				case SS_DUAL:
@@ -3223,6 +3261,7 @@ void G_SetTauntAnim(gentity_t* ent, int taunt)
 					break;
 				case SS_STRONG:
 				case SS_DESANN:
+				case SS_BLASTER: // SS_BLASTER
 					G_TauntAnim(ent, parts, BOTH_SHOWOFF_STRONG);
 					break;
 				case SS_DUAL:
@@ -3277,6 +3316,7 @@ void G_SetTauntAnim(gentity_t* ent, int taunt)
 					break;
 				case SS_STRONG:
 				case SS_DESANN:
+				case SS_BLASTER: // SS_BLASTER
 					G_TauntAnim(ent, SETANIM_TORSO, BOTH_VICTORY_STRONG);
 					break;
 				case SS_DUAL:
@@ -3363,6 +3403,7 @@ void G_SetTauntAnim(gentity_t* ent, int taunt)
 			case SS_MEDIUM:
 			case SS_STRONG:
 			case SS_DESANN:
+			case SS_BLASTER: // SS_BLASTER
 				G_TauntAnim(ent, SETANIM_TORSO, G_TauntEngageAnim(&flags));
 				break;
 			case SS_DUAL:
@@ -3866,6 +3907,8 @@ static qboolean IsGunner(const gentity_t* ent)
 {
 	switch (ent->s.weapon)
 	{
+	case WP_NOGHRI_STICK:
+	case WP_TUSKEN_RIFLE:
 	case WP_STUN_BATON:
 	case WP_BRYAR_PISTOL:
 	case WP_BLASTER:
@@ -4427,6 +4470,28 @@ static void ClientThink_real(gentity_t* ent)
 				}
 			}
 		}
+	}
+
+	if (client && client->ps.eFlags2 & EF2_SCEPTER
+		&& client->saber[0].model[0] && !client->saber[1].model[0]
+		&& !(client->saber[0].saberFlags & SFL_TWO_HANDED))
+	{
+		// Ragnos' scepter is in her left hand (the Possessed Tavion bot, ai_main.c): she only fights in SS_DUAL, saber in
+		// the right hand, scepter in the left (DH 2026-10-24). Set every frame, so no style change (bots switch styles at
+		// random, g_client.c) sticks
+		client->ps.fd.saber_anim_levelBase = client->ps.fd.saberAnimLevel = SS_DUAL;
+		client->ps.fd.saberDrawAnimLevel = SS_DUAL;
+	}
+
+	// SS_BLASTER is Kyle Katarn's style only: anyone else is moved off it every frame, however he got it
+	// (bot style pick, NPC file, give all, setforceall); G_ValidSaberStyle refuses it too
+	if (client && (client->ps.fd.saberAnimLevel == SS_BLASTER || client->ps.fd.saber_anim_levelBase == SS_BLASTER)
+		&& !G_SaberBlasterKyleModel(ent))
+	{
+		client->ps.fd.saber_anim_levelBase = client->ps.fd.saberAnimLevel = SS_MEDIUM;
+		client->ps.fd.saberDrawAnimLevel = SS_MEDIUM;
+		client->saberCycleQueue = SS_MEDIUM;
+		client->saberStylesKnown &= ~(1 << SS_BLASTER);
 	}
 
 	if (client && !isFollowing && client->ps.eFlags2 & EF2_HELD_BY_MONSTER)
@@ -5011,6 +5076,7 @@ static void ClientThink_real(gentity_t* ent)
 			{
 			case SS_TAVION:
 			case SS_FAST:
+			case SS_BLASTER: // SS_BLASTER
 				client->ps.speed *= 0.85f;
 				break;
 			case SS_MEDIUM:
@@ -5047,6 +5113,7 @@ static void ClientThink_real(gentity_t* ent)
 			case SS_MEDIUM:
 			case SS_DUAL:
 			case SS_STAFF:
+			case SS_BLASTER: // SS_BLASTER
 				client->ps.speed *= 0.85f;
 				break;
 			case SS_DESANN:
@@ -5196,6 +5263,15 @@ static void ClientThink_real(gentity_t* ent)
 				trap->SendServerCommand(-1, va("print \"%s ^7survived with ^5%d ^7health and ^5%d ^7shield\n\"",
 					ent->client->pers.netname, ent->client->ps.stats[STAT_HEALTH],
 					ent->client->ps.stats[STAT_ARMOR]));
+
+				// "you are a worthy adversary" for the duel winner only, challenger or challenged (DH 2026-10-25)
+				if (g_duelWinSound.integer && !(ent->r.svFlags & SVF_BOT))
+				{
+					gentity_t* te = G_TempEntity(ent->client->ps.origin, EV_GLOBAL_SOUND);
+					te->s.eventParm = G_SoundIndex("sound/player/Quin.mp3");
+					te->r.svFlags |= SVF_SINGLECLIENT | SVF_BROADCAST;
+					te->r.singleClient = ent->s.number;
+				}
 			}
 			else
 			{
@@ -5290,6 +5366,7 @@ static void ClientThink_real(gentity_t* ent)
 					case SS_MEDIUM:
 					case SS_STRONG:
 					case SS_DESANN:
+					case SS_BLASTER: // SS_BLASTER
 						if (client->ps.saberHolstered == 1 && client->saber[1].model[0])
 						{
 						}
@@ -6376,6 +6453,7 @@ static void ClientThink_real(gentity_t* ent)
 							break;
 						case SS_STRONG:
 						case SS_DESANN:
+						case SS_BLASTER: // SS_BLASTER
 							strength = Q_irand(3, 4);
 							break;
 						}
@@ -6526,6 +6604,9 @@ static void ClientThink_real(gentity_t* ent)
 		}
 #endif
 	}
+
+	// SS_BLASTER: remember the saberlock enemy, a lock shot breaks the lock inside Pmove
+	ent->client->saberBlasterLockEnemy = ent->client->ps.saberLockTime >= level.time ? ent->client->ps.saberLockEnemy : ENTITYNUM_NONE;
 
 	Pmove(&pmove);
 
@@ -7468,6 +7549,17 @@ void ClientEndFrame(gentity_t* ent)
 
 	// burn from lava, etc
 	P_WorldEffects(ent);
+	{	// breath bar (cg_drawAirBar): air left while it is being used up under water
+		const int airLeft = ent->client->airOutTime - level.time;
+		ent->client->ps.stats[STAT_AIR] = airLeft < 11900 ? 1 + (airLeft > 0 ? (airLeft < 12000 ? airLeft : 12000) : 0) / 100 : 0;
+	}
+	if (ent->client->ps.pm_type == PM_DEAD && ent->waterlevel >= 2
+		&& (ent->client->ps.legsAnim == BOTH_DEATH19
+			? BG_WaterDeathFrame(&ent->client->ps, bgAllAnims[ent->localAnimIndex].anims) >= 45.0f	// BOTH_DEATH19: from its frame 45
+			: ent->client->ps.legsTimer <= 0))	// after the death anim
+	{	// dead in water: ragdoll (the body floats, bg_pmove PM_WaterMove) (DH 2026-10-25)
+		ent->client->ps.eFlags |= EF_RAG;
+	}
 
 	// apply all the damage taken this frame
 	P_DamageFeedback(ent);

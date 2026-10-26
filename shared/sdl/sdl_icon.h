@@ -23,7 +23,7 @@
  /* GIMP RGBA C-Source image dump (sdl_icon.c) */ //MovieDuels
 #pragma once
 
-#ifdef MD_MP_BUILD
+#if 0	// MP uses the SP window icon too (DH 2026-10-25); the old MP icon is kept here unused
 // MP window icon
 static const struct
 {

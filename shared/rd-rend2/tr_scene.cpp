@@ -21,6 +21,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 #include "tr_local.h"
+#include "q_profile.h"
 
 int			r_firstSceneDrawSurf;
 
@@ -395,7 +396,7 @@ void RE_BeginScene(const refdef_t* fd)
 		}
 		else
 		{
-			float scale = pow(2.0f, r_mapOverBrightBits->integer - tr.overbrightBits - 8);
+			float scale = pow(2.0f, r_mapOverBrightBits->value - tr.overbright - 8);
 			if (r_forceSun->integer)
 			{
 				VectorScale(tr.sunLight, scale * r_forceSunLightScale->value, tr.refdef.sunCol);
@@ -559,6 +560,7 @@ to handle mirrors,
 */
 void RE_RenderScene(const refdef_t* fd)
 {
+	PROFILE_ZONE("R front end: RenderScene");
 	int				startTime = 0;
 
 	if (!tr.registered) {

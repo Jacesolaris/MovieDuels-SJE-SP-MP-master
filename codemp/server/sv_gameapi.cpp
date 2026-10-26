@@ -22,6 +22,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 //Anything above this #include will be ignored by the compiler
 
 #include "server.h"
+#include "q_profile.h"
 #include "botlib/botlib.h"
 #include "qcommon/stringed_ingame.h"
 #include "qcommon/RoffSystem.h"
@@ -2132,6 +2133,22 @@ static void SV_G2API_GetSurfaceName(void* ghoul2, const int surfNumber, const in
 	strcpy(fillBuf, tmp);
 }
 
+// BOTH_WIND (bg_pmove.c): a strong gust at pos, outside. The vanilla and rend2 renderers know the wind, the
+// dedicated renderer doesn't (its pointers are NULL): then never.
+static qboolean SV_WE_GetWindGust(vec3_t pos, vec3_t dir)
+{
+	static cvar_t* windAnim = Cvar_Get("g_windAnim", "1", CVAR_ARCHIVE);	// 0 = no BOTH_WIND in MP
+	if (!windAnim->integer || !re || !re->GetWindGusting || !re->GetWindVector || !re->IsOutside)
+	{
+		return qfalse;
+	}
+	if (!re->GetWindGusting(pos) || !re->IsOutside(pos))
+	{
+		return qfalse;
+	}
+	return re->GetWindVector(dir, pos) ? qtrue : qfalse;
+}
+
 static void GVM_Cvar_Set(const char* var_name, const char* value)
 {
 	Cvar_VM_Set(var_name, value, VM_GAME);
@@ -3389,6 +3406,7 @@ intptr_t SV_GameSystemCalls(intptr_t* args)
 
 void SV_InitGame(const qboolean restart)
 {
+	PROFILE_ZONE("Load: game init (entities, nav, scripts)");
 	int i = 0;
 	client_t* cl = nullptr;
 
@@ -3719,6 +3737,7 @@ void SV_BindGame(void)
 		gi.G2API_CleanEntAttachments = SV_G2API_CleanEntAttachments;
 		gi.G2API_OverrideServer = SV_G2API_OverrideServer;
 		gi.G2API_GetSurfaceName = SV_G2API_GetSurfaceName;
+		gi.WE_GetWindGust = SV_WE_GetWindGust;
 
 		const auto GetGameAPI = reinterpret_cast<GetGameAPI_t>(gvm->GetModuleAPI);
 		gameExport_t* ret = GetGameAPI(GAME_API_VERSION, &gi);

@@ -83,7 +83,7 @@ static void g_Spectator(gentity_t* ent)
 		ent->client->tempSpectate = Q3_INFINITE;
 		ent->health = ent->client->ps.stats[STAT_HEALTH] = 1;
 		ent->client->ps.weapon = WP_NONE;
-		ent->client->ps.stats[STAT_WEAPONS] = 0;
+		BG_ClearWeapons(ent->client->ps.stats);
 		ent->client->ps.stats[STAT_HOLDABLE_ITEMS] = 0;
 		ent->client->ps.stats[STAT_HOLDABLE_ITEM] = 0;
 		ent->takedamage = qfalse;
@@ -495,7 +495,7 @@ static void JMSaberTouch(gentity_t* self, gentity_t* other, trace_t* trace)
 		return;
 	}
 
-	if (other->client->ps.stats[STAT_WEAPONS] & 1 << WP_SABER)
+	if (BG_HasWeapon(other->client->ps.stats, WP_SABER))
 	{
 		return;
 	}
@@ -506,7 +506,7 @@ static void JMSaberTouch(gentity_t* self, gentity_t* other, trace_t* trace)
 	}
 
 	self->enemy = other;
-	other->client->ps.stats[STAT_WEAPONS] = 1 << WP_SABER;
+	BG_SetOnlyWeapon(other->client->ps.stats, WP_SABER);
 	other->client->ps.weapon = WP_SABER;
 	other->s.weapon = WP_SABER;
 	other->client->ps.zoomMode = 0;
@@ -1477,6 +1477,62 @@ static void BodySink(gentity_t* ent)
 	ent->takedamage = qfalse;
 }
 
+// a body left dead in water (DH 2026-10-25): once its death anim is done it ragdolls (EF_RAG) and rises to
+// the water surface, then BodySink takes over at the corpse removal time
+static void BodyRag(gentity_t* body);
+extern float BG_WaterDeathFrame(const playerState_t* ps, const animation_t* anims);	// bg_panimate.c
+
+static void BodyFloat(gentity_t* body)
+{
+	vec3_t top;
+	int k;
+
+	VectorCopy(body->r.currentOrigin, top);
+	for (k = 0; k < 128 && (trap->PointContents(top, body->s.number) & CONTENTS_WATER); k++)
+	{
+		top[2] += 8.0f;
+	}
+	top[2] -= 24.0f;	// lie in the surface
+	if (k > 0 && top[2] > body->r.currentOrigin[2] + 1.0f)
+	{
+		VectorCopy(body->r.currentOrigin, body->s.pos.trBase);
+		body->s.pos.trType = TR_LINEAR_STOP;
+		body->s.pos.trTime = level.time;
+		body->s.pos.trDuration = (int)((top[2] - body->r.currentOrigin[2]) / 60.0f * 1000.0f);
+		VectorSet(body->s.pos.trDelta, 0.0f, 0.0f, 60.0f);
+		top[2] = body->r.currentOrigin[2] + body->s.pos.trDuration * 0.06f;
+		VectorCopy(top, body->r.currentOrigin);	// where it ends up, for traces
+		trap->LinkEntity((sharedEntity_t*)body);
+	}
+	if (body->genericValue3 > level.time)
+	{	// BOTH_DEATH19: the ragdoll starts at its frame 45
+		body->think = BodyRag;
+		body->nextthink = body->genericValue3;
+		return;
+	}
+	BodyRag(body);
+}
+
+// the floating body becomes a ragdoll (EF_RAG), then BodySink takes over at the corpse removal time
+static void BodyRag(gentity_t* body)
+{
+	body->s.eFlags |= EF_RAG;
+	if (g_corpseRemovalTime.integer)
+	{
+		body->think = BodySink;
+		body->nextthink = body->timestamp + g_corpseRemovalTime.integer * 1000;
+		if (body->nextthink <= level.time)
+		{
+			body->nextthink = level.time + 1000;
+		}
+	}
+	else
+	{
+		body->think = NULL;
+		body->nextthink = 0;
+	}
+}
+
 /*
 =============
 CopyToBodyQue
@@ -1587,6 +1643,26 @@ static qboolean CopyToBodyQue(gentity_t* ent)
 	{
 		body->s.pos.trType = TR_STATIONARY;
 	}
+	int floatDelay = 0;
+	if (ent->waterlevel >= 2)
+	{	// dead in water: the body stays put while its death anim plays, then BodyFloat ragdolls it and floats it up
+		// (DH 2026-10-25)
+		if (ent->client->ps.legsAnim == BOTH_DEATH19)
+		{	// BOTH_DEATH19: floats from its frame 20, ragdolls from its frame 45 (genericValue3: when)
+			const float frame = BG_WaterDeathFrame(&ent->client->ps, bgAllAnims[ent->localAnimIndex].anims);
+			const float msPerFrame = fabs(bgAllAnims[ent->localAnimIndex].anims[BOTH_DEATH19].frameLerp) / 0.75f;
+			floatDelay = frame < 20.0f ? (int)((20.0f - frame) * msPerFrame) + 1 : 1;
+			body->genericValue3 = level.time + (frame < 45.0f ? (int)((45.0f - frame) * msPerFrame) : 0);
+		}
+		else
+		{
+			floatDelay = ent->client->ps.legsTimer > 0 ? ent->client->ps.legsTimer : 1;
+			body->genericValue3 = 0;
+		}
+		body->physicsObject = qfalse;
+		body->s.pos.trType = TR_STATIONARY;
+		VectorClear(body->s.pos.trDelta);
+	}
 
 	body->s.event = 0;
 
@@ -1638,6 +1714,11 @@ static qboolean CopyToBodyQue(gentity_t* ent)
 	{
 		body->nextthink = level.time + g_corpseRemovalTime.integer * 1000;
 		body->think = BodySink;
+	}
+	if (floatDelay > 0)
+	{	// in water: ragdoll and float once the death anim is done (it hands over to BodySink)
+		body->think = BodyFloat;
+		body->nextthink = level.time + floatDelay;
 	}
 
 	body->die = body_die;
@@ -1800,7 +1881,7 @@ void ClientRespawn(gentity_t* ent)
 				ent->health = ent->client->ps.stats[STAT_HEALTH] = 1;
 				ent->waterlevel = ent->watertype = 0;
 				ent->client->ps.weapon = WP_NONE;
-				ent->client->ps.stats[STAT_WEAPONS] = 0;
+				BG_ClearWeapons(ent->client->ps.stats);
 				ent->client->ps.stats[STAT_HOLDABLE_ITEMS] = 0;
 				ent->client->ps.stats[STAT_HOLDABLE_ITEM] = 0;
 				ent->takedamage = qfalse;
@@ -4866,6 +4947,11 @@ static void AI_SetBotSaberStyle(gentity_t* ent)
 	// -------------------------------
 	if (saber1->model[0] && saber1->numBlades == 1)
 	{
+		// SS_BLASTER bot class style set: Kyle Katarn - Medium and Blaster (as his NPC files)
+		if (ent->client->pers.botclass == BCLASS_KYLE)
+		{
+			ent->client->saberStylesKnown = 1 << SS_MEDIUM | 1 << SS_BLASTER;
+		}
 		ent->client->ps.fd.saberAnimLevel = SS_MEDIUM;
 		ent->client->ps.fd.saber_anim_levelBase = SS_MEDIUM;
 		ent->client->saberCycleQueue = SS_MEDIUM;
@@ -5079,7 +5165,7 @@ void ClientSpawn(gentity_t* ent)
 		&& ent->client->ps.fd.saberAnimLevel != SS_DUAL)
 	{
 		//Bots randomly switch styles on respawn if not using a staff or dual
-		int newLevel = Q_irand(SS_MEDIUM, SS_STAFF);
+		int newLevel = Q_irand(SS_MEDIUM, SS_BLASTER); // SS_BLASTER: bots can pick the blaster style too
 
 		//new validation technique.
 		if (!G_ValidSaberStyle(ent, newLevel))
@@ -5511,6 +5597,14 @@ spawn_done:
 	client->ps.animStyle = client->pers.animStyle;
 	client->sess = savedSess;
 	client->ps.ping = savedPing;
+
+	// SS_BLASTER bot class style set: again here, the memset above cleared what AI_SetBotSaberStyle set
+	if (ent->r.svFlags & SVF_BOT
+		&& client->pers.botclass == BCLASS_KYLE
+		&& client->saber[0].model[0] && client->saber[0].numBlades == 1 && !client->saber[1].model[0])
+	{
+		client->saberStylesKnown = 1 << SS_MEDIUM | 1 << SS_BLASTER;
+	}
 	client->accuracy_hits = accuracy_hits;
 	client->accuracy_shots = accuracy_shots;
 	client->lastkilled_client = -1;
@@ -5631,7 +5725,7 @@ spawn_done:
 	}
 
 	//give default weapons
-	client->ps.stats[STAT_WEAPONS] = 1 << WP_NONE;
+	BG_SetOnlyWeapon(client->ps.stats, WP_NONE);
 
 	if (level.gametype == GT_DUEL || level.gametype == GT_POWERDUEL)
 	{
@@ -5656,10 +5750,10 @@ spawn_done:
 	//Give everyone fists as long as they aren't disabled.
 	// MovieDuels (port of SJE MP): except the classes that have no melee at all (SP NPC files: R2 only the stun; R5,
 	// gonk and protocol nothing)
-	if ((!wDisable || !(wDisable & 1 << WP_MELEE)) &&
+	if ((!wDisable || !(WP_MASK_HAS(wDisable, WP_MELEE))) &&
 		!(level.gametype != GT_SIEGE && ent->s.eType != ET_NPC && BG_ClassHasNoFists(client->pers.botclass)))
 	{
-		client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+		BG_GiveWeapon(client->ps.stats, WP_MELEE);
 	}
 
 	if (level.gametype != GT_HOLOCRON
@@ -5722,43 +5816,43 @@ spawn_done:
 			client->ps.trueJedi = qtrue;
 			//make sure they only use the saber
 			client->ps.weapon = WP_SABER;
-			client->ps.stats[STAT_WEAPONS] = 1 << WP_SABER;
+			BG_SetOnlyWeapon(client->ps.stats, WP_SABER);
 		}
 		else
 		{
 			//no force powers set
 			client->ps.trueNonJedi = qtrue;
 			client->ps.trueJedi = qfalse;
-			if (!wDisable || !(wDisable & 1 << WP_BRYAR_PISTOL))
+			if (!wDisable || !(WP_MASK_HAS(wDisable, WP_BRYAR_PISTOL)))
 			{
-				client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+				BG_GiveWeapon(client->ps.stats, WP_BRYAR_PISTOL);
 			}
-			if (!wDisable || !(wDisable & 1 << WP_BLASTER))
+			if (!wDisable || !(WP_MASK_HAS(wDisable, WP_BLASTER)))
 			{
-				client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+				BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 			}
-			if (!wDisable || !(wDisable & 1 << WP_BOWCASTER))
+			if (!wDisable || !(WP_MASK_HAS(wDisable, WP_BOWCASTER)))
 			{
-				client->ps.stats[STAT_WEAPONS] |= 1 << WP_BOWCASTER;
+				BG_GiveWeapon(client->ps.stats, WP_BOWCASTER);
 			}
-			if (!wDisable || !(wDisable & 1 << WP_REPEATER))
+			if (!wDisable || !(WP_MASK_HAS(wDisable, WP_REPEATER)))
 			{
-				client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+				BG_GiveWeapon(client->ps.stats, WP_REPEATER);
 			}
-			if (!wDisable || !(wDisable & 1 << WP_DISRUPTOR))
+			if (!wDisable || !(WP_MASK_HAS(wDisable, WP_DISRUPTOR)))
 			{
-				client->ps.stats[STAT_WEAPONS] |= 1 << WP_DISRUPTOR;
+				BG_GiveWeapon(client->ps.stats, WP_DISRUPTOR);
 			}
-			if (!wDisable || !(wDisable & 1 << WP_FLECHETTE))
+			if (!wDisable || !(WP_MASK_HAS(wDisable, WP_FLECHETTE)))
 			{
-				client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+				BG_GiveWeapon(client->ps.stats, WP_FLECHETTE);
 			}
-			if (!wDisable || !(wDisable & 1 << WP_Z6_ROTARY_CANNON))
+			if (!wDisable || !(WP_MASK_HAS(wDisable, WP_Z6_ROTARY_CANNON)))
 			{
-				client->ps.stats[STAT_WEAPONS] |= 1 << WP_Z6_ROTARY_CANNON;
+				BG_GiveWeapon(client->ps.stats, WP_Z6_ROTARY_CANNON);
 			}
-			client->ps.stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
-			client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+			BG_TakeWeapon(client->ps.stats, WP_SABER);
+			BG_GiveWeapon(client->ps.stats, WP_MELEE);
 			client->ps.ammo[AMMO_POWERCELL] = ammoData[AMMO_POWERCELL].max;
 			client->ps.ammo[AMMO_BLASTER] = ammoData[AMMO_BLASTER].max;
 			client->ps.ammo[AMMO_METAL_BOLTS] = ammoData[AMMO_METAL_BOLTS].max;
@@ -5781,9 +5875,9 @@ spawn_done:
 		if (level.gametype == GT_HOLOCRON)
 		{
 			//always get free saber level 1 in holocron
-			if (!wDisable || !(wDisable & 1 << WP_SABER))
+			if (!wDisable || !(WP_MASK_HAS(wDisable, WP_SABER)))
 			{
-				client->ps.stats[STAT_WEAPONS] |= 1 << WP_SABER;
+				BG_GiveWeapon(client->ps.stats, WP_SABER);
 			}
 		}
 		else if (g_gametype.integer == GT_JEDIMASTER || g_gametype.integer == GT_HOLOCRON)
@@ -5811,16 +5905,16 @@ spawn_done:
 					//botclass weapons and ammo here
 				case BCLASS_CADENCE:
 				case BCLASS_SERENITY:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_SABER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_SABER);
 					client->ps.stats[STAT_HOLDABLE_ITEMS] |= (1 << HI_SEEKER);
 					break;
 					// Force-only classes (no saber)
 				case BCLASS_FORCE_DARK_NO_SABER:
 				case BCLASS_FORCE_LIGHT_NO_SABER:
 					// Give only melee as a fallback, but do NOT grant a saber.
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_TakeWeapon(client->ps.stats, WP_SABER);
 					break;
 				case BCLASS_JEDITRAINER:
 				case BCLASS_ALORA:
@@ -5869,49 +5963,59 @@ spawn_done:
 				case BCLASS_STAFF:
 				case BCLASS_UNSTABLESABER:
 				case BCLASS_OBIWAN:
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_SABER);
+					break;
 				case BCLASS_TUSKEN_RAIDER:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_SABER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					if (g_tuskenWeapons.integer)
+					{
+						BG_GiveWeapon(client->ps.stats, WP_TUSKEN_STAFF); // the tusken staff (from SJE SP), the one they spawn holding
+					}
+					else
+					{
+						BG_GiveWeapon(client->ps.stats, WP_SABER); // the old stand-in for the staff
+					}
 					break;
 				case BCLASS_ASSASSIN_DROID:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DISRUPTOR;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_DISRUPTOR);
 					client->skillLevel[SK_DISRUPTOR] = FORCE_LEVEL_3;
 					// MovieDuels 2026-10-12 (DH: closest existing): assassin_droid.npc carries a blaster (as SJE)
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_BARTENDER:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DISRUPTOR;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_DISRUPTOR);
 					client->skillLevel[SK_DISRUPTOR] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DET_PACK;
+					BG_GiveWeapon(client->ps.stats, WP_DET_PACK);
 					client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_DETPACK] = 3;
 					break;
 				case BCLASS_BESPIN_COP:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REBELBLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_REBELBLASTER);
 					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_2;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					break;
 				case BCLASS_BOBAFETT:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					client->skillLevel[SK_BLASTERRATEOFFIREUPGRADE] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BOBA;
+					BG_GiveWeapon(client->ps.stats, WP_BOBA);
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					BG_GiveWeapon(client->ps.stats, WP_ROCKET_LAUNCHER);
 					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_ROCKETS] = 3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->skillLevel[SK_SMOKEGRENADE] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
@@ -5919,12 +6023,12 @@ spawn_done:
 					client->skillLevel[SK_FLAMETHROWER] = FORCE_LEVEL_3;
 					break;
 				case BCLASS_JANGO_NOJP:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CLONERIFLE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_CLONERIFLE);
 					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					client->skillLevel[SK_BLASTERRATEOFFIREUPGRADE] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_JANGO;
+					BG_GiveWeapon(client->ps.stats, WP_JANGO);
 					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_3;
 					client->ps.eFlags |= EF3_DUAL_WEAPONS;
 					ClassAmmoSetup(ent);
@@ -5932,135 +6036,136 @@ spawn_done:
 					client->skillLevel[SK_FLAMETHROWER] = FORCE_LEVEL_3;
 					break;
 				case BCLASS_CHEWIE:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BOWCASTER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_BOWCASTER);
 					client->skillLevel[SK_BOWCASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_TRIP_MINE;
+					BG_GiveWeapon(client->ps.stats, WP_TRIP_MINE);
 					client->ps.ammo[AMMO_TRIPMINE] = 3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DET_PACK;
+					BG_GiveWeapon(client->ps.stats, WP_DET_PACK);
 					client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_DETPACK] = 3;
 					break;
 				case BCLASS_ELDER:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					break;
 				case BCLASS_GALAK:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CLONECARBINE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_CLONECARBINE);
 					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
 					client->skillLevel[SK_REPEATERUPGRADE] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					BG_GiveWeapon(client->ps.stats, WP_FLECHETTE);
 					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					BG_GiveWeapon(client->ps.stats, WP_ROCKET_LAUNCHER);
 					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_ROCKETS] = 3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					break;
 				case BCLASS_GRAN:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					break;
 				case BCLASS_GRAN_SHOOTER:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_HAZARDTROOPER:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_REPEATER);
 					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					BG_GiveWeapon(client->ps.stats, WP_ROCKET_LAUNCHER);
 					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_ROCKETS] = 3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DET_PACK;
+					BG_GiveWeapon(client->ps.stats, WP_DET_PACK);
 					client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_DETPACK] = 3;
 					break;
 				case BCLASS_HUMAN_MERC:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_FLECHETTE);
 					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->skillLevel[SK_SMOKEGRENADE] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DET_PACK;
+					BG_GiveWeapon(client->ps.stats, WP_DET_PACK);
 					client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_DETPACK] = 4;
 					break;
 				case BCLASS_IMPERIAL:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DEMP2;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_DEMP2);
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_IMPWORKER:
 				case BCLASS_IMPOFFICER:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_JAN:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->skillLevel[SK_FLASHGRENADE] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					break;
 				case BCLASS_JAWA:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_STUN_BATON;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_STUN_BATON);
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_LANDO:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+					BG_GiveWeapon(client->ps.stats, WP_BRYAR_PISTOL);
 					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_2;
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					client->skillLevel[SK_BLASTERRATEOFFIREUPGRADE] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_GALAKMECH:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_REPEATER);
 					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
 					client->skillLevel[SK_REPEATERUPGRADE] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					BG_GiveWeapon(client->ps.stats, WP_FLECHETTE);
 					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					BG_GiveWeapon(client->ps.stats, WP_ROCKET_LAUNCHER);
 					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_ROCKETS] = 3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					client->ps.powerups[PW_GALAK_SHIELD] = Q3_INFINITE;
 					break;
 				case BCLASS_MONMOTHMA:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_BRYAR_PISTOL);
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_2;
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_NOGHRI:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CONCUSSION;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_NOGHRI_STICK); // the noghri stick (from SJE SP), the one they spawn holding
+					BG_GiveWeapon(client->ps.stats, WP_CONCUSSION);
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					ClassAmmoSetup(ent);
@@ -6074,198 +6179,202 @@ spawn_done:
 				case BCLASS_HOWLER:
 				case BCLASS_MINEMONSTER:
 					// MovieDuels (port of SJE MP): howler.npc / minemonster.npc: WP_MELEE (their bites, BG_ClassCreatureAttackAnim)
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					break;
 				case BCLASS_R2D2:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_STUN_BATON;
+					BG_GiveWeapon(client->ps.stats, WP_STUN_BATON);
 					break;
 				case BCLASS_RAGNOS:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_SABER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_SABER);
 					break;
 				case BCLASS_RANCOR:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					break;
 				case BCLASS_RAX:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CONCUSSION;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_CONCUSSION);
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					break;
 				case BCLASS_REBEL:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REBELBLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_REBELBLASTER);
 					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_2;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REBELRIFLE;
+					BG_GiveWeapon(client->ps.stats, WP_REBELRIFLE);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_REBEL_PILOT:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REBELBLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_REBELBLASTER);
 					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_2;
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_REELO:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					BG_GiveWeapon(client->ps.stats, WP_FLECHETTE);
 					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CONCUSSION;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					BG_GiveWeapon(client->ps.stats, WP_CONCUSSION);
+					BG_GiveWeapon(client->ps.stats, WP_REPEATER);
 					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->skillLevel[SK_FLASHGRENADE] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					break;
 				case BCLASS_ROCKETTROOPER:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					BG_GiveWeapon(client->ps.stats, WP_REPEATER);
 					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					BG_GiveWeapon(client->ps.stats, WP_ROCKET_LAUNCHER);
 					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_ROCKETS] = 5;
 					break;
 				case BCLASS_RODIAN:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_FLECHETTE);
 					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CONCUSSION;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_CONCUSSION);
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					break;
 				case BCLASS_SABOTEUR:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->ps.stats[STAT_ARMOR] = 100;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DISRUPTOR;
+					BG_GiveWeapon(client->ps.stats, WP_DISRUPTOR);
 					client->skillLevel[SK_DISRUPTOR] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_STORMTROOPER:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->ps.stats[STAT_ARMOR] = 100;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					client->skillLevel[SK_GRAPPLE] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_STORMPILOT:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->ps.stats[STAT_ARMOR] = 100;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+					BG_GiveWeapon(client->ps.stats, WP_BRYAR_PISTOL);
 					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_2;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_SWAMPTROOPER:
 				case BCLASS_PAZVIZSLA:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_FLECHETTE);
 					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CLONECOMMANDO;
+					BG_GiveWeapon(client->ps.stats, WP_CLONECOMMANDO);
 					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
 					client->skillLevel[SK_REPEATERUPGRADE] = FORCE_LEVEL_3;
 					break;
 				case BCLASS_RESISTANCE:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REBELBLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_REBELBLASTER);
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REBELRIFLE;
+					BG_GiveWeapon(client->ps.stats, WP_REBELRIFLE);
 					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
 					client->skillLevel[SK_REPEATERUPGRADE] = FORCE_LEVEL_3;
 					break;
 				case BCLASS_TRANDOSHAN:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->ps.stats[STAT_ARMOR] = 100;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					break;
 				case BCLASS_TUSKEN_SNIPER:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					if (g_tuskenWeapons.integer)
+					{
+						BG_GiveWeapon(client->ps.stats, WP_TUSKEN_RIFLE); // the tusken rifle (from SJE SP), the one they spawn holding
+					}
 					client->ps.stats[STAT_ARMOR] = 100;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DISRUPTOR;
+					BG_GiveWeapon(client->ps.stats, WP_DISRUPTOR);
 					client->skillLevel[SK_DISRUPTOR] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_UGNAUGHT:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->ps.stats[STAT_ARMOR] = 100;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+					BG_GiveWeapon(client->ps.stats, WP_BRYAR_PISTOL);
 					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_2;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_WAMPA:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					break;
 				case BCLASS_WEEQUAY:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CONCUSSION;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_CONCUSSION);
 					if (Q_stristr(client->modelname, "weequay/sp"))
 					{
 						// MovieDuels 2026-10-12 (DH: closest existing): weequay/sp's NPC weapon is the bowcaster
-						client->ps.stats[STAT_WEAPONS] |= 1 << WP_BOWCASTER;
+						BG_GiveWeapon(client->ps.stats, WP_BOWCASTER);
 					}
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					break;
 				case BCLASS_MANDOLORIAN: //boba fett
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BOBA;
+					BG_GiveWeapon(client->ps.stats, WP_BOBA);
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					client->skillLevel[SK_GRAPPLE] = FORCE_LEVEL_3;
 					client->skillLevel[SK_FLAMETHROWER] = FORCE_LEVEL_3;
 					break;
 				case BCLASS_MANDOLORIAN1:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BATTLEDROID;
+					BG_GiveWeapon(client->ps.stats, WP_BATTLEDROID);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CLONEPISTOL;
+					BG_GiveWeapon(client->ps.stats, WP_CLONEPISTOL);
 					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_3;
 					client->ps.eFlags |= EF3_DUAL_WEAPONS;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CLONECARBINE;
+					BG_GiveWeapon(client->ps.stats, WP_CLONECARBINE);
 					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					BG_GiveWeapon(client->ps.stats, WP_ROCKET_LAUNCHER);
 					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_ROCKETS] = 5;
 					client->skillLevel[SK_GRAPPLE] = FORCE_LEVEL_3;
 					client->skillLevel[SK_FLAMETHROWER] = FORCE_LEVEL_3;
 					break;
 				case BCLASS_MANDOLORIAN2:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_JANGO;
+					BG_GiveWeapon(client->ps.stats, WP_JANGO);
 					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_3;
 					client->ps.eFlags |= EF3_DUAL_WEAPONS;
 					ClassAmmoSetup(ent);
 					client->ps.ammo[AMMO_ROCKETS] = 5;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->skillLevel[SK_FLASHGRENADE] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
@@ -6273,167 +6382,167 @@ spawn_done:
 					client->skillLevel[SK_FLAMETHROWER] = FORCE_LEVEL_3;
 					break;
 				case BCLASS_SOILDER:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REBELRIFLE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_REBELRIFLE);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					BG_GiveWeapon(client->ps.stats, WP_ROCKET_LAUNCHER);
 					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_ROCKETS] = 3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->skillLevel[SK_SMOKEGRENADE] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					break;
 				case BCLASS_BATTLEDROID:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BATTLEDROID;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_BATTLEDROID);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					if (Q_stristr(client->modelname, "battledroid/sniper"))
 					{
 						// MovieDuels 2026-10-12 (DH: closest existing): the B1 sniper's NPC weapon (the class stays BATTLEDROID:
 						// droid death, sounds, effects)
-						client->ps.stats[STAT_WEAPONS] |= 1 << WP_DISRUPTOR;
+						BG_GiveWeapon(client->ps.stats, WP_DISRUPTOR);
 						client->skillLevel[SK_DISRUPTOR] = FORCE_LEVEL_3;
 					}
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_SBD:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_OLD;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_BRYAR_OLD);
 					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_3;
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_BLASTER] = 999;
 					break;
 				case BCLASS_WOOKIEMELEE:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
 					break;
 				case BCLASS_TROOPER1:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_REPEATER);
 					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->skillLevel[SK_SMOKEGRENADE] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					break;
 				case BCLASS_TROOPER2:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_FLECHETTE);
 					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_TROOPER3:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_REPEATER);
 					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_ROCKET_LAUNCHER;
+					BG_GiveWeapon(client->ps.stats, WP_ROCKET_LAUNCHER);
 					client->skillLevel[SK_ROCKET] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_ROCKETS] = 5;
 					break;
 				case BCLASS_SMUGGLER2:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->ps.stats[STAT_ARMOR] = 100;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					client->ps.ammo[AMMO_TRIPMINE] = 3;
 					break;
 				case BCLASS_BOUNTYHUNTER1:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_FLECHETTE);
 					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_Z6_ROTARY_CANNON;
+					BG_GiveWeapon(client->ps.stats, WP_Z6_ROTARY_CANNON);
 					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->ps.ammo[AMMO_THERMAL] = 4;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DET_PACK;
+					BG_GiveWeapon(client->ps.stats, WP_DET_PACK);
 					client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_DETPACK] = 3;
 					break;
 				case BCLASS_BOUNTYHUNTER2:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_BRYAR_PISTOL);
 					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_3;
 					client->ps.eFlags |= EF3_DUAL_WEAPONS;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_DET_PACK;
+					BG_GiveWeapon(client->ps.stats, WP_DET_PACK);
 					client->skillLevel[SK_DETPACK] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_DETPACK] = 3;
 					break;
 				case BCLASS_BOUNTYHUNTER3:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					BG_GiveWeapon(client->ps.stats, WP_REPEATER);
 					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
 					break;
 				case BCLASS_IPPERIALAGENT1:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_FLECHETTE);
 					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_METAL_BOLTS] = 675;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_REPEATER;
+					BG_GiveWeapon(client->ps.stats, WP_REPEATER);
 					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
 					break;
 				case BCLASS_IPPERIALAGENT2:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					BG_GiveWeapon(client->ps.stats, WP_FLECHETTE);
 					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					break;
 				case BCLASS_IPPERIALAGENT3:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->skillLevel[SK_ACROBATICS] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+					BG_GiveWeapon(client->ps.stats, WP_BRYAR_PISTOL);
 					client->skillLevel[SK_PISTOL] = FORCE_LEVEL_3;
 					client->ps.eFlags |= EF3_DUAL_WEAPONS;
 					ClassAmmoSetup(ent);
 					client->ps.ammo[AMMO_TRIPMINE] = 3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->skillLevel[SK_CRYOBAN] = FORCE_LEVEL_3;
 					client->ps.ammo[AMMO_THERMAL] = 4;
 					break;
 				case BCLASS_CLONETROOPER:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->ps.stats[STAT_ARMOR] = 100;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CLONERIFLE;
+					BG_GiveWeapon(client->ps.stats, WP_CLONERIFLE);
 					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
 					break;
 				case BCLASS_HEAVYTROOPER:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_FLECHETTE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_FLECHETTE);
 					client->skillLevel[SK_FLECHETTE] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_Z6_ROTARY_CANNON;
+					BG_GiveWeapon(client->ps.stats, WP_Z6_ROTARY_CANNON);
 					client->skillLevel[SK_REPEATER] = FORCE_LEVEL_3;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_THERMAL;
+					BG_GiveWeapon(client->ps.stats, WP_THERMAL);
 					client->ps.ammo[AMMO_THERMAL] = 4;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_CLONECOMMANDO;
+					BG_GiveWeapon(client->ps.stats, WP_CLONECOMMANDO);
 					break;
 				case BCLASS_PLAYER:
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_BLASTER;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
+					BG_GiveWeapon(client->ps.stats, WP_BLASTER);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					ClassAmmoSetup(ent);
 					break;
@@ -6442,26 +6551,26 @@ spawn_done:
 					{
 						if (g_gametype.integer == GT_JEDIMASTER)
 						{
-							if (!wDisable || !(wDisable & 1 << WP_BRYAR_PISTOL))
+							if (!wDisable || !(WP_MASK_HAS(wDisable, WP_BRYAR_PISTOL)))
 							{
-								client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+								BG_GiveWeapon(client->ps.stats, WP_BRYAR_PISTOL);
 							}
 						}
 						if (client->ps.fd.forcePowerSelected == FP_SABER_OFFENSE)
 						{
-							client->ps.stats[STAT_WEAPONS] |= 1 << WP_SABER;
+							BG_GiveWeapon(client->ps.stats, WP_SABER);
 						}
 						else
 						{
-							if (!wDisable || !(wDisable & 1 << WP_BRYAR_PISTOL))
+							if (!wDisable || !(WP_MASK_HAS(wDisable, WP_BRYAR_PISTOL)))
 							{
-								client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+								BG_GiveWeapon(client->ps.stats, WP_BRYAR_PISTOL);
 							}
 						}
 					}
 
 					ClassAmmoSetup(ent);
-					client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+					BG_GiveWeapon(client->ps.stats, WP_MELEE);
 					client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 					client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 					client->skillLevel[SK_BOWCASTER] = FORCE_LEVEL_3;
@@ -6486,27 +6595,27 @@ spawn_done:
 				{
 					if (g_gametype.integer == GT_JEDIMASTER)
 					{
-						if (!wDisable || !(wDisable & 1 << WP_BRYAR_PISTOL))
+						if (!wDisable || !(WP_MASK_HAS(wDisable, WP_BRYAR_PISTOL)))
 						{
-							client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+							BG_GiveWeapon(client->ps.stats, WP_BRYAR_PISTOL);
 						}
 					}
 					if (client->ps.fd.forcePowerSelected == FP_SABER_OFFENSE)
 					{
-						client->ps.stats[STAT_WEAPONS] |= 1 << WP_SABER;
+						BG_GiveWeapon(client->ps.stats, WP_SABER);
 					}
 					else
 					{
-						if (!wDisable || !(wDisable & 1 << WP_BRYAR_PISTOL))
+						if (!wDisable || !(WP_MASK_HAS(wDisable, WP_BRYAR_PISTOL)))
 						{
-							client->ps.stats[STAT_WEAPONS] |= 1 << WP_BRYAR_PISTOL;
+							BG_GiveWeapon(client->ps.stats, WP_BRYAR_PISTOL);
 						}
 					}
 				}
 				client->ps.ammo[AMMO_BLASTER] = 500;
 				client->ps.ammo[AMMO_POWERCELL] = 500;
 				client->ps.ammo[AMMO_METAL_BOLTS] = 500;
-				client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+				BG_GiveWeapon(client->ps.stats, WP_MELEE);
 				client->skillLevel[SK_BLASTER] = FORCE_LEVEL_3;
 				client->skillLevel[SK_THERMAL] = FORCE_LEVEL_3;
 				client->skillLevel[SK_BOWCASTER] = FORCE_LEVEL_3;
@@ -6527,7 +6636,7 @@ spawn_done:
 		if (wDisable == WP_ALLDISABLED)
 		{
 			//some joker disabled all the weapons.  Give everyone Melee
-			client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+			BG_GiveWeapon(client->ps.stats, WP_MELEE);
 			Com_Printf("ERROR:  The game doesn't like it when you disable ALL the weapons.\nReenabling Melee.\n");
 			if (g_gametype.integer == GT_DUEL || g_gametype.integer == GT_POWERDUEL)
 			{
@@ -6541,15 +6650,15 @@ spawn_done:
 
 		if (level.gametype == GT_JEDIMASTER)
 		{
-			client->ps.stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
+			BG_TakeWeapon(client->ps.stats, WP_SABER);
 
-			if (!wDisable || !(wDisable & 1 << WP_BRYAR_PISTOL))
+			if (!wDisable || !(WP_MASK_HAS(wDisable, WP_BRYAR_PISTOL)))
 			{
-				client->ps.stats[STAT_WEAPONS] |= 1 << WP_MELEE;
+				BG_GiveWeapon(client->ps.stats, WP_MELEE);
 			}
 		}
 
-		if (client->ps.stats[STAT_WEAPONS] & 1 << WP_SABER)
+		if (BG_HasWeapon(client->ps.stats, WP_SABER))
 		{
 			//sabers auto selected if we have them.
 			client->ps.weapon = WP_SABER;
@@ -6559,7 +6668,7 @@ spawn_done:
 			int i1 = 0;
 			for (i1 = LAST_SELECTABLE_WEAPON; i1 > WP_NONE; i1--)
 			{
-				if (client->ps.stats[STAT_WEAPONS] & 1 << i1)
+				if (BG_HasWeapon(client->ps.stats, i1))
 				{
 					//have this one, equip it.
 					client->ps.weapon = i1;
@@ -6581,12 +6690,13 @@ spawn_done:
 		int m = 0;
 
 		client->ps.stats[STAT_WEAPONS] = bgSiegeClasses[client->siegeClass].weapons;
+		client->ps.stats[STAT_WEAPONS2] = 0; // siege classes only list weapons 0-31
 
-		if (client->ps.stats[STAT_WEAPONS] & 1 << WP_SABER)
+		if (BG_HasWeapon(client->ps.stats, WP_SABER))
 		{
 			client->ps.weapon = WP_SABER;
 		}
-		else if (client->ps.stats[STAT_WEAPONS] & 1 << WP_BRYAR_PISTOL)
+		else if (BG_HasWeapon(client->ps.stats, WP_BRYAR_PISTOL))
 		{
 			client->ps.weapon = WP_BRYAR_PISTOL;
 		}
@@ -6596,9 +6706,9 @@ spawn_done:
 		}
 		inSiegeWithClass = qtrue;
 
-		while (m < WP_NUM_WEAPONS)
+		while (m < WP_NUM_OWNABLE_WEAPONS)
 		{
-			if (client->ps.stats[STAT_WEAPONS] & 1 << m)
+			if (BG_HasWeapon(client->ps.stats, m))
 			{
 				if (client->ps.weapon != WP_SABER)
 				{
@@ -7579,7 +7689,7 @@ spawn_done:
 
 	if (client->sess.sessionTeam == TEAM_SPECTATOR)
 	{
-		client->ps.stats[STAT_WEAPONS] = 0;
+		BG_ClearWeapons(client->ps.stats);
 		client->ps.stats[STAT_HOLDABLE_ITEMS] = 0;
 		client->ps.stats[STAT_HOLDABLE_ITEM] = 0;
 	}
@@ -7739,7 +7849,7 @@ spawn_done:
 		if (ent->client->sess.sessionTeam != TEAM_SPECTATOR)
 		{
 			g_kill_box(ent);
-			if (client->ps.weapon <= WP_NONE && client->ps.stats[STAT_WEAPONS] & ~(1 << WP_NONE))
+			if (client->ps.weapon <= WP_NONE && (client->ps.stats[STAT_WEAPONS] & ~(1 << WP_NONE) || client->ps.stats[STAT_WEAPONS2]))
 			{
 				// (MovieDuels: only when there is a weapon; the weaponless classes - R5, gonk, protocol - keep WP_NONE)
 				client->ps.weapon = WP_BRYAR_PISTOL;
@@ -7792,6 +7902,9 @@ spawn_done:
 			trap->LinkEntity((sharedEntity_t*)ent);
 		}
 	}
+
+	// Ragnos' scepter (SP's WP_SCEPTER) for the Possessed Tavion bot: EF2_SCEPTER (ai_main.c)
+	G_ScepterSpawnCheck(ent);
 
 	//set teams for NPCs to recognize
 	if (level.gametype == GT_SIEGE)

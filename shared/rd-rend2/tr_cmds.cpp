@@ -213,7 +213,7 @@ static void R_PerformanceCounters(void)
 	Com_Memset(&backEnd.pc, 0, sizeof(backEnd.pc));
 	currentFrame->numTimedBlocks = 0;
 	currentFrame->numTimers = 0;
-}
+	}
 
 /*
 ====================
@@ -291,7 +291,7 @@ static void* R_GetCommandBufferReserved(unsigned int bytes, const int reservedBy
 	cmdList->used += bytes;
 
 	return cmdList->cmds + cmdList->used - bytes;
-}
+	}
 
 /*
 ============
@@ -310,7 +310,7 @@ R_AddDrawSurfCmd
 
 =============
 */
-void R_AddDrawSurfCmd(drawSurf_t* drawSurfs, const int numDrawSurfs)
+void R_AddDrawSurfCmd(drawSurf_t * drawSurfs, const int numDrawSurfs)
 {
 	drawSurfsCommand_t* cmd = nullptr;
 
@@ -336,7 +336,7 @@ R_AddConvolveCubemapsCmd
 
 =============
 */
-void R_AddConvolveCubemapCmd(cubemap_t* cubemap, int cubemapId) {
+void R_AddConvolveCubemapCmd(cubemap_t * cubemap, int cubemapId) {
 	convolveCubemapCommand_t* cmd = nullptr;
 
 	if (!tr.registered) {
@@ -463,7 +463,7 @@ void	RE_SetColor(const float* rgba) {
 	}
 	// the fade is applied per shader stage in the backend (RB_HudFadeStage), so shaders that ignore the vertex alpha fade too
 	cmd->hudFade = 0.0f;
-	if (r_hudAlpha && r_hudAlpha->value < 1.0f)
+	if (r_hudAlpha&& r_hudAlpha->value < 1.0f)
 	{
 		cmd->hudFade = r_hudAlpha->value > 0.0f ? 1.0f - r_hudAlpha->value : 1.0f;
 	}
@@ -561,7 +561,7 @@ void RE_StretchPic(const float x, const float y, const float w, const float h, c
 #define MODE_GREEN_MAGENTA 4
 #define MODE_MAX	MODE_GREEN_MAGENTA
 
-static void R_SetColorMode(GLboolean* rgba, stereoFrame_t stereoFrame, int colormode)
+static void R_SetColorMode(GLboolean * rgba, stereoFrame_t stereoFrame, int colormode)
 {
 	rgba[0] = rgba[1] = rgba[2] = rgba[3] = GL_TRUE;
 
@@ -1001,7 +1001,7 @@ RE_TakeVideoFrame
 =============
 */
 void RE_TakeVideoFrame(int width, int height,
-	byte* captureBuffer, byte* encodeBuffer, qboolean motionJpeg)
+	byte * captureBuffer, byte * encodeBuffer, qboolean motionJpeg)
 {
 	videoFrameCommand_t* cmd = nullptr;
 

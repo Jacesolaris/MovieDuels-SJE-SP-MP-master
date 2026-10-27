@@ -5279,6 +5279,7 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker,
 
 	self->client->ps.stasisTime = 0;
 	self->client->ps.stasisJediTime = 0;
+	self->client->ps.darkStasisTime = 0;
 
 	VectorCopy(self->currentAngles, self->client->ps.viewangles);
 
@@ -6482,9 +6483,9 @@ void G_Knockdown(gentity_t* self, gentity_t* attacker, const vec3_t push_dir, fl
 		return;
 	}
 
-	if (self->client->ps.repulseChargeStart)
+	if (self->client->ps.repulseChargeStart || self->client->ps.forcePowersActive & 1 << FP_DARK_STASIS)
 	{
-		return; // charging Force Repulse: can't be knocked down
+		return; // charging Force Repulse or Dark Stasis active: can't be knocked down
 	}
 
 	if (self->client->NPC_class == CLASS_ROCKETTROOPER)
@@ -7987,10 +7988,10 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, const 
 		return; // targ is used unchecked below (targ->takedamage)
 	}
 
-	if (targ->client && targ->client->ps.repulseChargeStart && mod != MOD_TRIGGER_HURT && mod != MOD_SUICIDE
+	if (targ->client && (targ->client->ps.repulseChargeStart || targ->client->ps.forcePowersActive & 1 << FP_DARK_STASIS) && mod != MOD_TRIGGER_HURT && mod != MOD_SUICIDE
 		&& mod != MOD_CRUSH)
 	{
-		return; // charging Force Repulse: invincible, no knockback either (2026-10-12, DH)
+		return; // charging Force Repulse (2026-10-12) or Dark Stasis active (2026-10-27): invincible, no knockback, DH
 	}
 
 	if (mod == MOD_SABER && targ && targ->client && targ->client->ps.stats[STAT_SABER_BREAK_SAFE] > level.time)

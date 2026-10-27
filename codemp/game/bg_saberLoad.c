@@ -466,6 +466,10 @@ saber_colors_t TranslateSaberColor(const char* name)
 	{
 		return SABER_LIME;
 	}
+	if (!Q_stricmp(name, "unstable_red")) // MovieDuels: Kylo's blade (the SP saber menus' colour)
+	{
+		return SABER_UNSTABLE_RED;
+	}
 	if (!Q_stricmp(name, "random"))
 	{
 		return Q_irand(SABER_ORANGE, SABER_PURPLE);
@@ -487,6 +491,7 @@ const char* SaberColorToString(const saber_colors_t color)
 	if (color == SABER_PIMP) return "pimp";
 	if (color == SABER_SCRIPTED) return "scripted";
 	if (color == SABER_LIME) return "lime";
+	if (color == SABER_UNSTABLE_RED) return "unstable_red";
 
 	return NULL;
 }
@@ -3447,6 +3452,13 @@ static qboolean WP_IsSaberTwoHanded(const char* saber_name)
 	return twoHanded != 0;
 }
 
+static qboolean WP_IsSaberStaffType(const char* saber_name)
+{
+	char saberTypeString[MAX_QPATH] = { 0 };
+	return WP_SaberParseParm(saber_name, "saberType", saberTypeString) && !Q_stricmpn(saberTypeString, "SABER_STAFF", 11)
+		? qtrue : qfalse;
+}
+
 void WP_SaberGetHiltInfo(const char* singleHilts[MAX_SABER_HILTS], const char* staffHilts[MAX_SABER_HILTS])
 {
 	int numSingleHilts = 0, numStaffHilts = 0;
@@ -3482,7 +3494,8 @@ void WP_SaberGetHiltInfo(const char* singleHilts[MAX_SABER_HILTS], const char* s
 			continue;
 		}
 
-		if (WP_IsSaberTwoHanded(saber_name))
+		// MovieDuels: a staff is "twoHanded 1" or a SABER_STAFF* type (many MD staffs only set the type, 2026-10-27)
+		if (WP_IsSaberTwoHanded(saber_name) || WP_IsSaberStaffType(saber_name))
 		{
 			if (numStaffHilts < MAX_SABER_HILTS - 1) //-1 because we have to NULL terminate the list
 			{

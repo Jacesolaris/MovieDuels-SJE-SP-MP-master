@@ -79,7 +79,7 @@ static void RE_FreeDecal(const int type, const int index)
 	re_decalPolys[type][index].time = 0;
 
 	re_decalPolyTotal[type]--;
-}
+	}
 
 /*
 ===================

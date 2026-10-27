@@ -2043,7 +2043,6 @@ void CG_DrawWeaponSelect(void)
 	// Clear pickup display
 	cg.itemPickupTime = 0;
 
-
 	// Count selectable weapons
 	for (i = FIRST_SELECTABLE_WEAPON; i <= LAST_SELECTABLE_WEAPON; i++)
 	{
@@ -4496,7 +4495,8 @@ static const char* CG_MDWheel_ForceName(const int fp)
 		return "";
 	}
 	if (trap->SE_GetStringTextString(va("MD_MP_GAME_%s", showPowersName[fp]), text, sizeof text)
-		|| trap->SE_GetStringTextString(va("SP_INGAME_%s", showPowersName[fp]), text, sizeof text))
+		|| trap->SE_GetStringTextString(va("SP_INGAME_%s", showPowersName[fp]), text, sizeof text)
+		|| trap->SE_GetStringTextString(showPowersName[fp], text, sizeof text)) // DARKSTASIS_NAME
 	{
 		return text;
 	}

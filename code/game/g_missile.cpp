@@ -3901,7 +3901,7 @@ static void wp_handle_bolt_block_sje_blockpoints(gentity_t* ent, gentity_t* miss
 
 	if (in_joystick->integer && accurate_missile_blocking)
 	{
-		if (level.time - blocker->client->ps.ManualblockStartTime < 500)
+		if (level.time - blocker->client->ps.ManualblockStartTime < 1500)
 		{
 			saber_block_reflection = qfalse;
 			bolt_block_reflection = qtrue;
@@ -3935,7 +3935,7 @@ static void wp_handle_bolt_block_sje_blockpoints(gentity_t* ent, gentity_t* miss
 	{
 		vec3_t angs;
 
-		if (level.time - blocker->client->ps.ManualBlockingTime < 3000)
+		if (level.time - blocker->client->ps.ManualblockStartTime < 3000)
 		{
 			// Good block
 			vectoangles(forward, angs);
@@ -4359,7 +4359,7 @@ static void wp_handle_bolt_block_sje_forcepoints(gentity_t* ent, gentity_t* miss
 
 	if (in_joystick->integer && accurate_missile_blocking)
 	{
-		if (level.time - blocker->client->ps.ManualblockStartTime < 500)
+		if (level.time - blocker->client->ps.ManualblockStartTime < 1500)
 		{
 			saber_block_reflection = qfalse;
 			bolt_block_reflection = qtrue;
@@ -4400,7 +4400,7 @@ static void wp_handle_bolt_block_sje_forcepoints(gentity_t* ent, gentity_t* miss
 	{
 		vec3_t angs;
 
-		if (level.time - blocker->client->ps.ManualblockStartTime < 6000)
+		if (level.time - blocker->client->ps.ManualblockStartTime < 3000)
 		{
 			// Good block
 			vectoangles(forward, angs);

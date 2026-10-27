@@ -1,9 +1,9 @@
-# MovieDuels launcher (Windows only), from the team's design: HOME, OPTIONS, DISCORD, HELP and
-# SINGLEPLAYER MODE / MULTIPLAYER MODE, starting MovieDuels-SP.x86_64.exe or MovieDuels-MP.x86_64.exe
-# from its own folder. The backgrounds in art/ are built by MD-work/launcher2/LauncherArt.cs from
-# the mockup (checkerboard removed, labels erased; the launcher draws the labels).
-# The sounds in sound/ are the in-game menu's own (MD_Assets.pk3: sound/interface/button1.wav,
-# menuroam.wav, esc.wav) and the main menu music (music/mainMenu/main/CTCMusic.mp3).
+# MovieDuels launcher (Windows only): the team's launcher (MovieDuels-SJE-Launcher-master, WPF) as a native exe built
+# with the game, like the SerenityJediEngine launcher. SINGLEPLAYER MODE / MULTIPLAYER MODE start
+# MovieDuels-SP.x86_64.exe / MovieDuels-MP.x86_64.exe from its own folder (release builds of the game only start from
+# it: shared/sys/sys_main.cpp Sys_RequireLauncher).
+# art/ and sound/ are the team's launcher assets (Assets/Images, Assets/Icons, Assets/Audio), renamed without spaces.
+# The old launcher's bg_*.jpg, btn_*.png and CTCMusic.mp3 are no longer used.
 
 set(LauncherName "MovieDuels-Launcher")
 
@@ -16,7 +16,10 @@ source_group("launcher" FILES ${LauncherFiles})
 
 add_executable(${LauncherName} WIN32 ${LauncherFiles})
 target_compile_definitions(${LauncherName} PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-target_link_libraries(${LauncherName} gdiplus shlwapi winmm shell32)
+# ${SPDir}: win32/AutoVersion.h (the build shown in the corner); minizip + zlib: the update of the game's assets,
+# read from ui/main.menu in the MD folder's pk3s
+target_include_directories(${LauncherName} PRIVATE "${SPDir}" ${MINIZIP_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIR})
+target_link_libraries(${LauncherName} ${MINIZIP_LIBRARIES} ${ZLIB_LIBRARIES} gdiplus shlwapi winmm shell32)
 set_target_properties(${LauncherName} PROPERTIES PROJECT_LABEL "Launcher")
 
 install(TARGETS ${LauncherName}

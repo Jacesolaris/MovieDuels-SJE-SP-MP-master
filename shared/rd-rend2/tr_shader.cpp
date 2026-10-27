@@ -136,6 +136,18 @@ static void ClearGlobalShader(void)
 	shader.contentFlags = CONTENTS_SOLID | CONTENTS_OPAQUE;
 }
 
+// rend2 look (DH 2026-10-26): r_dlightIntensity / r_dlightRadius scale every dynamic light (sabers, shots, explosions),
+// r_baseRoughness = surface roughness for textures without a material map (1 = matte as before)
+extern cvar_t* r_baseRoughness;
+static float R_BaseRoughness()
+{
+	if (!r_baseRoughness)
+	{
+		return 1.0f;
+	}
+	return Com_Clamp(0.05f, 1.0f, r_baseRoughness->value);
+}
+
 static uint32_t generateHashValueForText(const char* string, size_t length)
 {
 	int i = 0;
@@ -250,7 +262,7 @@ void R_RemapShader(const char* shaderName, const char* newShaderName, const char
 	if (timeOffset) {
 		sh2->timeOffset = atof(timeOffset);
 	}
-}
+	}
 
 /*
 ===============
@@ -1128,7 +1140,7 @@ static bool ParseSurfaceSprites(const char* buffer, shaderStage_t * stage)
 	stage->ss->fxAlphaEnd = 0.0f;
 
 	return true;
-}
+	}
 
 // Parses the following keywords in a shader stage:
 //
@@ -3874,8 +3886,8 @@ static void CollapseStagesToLightall(shaderStage_t * stage, shaderStage_t * ligh
 					if (!stage->bundle[TB_ORMSMAP].image[0])
 					{
 						stage->specularScale[0] = 0.0f;
-						stage->specularScale[2] =
-							stage->specularScale[3] = 1.0f;
+						stage->specularScale[2] = 1.0f;
+						stage->specularScale[3] = R_BaseRoughness();
 						stage->specularScale[1] = 0.5f;
 					}
 				}
@@ -4244,8 +4256,8 @@ static qboolean CollapseStagesToGLSL(void)
 		{
 			shaderStage_t* pStage = &stages[i];
 			pStage->specularScale[0] = 0.0f;
-			pStage->specularScale[2] =
-				pStage->specularScale[3] = 1.0f;
+			pStage->specularScale[2] = 1.0f;
+			pStage->specularScale[3] = R_BaseRoughness();
 			pStage->specularScale[1] = 0.5f;
 		}
 	}
@@ -5363,7 +5375,7 @@ shader_t* R_FindShader(const char* name, const int* lightmapIndexes, const byte 
 			// match found
 			return sh;
 		}
-	}
+		}
 
 	// clear the global shader
 	ClearGlobalShader();
@@ -5529,7 +5541,7 @@ shader_t* R_FindShader(const char* name, const int* lightmapIndexes, const byte 
 	}
 
 	return FinishShader();
-}
+	}
 
 #ifdef REND2_SP
 shader_t* R_FindServerShader(const char* name, const int* lightmapIndex, const byte * styles, qboolean mip_raw_image)
@@ -5565,7 +5577,7 @@ shader_t* R_FindServerShader(const char* name, const int* lightmapIndexes, const
 			// match found
 			return sh;
 		}
-	}
+		}
 
 	// clear the global shader
 	ClearGlobalShader();
@@ -5578,7 +5590,7 @@ shader_t* R_FindServerShader(const char* name, const int* lightmapIndexes, const
 
 	shader.defaultShader = qtrue;
 	return FinishShader();
-}
+	}
 
 #ifdef REND2_SP
 static qhandle_t RE_RegisterShaderFromImage(const char* name, const int* lightmapIndex, const byte * styles, image_t * image, qboolean mip_raw_image) {
@@ -5619,7 +5631,7 @@ qhandle_t RE_RegisterShaderFromImage(const char* name, const int* lightmapIndexe
 			// match found
 			return sh->index;
 		}
-	}
+		}
 
 	// clear the global shader
 	ClearGlobalShader();
@@ -5692,7 +5704,7 @@ qhandle_t RE_RegisterShaderFromImage(const char* name, const int* lightmapIndexe
 
 	sh = FinishShader();
 	return sh->index;
-}
+	}
 
 /*
 ====================
@@ -5953,7 +5965,7 @@ void	R_ShaderList_f(void) {
 #endif // REND2_SP
 		}
 		count++;
-	}
+		}
 #ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "%i total shaders\n", count);
 	ri.Printf(PRINT_ALL, "------------------\n");
@@ -5961,7 +5973,7 @@ void	R_ShaderList_f(void) {
 	ri->Printf(PRINT_ALL, "%i total shaders\n", count);
 	ri->Printf(PRINT_ALL, "------------------\n");
 #endif // REND2_SP
-}
+	}
 
 /*
 ====================
@@ -6187,8 +6199,8 @@ static void ScanAndLoadShaderFiles(void)
 					s_shaderBuffers[i] = nullptr;
 					break;
 				}
+				}
 			}
-		}
 
 		if (s_shaderBuffers[i] != nullptr)
 		{
@@ -6198,7 +6210,7 @@ static void ScanAndLoadShaderFiles(void)
 
 		COM_EndParseSession();
 #endif // REND2_SP
-	}
+				}
 
 	/*
 	==========================================================
@@ -6313,7 +6325,7 @@ static void ScanAndLoadShaderFiles(void)
 #ifdef REND2_SP
 
 	COM_EndParseSession();
-}
+			}
 
 #else // !REND2_SP
 			}

@@ -775,7 +775,8 @@ const char* forcepowerDesc[NUM_FORCE_POWERS] =
 	"@SP_INGAME_FORCE_DEADLYSIGHT_DESC",
 	"@SP_INGAME_FORCE_BLAST_DESC",
 	"@SP_INGAME_FORCE_INSANITY_DESC",
-	"@SP_INGAME_FORCE_BLINDING_DESC"
+	"@SP_INGAME_FORCE_BLINDING_DESC",
+	"@DARKSTASIS_DESC"
 };
 
 // Movedata Sounds
@@ -2367,8 +2368,8 @@ void UI_LoadMenus(const char* menuFile, const qboolean reset)
 	Com_Printf("----------------------- MovieDuels-SJE-MP -----------------------\n");
 	Com_Printf("-----------------------------------------------------------------\n");
 	Com_Printf("-------------------------- Update 9.0 ---------------------------\n");
-	Com_Printf("--------------------- Build Date 25/10/2026 ---------------------\n");// build date
-	Com_Printf("--------------------------- Build 05 ----------------------------\n");
+	Com_Printf("--------------------- Build Date 27/10/2026 ---------------------\n");// build date
+	Com_Printf("--------------------------- Build 07 ----------------------------\n");
 	Com_Printf("-----------------------------------------------------------------\n");
 	Com_Printf("-------------------------- Lightsaber ---------------------------\n");
 	Com_Printf("---------- An elegant weapon for a more civilized age -----------\n");
@@ -3746,6 +3747,7 @@ static int UI_OwnerDrawWidth(int ownerDraw, float scale)
 	case UI_FORCE_RANK_BLAST:
 	case UI_FORCE_RANK_INSANITY:
 	case UI_FORCE_RANK_BLINDING:
+	case UI_FORCE_RANK_DARK_STASIS:
 		findex = UI_FORCE_RANK_INDEX(ownerDraw);
 		//this will give us the index as long as UI_FORCE_RANK is always one below the first force rank index
 		i = uiForcePowersRank[findex];
@@ -4213,6 +4215,7 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
 	case UI_FORCE_RANK_BLAST:
 	case UI_FORCE_RANK_INSANITY:
 	case UI_FORCE_RANK_BLINDING:
+	case UI_FORCE_RANK_DARK_STASIS:
 		findex = UI_FORCE_RANK_INDEX(ownerDraw);
 		//this will give us the index as long as UI_FORCE_RANK is always one below the first force rank index
 		if (uiForcePowerDarkLight[findex] && uiForceSide != uiForcePowerDarkLight[findex])
@@ -5511,6 +5514,7 @@ static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float* special, 
 	case UI_FORCE_RANK_BLAST:
 	case UI_FORCE_RANK_INSANITY:
 	case UI_FORCE_RANK_BLINDING:
+	case UI_FORCE_RANK_DARK_STASIS:
 		findex = UI_FORCE_RANK_INDEX(ownerDraw);
 		//this will give us the index as long as UI_FORCE_RANK is always one below the first force rank index
 		return UI_ForcePowerRank_HandleKey(flags, special, key, uiForcePowersRank[findex], 0,
@@ -6841,6 +6845,51 @@ void UI_UpdateCharacterSkin(void)
 	ItemParse_model_g2skin_go(item, skin);
 }
 
+// Profile menu (ingame_player): the player's own character in its "character" model item, from the "model" cvar:
+// "model", "model/skin" (model_<skin>.skin) or "model/head|torso|lower" (multipart). DH 2026-10-27.
+static void MD_ShowPlayerModel(void)
+{
+	char model[MAX_QPATH];
+	char path[MAX_QPATH];
+	int animRunLength = 0;
+	const menuDef_t* menu = Menu_GetFocused();
+	itemDef_t* item = menu ? Menu_FindItemByName(menu, "character") : NULL;
+
+	if (!item)
+	{
+		return;
+	}
+
+	trap->Cvar_VariableStringBuffer("model", model, sizeof model);
+	char* skin = strchr(model, '/');
+	if (skin)
+	{
+		*skin++ = 0;
+	}
+	if (!model[0])
+	{
+		return;
+	}
+
+	ItemParse_model_g2anim_go(item, ui_char_anim.string);
+	Com_sprintf(path, sizeof path, "models/players/%s/model.glm", model);
+	ItemParse_asset_model_go(item, path, &animRunLength);
+
+	if (!skin || !skin[0])
+	{
+		Com_sprintf(path, sizeof path, "models/players/%s/model_default.skin", model);
+	}
+	else if (strchr(skin, '|'))
+	{
+		Com_sprintf(path, sizeof path, "models/players/%s/|%s", model, skin);
+	}
+	else
+	{
+		Com_sprintf(path, sizeof path, "models/players/%s/model_%s.skin", model, skin);
+	}
+	ItemParse_model_g2skin_go(item, path);
+}
+
 static void UI_ResetCharacterListBoxes(void)
 {
 	const menuDef_t* menu = Menu_GetFocused();
@@ -6899,6 +6948,331 @@ const char* saberStaffHiltInfo[MAX_SABER_HILTS];
 
 qboolean UI_SaberProperNameForSaber(const char* saber_name, char* saberProperName);
 void WP_SaberGetHiltInfo(const char* singleHilts[MAX_SABER_HILTS], const char* staffHilts[MAX_SABER_HILTS]);
+
+// MovieDuels: the hilt lists of the SP saber menus (MD SP ui_main.cpp singleSaberHilts / staffSaberHilts: same
+// names and order, with the MP saber names), shown by the big hilt list (FEEDER_SINGLE_SABER_HILTS /
+// FEEDER_STAFF_SABER_HILTS) of the MP saber menus. Any other MP hilt the SP lists don't have follows at the end.
+typedef struct
+{
+	const char* name; // menu text (string reference)
+	const char* hilt; // MP saber
+} mdSaberHilt_t;
+
+static const mdSaberHilt_t mdSingleSaberHilts[] = {
+	{ "@MENUS_SINGLE_HILT1",                 "saber_1" },
+	{ "@MENUS_SINGLE_HILT2",                 "saber_2" },
+	{ "@MENUS_SINGLE_HILT3",                 "saber_3" },
+	{ "@MENUS_SINGLE_HILT4",                 "saber_4" },
+	{ "@MENUS_SINGLE_HILT5",                 "saber_5" },
+	{ "@MENUS_SINGLE_HILT6",                 "saber_6" },
+	{ "@MENUS_SINGLE_HILT7",                 "saber_7" },
+	{ "@MENUS_SINGLE_HILT8",                 "saber_8" },
+	{ "@MENUS_SINGLE_HILT9",                 "saber_9" },
+	{ "@MD_MENU_SABER_AAYLA",                "aayla_mp" },
+	{ "@MD_MENU_SABER_AHSOKA",               "ahsoka_mp" },
+	{ "@MD_MENU_SABER_AHSOKA_SHORT",         "ahsoka_short_mp" },
+	{ "@MD_MENU_SABER_AHSOKA_REBELS",        "ahsoka_reb1_mp" },
+	{ "@MD_MENU_SABER_AHSOKA_REBELS_SHORT",  "ahsoka_reb2_mp" },
+	{ "@MD_MENU_SABER_ANAKIN_EP2",           "anakin_ep2_mp" },
+	{ "@MD_MENU_SABER_ANAKIN_EP3",           "anakin_ep3_mp" },
+	{ "@MD_MENU_SABER_VENTRESS_CW",          "ventress_cw_mp" },
+	{ "@MD_MENU_SABER_VENTRESS_TCW",         "ventress_tcw_mp" },
+	{ "@MD_MENU_SABER_VENTRESS_TCW",         "ventress2_tcw_mp" },
+	{ "@MD_MENU_SABER_ASHARAD",              "asharad_mp" },
+	{ "@MD_MENU_SABER_ASHARAD_ALT",          "asharad2_mp" },
+	{ "@MD_MENU_SABER_BARRISS",              "barriss_mp" },
+	{ "@MD_MENU_SABER_BASTILA",              "bastila_single_mp" },
+	{ "@MD_MENU_SABER_BOC",                  "Boc_mp" },
+	{ "@MD_MENU_SABER_CAL_KESTIS",           "cal_mp" },
+	{ "@MD_MENU_SABER_CAL_KESTIS",           "cal_js_mp" },
+	{ "@MD_MENU_SABER_CAL_KESTIS",           "cal_cg_js_mp" },
+	{ "@MD_MENU_SABER_COLEMAN",              "coleman_mp" },
+	{ "@MD_MENU_SABER_COUNT_DOOKU",          "dooku2_mp" },
+	{ "@MD_MENU_SABER_COUNT_DOOKU_TFU",      "dooku_tfu_mp" },
+	{ "@MD_MENU_SABER_DAGAN",                "dagan_mp" },
+	{ "@MD_MENU_SABER_DARKSABER_TCW",        "darksaber_tcw_mp" },
+	{ "@MD_MENU_SABER_DARKSABER_REBELS",     "darksaber_reb_mp" },
+	{ "@MD_MENU_SABER_DARKSABER_TM",         "darksaber_tm_mp" },
+	{ "@MD_MENU_SABER_D_DESOLOUS",           "desolous_mp" },
+	{ "@MD_MENU_SABER_D_MAUL",               "single_maul_mp" },
+	{ "@MD_MENU_SABER_BANE",                 "bane_mp" },
+	{ "@MD_MENU_SABER_MALGUS",               "malgus_mp" },
+	{ "@MD_MENU_SABER_MALAK",                "malak_mp" },
+	{ "@MD_MENU_SABER_NIHILUS",              "nihilus_mp" },
+	{ "@MD_MENU_SABER_D_SIDIOUS",            "sidious_mp" },
+	{ "@MD_MENU_SABER_D_SIDIOUS_ALT",        "sidious2_mp" },
+	{ "@MD_MENU_SABER_D_VADER_EP3",          "vader_ro_mp" },
+	{ "@MD_MENU_SABER_D_VADER_EP4",          "vader_ep4_mp" },
+	{ "@MD_MENU_SABER_D_VADER_EP5",          "vader_mp" },
+	{ "@MD_MENU_SABER_D_VADER_EP6",          "vader_ep6_mp" },
+	{ "@MD_MENU_SABER_DEPA",                 "depa_mp" },
+	{ "@MD_MENU_SABER_EVEN",                 "even_piell_mp" },
+	{ "@MD_MENU_SABER_EZRA",                 "ezra_mp" },
+	{ "@MD_MENU_SABER_EZRA_S3",              "ezra2_mp" },
+	{ "@MD_MENU_SABER_GALEN_MAREK",          "galenmarek_mp" },
+	{ "@MD_MENU_SABER_GALEN_MAREK_ALT",      "galenmarek_alt_mp" },
+	{ "@MD_MENU_SABER_GALEN_MAREK_CJR",      "galenmarek_cjr_mp" },
+	{ "@MD_MENU_SABER_GORC",                 "Gorc_mp" },
+	{ "@MD_MENU_SABER_GRANDINQUISITOR",      "inquisitor_single_mp" },
+	{ "@MD_MENU_SABER_GRANDINQUISITOR_OWK",  "inquisitor_owk_single_mp" },
+	{ "@MD_MENU_SABER_FIFTHBROTHER",         "inquisitor2_single_mp" },
+	{ "@MD_MENU_SABER_SEVENTHSISTER",        "inquisitor3_single_mp" },
+	{ "@MD_MENU_SABER_JEREC",                "jerec_mp" },
+	{ "@MD_MENU_SABER_JOLEE",                "jolee_mp" },
+	{ "@MD_MENU_SABER_KANAN",                "kanan_mp" },
+	{ "@MD_MENU_SABER_KYLE",                 "kyle_mp" },
+	{ "@MD_MENU_SABER_KI_ADI",               "mundi_mp" },
+	{ "@MD_MENU_SABER_KYLO",                 "kylo_ren_mp" },
+	{ "@MD_MENU_SABER_LEIA_EP9",             "leia_ep9_mp" },
+	{ "@MD_MENU_SABER_LUKE_EP4",             "luke_ep4_mp" },
+	{ "@MD_MENU_SABER_LUKE_EP5",             "luke_ep5_mp" },
+	{ "@MD_MENU_SABER_LUKE_EP6",             "luke_ep6_mp" },
+	{ "@MD_MENU_SABER_LUMINARA",             "luminara_mp" },
+	{ "@MD_MENU_SABER_MACE_EP1",             "windu_ep1_mp" },
+	{ "@MD_MENU_SABER_MACE",                 "windu_mp" },
+	{ "@MD_MENU_SABER_MARA",                 "mara_mp" },
+	{ "@MD_MENU_SABER_MARA_MOTS",            "mara_mots_mp" },
+	{ "@MD_MENU_SABER_MAW",                  "Maw_mp" },
+	{ "@MD_MENU_SABER_OBI_EP1",              "obiwan_ep1_mp" },
+	{ "@MD_MENU_SABER_OBI_EP3",              "obiwan_ep3_mp" },
+	{ "@MD_MENU_SABER_OBI_OWK",              "obiwan_owk_mp" },
+	{ "@MD_MENU_SABER_OBI_EP4",              "obiwan_ep4_mp" },
+	{ "@MD_MENU_SABER_OPPO",                 "oppo_mp" },
+	{ "@MD_MENU_SABER_PIC",                  "Pic_mp" },
+	{ "@MD_MENU_SABER_PLO",                  "plo_koon_mp" },
+	{ "@MD_MENU_SABER_QUI",                  "quigon_mp" },
+	{ "@MD_MENU_SABER_QUINLAN",              "quinlan_mp" },
+	{ "@MD_MENU_SABER_RAHN",                 "rahn_mp" },
+	{ "@MD_MENU_SABER_KOTA",                 "kota_mp" },
+	{ "@MD_MENU_SABER_REY_EP7",              "rey_ep7_mp" },
+	{ "@MD_MENU_SABER_REY_EP8",              "rey_ep8_mp" },
+	{ "@MD_MENU_SABER_REY_EP9",              "rey_ep9_mp" },
+	{ "@MD_MENU_SABER_REY2_EP9",             "rey2_ep9_mp" },
+	{ "@MD_MENU_SABER_REY_DARKFOLD_EP9",     "rey_darkfold_ep9_mp" },
+	{ "@MD_MENU_SABER_REVAN",                "revan_mp" },
+	{ "@MD_MENU_SABER_RIG_NEMA",             "rig_mp" },
+	{ "@MD_MENU_SABER_SAESSEE",              "saesee_mp" },
+	{ "@MD_MENU_SABER_SARISS",               "Sariss_mp" },
+	{ "@MD_MENU_SABER_SHAAK",                "shaak_mp" },
+	{ "@MD_MENU_SABER_STALKER",              "sith_stalker_mp" },
+	{ "@MD_MENU_SABER_STALKER2",             "sith_stalker2_mp" },
+	{ "@MD_MENU_SABER_STARKILLER",           "starkiller_mp" },
+	{ "@MD_MENU_SABER_TARON",                "malicos_mp" },
+	{ "@MD_MENU_SABER_TAVION",               "tavion_mp" },
+	{ "@MD_MENU_SABER_YARAEL",               "yarael_mp" },
+	{ "@MD_MENU_SABER_YODA",                 "yoda_mp" },
+	{ "@MD_MENU_SABER_YUN",                  "yun_mp" },
+};
+
+static const mdSaberHilt_t mdStaffSaberHilts[] = {
+	{ "@MENUS_STAFF_HILT1",                  "staff_1" },
+	{ "@MENUS_STAFF_HILT2",                  "staff_2" },
+	{ "@MENUS_STAFF_HILT3",                  "staff_3" },
+	{ "@MENUS_STAFF_HILT4",                  "staff_4" },
+	{ "@MENUS_STAFF_HILT5",                  "staff_5" },
+	{ "@MD_MENU_SABER_VENTRESS_CW",          "ventress_cw_dual_mp" },
+	{ "@MD_MENU_SABER_VENTRESS_TCW",         "ventress_tcw_dual_mp" },
+	{ "@MD_MENU_SABER_CAL_KESTIS",           "cal_staff_mp" },
+	{ "@MD_MENU_SABER_CAL_KESTIS",           "cal_staff_js_mp" },
+	{ "@MD_MENU_SABER_DAGAN_STAFF",          "dagan_staff_mp" },
+	{ "@MD_MENU_SABER_D_MAUL_STAFF",         "dual_maul_mp" },
+	{ "@MD_MENU_SABER_D_MAUL_TCW",           "maul_tcw_mp" },
+	{ "@MD_MENU_SABER_D_MAUL_REBELS",        "maul_rebels_mp" },
+	{ "@MD_MENU_SABER_D_PHOBOS",             "phobos_mp" },
+	{ "@MD_MENU_SABER_GRANDINQUISITOR",      "inquisitor_mp" },
+	{ "@MD_MENU_SABER_GRANDINQUISITOR_OWK",  "inquisitor_owk_mp" },
+	{ "@MD_MENU_SABER_FIFTHBROTHER",         "inquisitor2_mp" },
+	{ "@MD_MENU_SABER_SEVENTHSISTER",        "inquisitor3_mp" },
+	{ "@MD_MENU_SABER_EIGHTHBROTHER",        "inquisitor4_mp" },
+	{ "@MD_MENU_SABER_REY_DARKSTAFF_EP9",    "rey_darkstaff_ep9_mp" },
+	{ "@MD_MENU_SABER_SAVAGE",               "dual_opress_mp" },
+	{ "@MD_MENU_SABER_JT_GUARD",             "temple_guard_mp" },
+	{ "@MD_MENU_SABER_BASTILA",              "bastila_staff_mp" },
+};
+
+typedef struct
+{
+	const char* hilt[MAX_SABER_HILTS];
+	const char* name[MAX_SABER_HILTS]; // string reference, NULL = the saber's own name
+	int count;
+} mdSaberHiltList_t;
+
+static mdSaberHiltList_t mdSingleHiltList, mdStaffHiltList;
+static int mdSaberHiltIndex = 0;
+
+static qboolean MD_HiltLoaded(const char* hilt, const char** loaded)
+{
+	for (int i = 0; i < MAX_SABER_HILTS && loaded[i]; i++)
+	{
+		if (!Q_stricmp(loaded[i], hilt))
+		{
+			return qtrue;
+		}
+	}
+	return qfalse;
+}
+
+static void MD_BuildSaberHiltList(mdSaberHiltList_t* list, const mdSaberHilt_t* table, const int table_count,
+	const char** loaded)
+{
+	list->count = 0;
+
+	for (int i = 0; i < table_count && list->count < MAX_SABER_HILTS; i++)
+	{
+		if (MD_HiltLoaded(table[i].hilt, loaded))
+		{
+			list->hilt[list->count] = table[i].hilt;
+			list->name[list->count] = table[i].name;
+			list->count++;
+		}
+	}
+
+	for (int i = 0; i < MAX_SABER_HILTS && loaded[i] && list->count < MAX_SABER_HILTS; i++)
+	{
+		int j;
+		for (j = 0; j < table_count; j++)
+		{
+			if (!Q_stricmp(loaded[i], table[j].hilt))
+			{
+				break;
+			}
+		}
+		if (j == table_count)
+		{
+			list->hilt[list->count] = loaded[i];
+			list->name[list->count] = NULL;
+			list->count++;
+		}
+	}
+}
+
+// after WP_SaberGetHiltInfo (uiScript getsaberhiltinfo, run by the saber menus' onOpen)
+static void MD_BuildSaberHiltLists(void)
+{
+	MD_BuildSaberHiltList(&mdSingleHiltList, mdSingleSaberHilts, (int)ARRAY_LEN(mdSingleSaberHilts), saberSingleHiltInfo);
+	MD_BuildSaberHiltList(&mdStaffHiltList, mdStaffSaberHilts, (int)ARRAY_LEN(mdStaffSaberHilts), saberStaffHiltInfo);
+	if (mdSaberHiltIndex >= mdSingleHiltList.count && mdSaberHiltIndex >= mdStaffHiltList.count)
+	{
+		mdSaberHiltIndex = 0;
+	}
+}
+
+static qboolean MD_HiltInList(const mdSaberHiltList_t* list, const char* hilt)
+{
+	for (int i = 0; i < list->count; i++)
+	{
+		if (!Q_stricmp(list->hilt[i], hilt))
+		{
+			return qtrue;
+		}
+	}
+	return qfalse;
+}
+
+// a staff (two blades on one hilt): the staff hilt list, or a saber whose sabers.cfg type is a SABER_STAFF kind
+static qboolean MD_IsStaffSaber(const char* saber)
+{
+	char saberTypeString[MAX_QPATH] = { 0 };
+
+	if (MD_HiltInList(&mdStaffHiltList, saber))
+	{
+		return qtrue;
+	}
+	return UI_SaberTypeForSaber(saber, saberTypeString) && !Q_stricmpn(saberTypeString, "SABER_STAFF", 11)
+		? qtrue : qfalse;
+}
+
+// a saber the menu can use as one of one or two sabers ("" and "none" are no saber)
+static qboolean MD_IsSingleSaber(const char* saber)
+{
+	return saber[0] && Q_stricmp(saber, "none") && !MD_IsStaffSaber(saber) ? qtrue : qfalse;
+}
+
+// The saber menus show one saber, the staff (Staff style) or two sabers (Dual style), placed like SP's
+static void MD_PlaceMenuSabers(const qboolean dual)
+{
+	const menuDef_t* menu = Menu_GetFocused();
+	if (!menu)
+	{
+		return;
+	}
+	itemDef_t* item = Menu_FindItemByName(menu, "saber");
+	if (item)
+	{
+		item->window.rect.y = (dual ? -207 : -182) + menu->window.rect.y;
+	}
+	item = Menu_FindItemByName(menu, "saber2");
+	if (item)
+	{
+		item->window.rect.y = (dual ? -156 : -182) + menu->window.rect.y;
+	}
+}
+
+// uiScript md_saberstyletype, the Lightsaber Style button of the saber menus: Dual style = two sabers, Staff style =
+// the staff, the other styles one saber (2026-10-27, DH). Keeps the hilts picked when they fit the new type.
+static void MD_SaberTypeFromStyle(void)
+{
+	const int style = (int)trap->Cvar_VariableValue("saberStyleDescriptions");
+	char saber[MAX_QPATH];
+	char saber2[MAX_QPATH];
+
+	trap->Cvar_VariableStringBuffer("ui_saber", saber, sizeof saber);
+	trap->Cvar_VariableStringBuffer("ui_saber2", saber2, sizeof saber2);
+
+	if (style == 4)
+	{
+		trap->Cvar_Set("ui_saber_type", "staff");
+		if (!MD_IsStaffSaber(saber))
+		{
+			trap->Cvar_Set("ui_saber", mdStaffHiltList.count ? mdStaffHiltList.hilt[0] : DEFAULT_SABER_STAFF);
+		}
+		trap->Cvar_Set("ui_saber2", "none");
+	}
+	else
+	{
+		trap->Cvar_Set("ui_saber_type", style == 3 ? "dual" : "single");
+		if (!MD_IsSingleSaber(saber))
+		{
+			Q_strncpyz(saber, mdSingleHiltList.count ? mdSingleHiltList.hilt[0] : DEFAULT_SABER, sizeof saber);
+			trap->Cvar_Set("ui_saber", saber);
+		}
+		if (style == 3)
+		{
+			trap->Cvar_Set("ui_saber2", MD_IsSingleSaber(saber2) ? saber2 : saber);
+		}
+		else
+		{
+			trap->Cvar_Set("ui_saber2", "none");
+		}
+	}
+	UI_UpdateSaberHilt(qfalse);
+	UI_UpdateSaberHilt(qtrue);
+	MD_PlaceMenuSabers(style == 3 ? qtrue : qfalse);
+}
+
+// uiScript md_saberstylefromtype, the saber menus' onOpen (after getsaberhiltinfo + getsabercvars): the Lightsaber
+// Style shown matches the sabers in use (a staff = Staff, two sabers = Dual, else Medium)
+static void MD_SaberStyleFromType(void)
+{
+	char saber[MAX_QPATH];
+	char saber2[MAX_QPATH];
+
+	trap->Cvar_VariableStringBuffer("ui_saber", saber, sizeof saber);
+	trap->Cvar_VariableStringBuffer("ui_saber2", saber2, sizeof saber2);
+	if (MD_IsStaffSaber(saber))
+	{
+		trap->Cvar_Set("saberStyleDescriptions", "4");
+	}
+	else if (MD_IsSingleSaber(saber2))
+	{
+		trap->Cvar_Set("saberStyleDescriptions", "3");
+	}
+	else
+	{
+		trap->Cvar_Set("saberStyleDescriptions", "1");
+	}
+	MD_SaberTypeFromStyle();
+}
 
 static void UI_UpdateCharacter(qboolean changedModel)
 {
@@ -7662,6 +8036,7 @@ static void UI_RunMenuScript(char** args)
 		else if (Q_stricmp(name, "getsaberhiltinfo") == 0)
 		{
 			WP_SaberGetHiltInfo(saberSingleHiltInfo, saberStaffHiltInfo);
+			MD_BuildSaberHiltLists();
 		}
 		// On the solo game creation screen, we can't see siege maps
 		else if (Q_stricmp(name, "checkforsiege") == 0)
@@ -8193,6 +8568,10 @@ static void UI_RunMenuScript(char** args)
 		{
 			UI_UpdateCharacter(qtrue);
 		}
+		else if (Q_stricmp(name, "md_profile_model") == 0)
+		{
+			MD_ShowPlayerModel(); // Profile menu: the player's own character
+		}
 		else if (Q_stricmp(name, "updatecharcvars") == 0
 			|| Q_stricmp(name, "updatecharmodel") == 0)
 		{
@@ -8480,6 +8859,36 @@ static void UI_RunMenuScript(char** args)
 						trap->Cvar_Set("ui_saber", saberStaffHiltInfo[item->cursorPos]);
 					}
 				}
+			}
+		}
+		// MovieDuels: the SP saber menus' big hilt lists (the row picked in UI_FeederSelection)
+		else if (Q_stricmp(name, "md_assignsaber1") == 0)
+		{
+			if (mdSaberHiltIndex < mdSingleHiltList.count)
+			{
+				trap->Cvar_Set("ui_saber", mdSingleHiltList.hilt[mdSaberHiltIndex]);
+			}
+		}
+		else if (Q_stricmp(name, "md_assignsaber2") == 0)
+		{
+			if (mdSaberHiltIndex < mdSingleHiltList.count)
+			{
+				trap->Cvar_Set("ui_saber2", mdSingleHiltList.hilt[mdSaberHiltIndex]);
+			}
+		}
+		else if (Q_stricmp(name, "md_saberstyletype") == 0)
+		{
+			MD_SaberTypeFromStyle();
+		}
+		else if (Q_stricmp(name, "md_saberstylefromtype") == 0)
+		{
+			MD_SaberStyleFromType();
+		}
+		else if (Q_stricmp(name, "md_assignsaberstaff") == 0)
+		{
+			if (mdSaberHiltIndex < mdStaffHiltList.count)
+			{
+				trap->Cvar_Set("ui_saber", mdStaffHiltList.hilt[mdSaberHiltIndex]);
 			}
 		}
 		else if (Q_stricmp(name, "saber2_hilt") == 0)
@@ -9705,6 +10114,10 @@ static int UI_FeederCount(float feederID)
 	case FEEDER_MD_MODELS:
 	case FEEDER_MD_VARIANTS:
 		return MD_FeederCount((int)feederID);
+	case FEEDER_SINGLE_SABER_HILTS:
+		return mdSingleHiltList.count;
+	case FEEDER_STAFF_SABER_HILTS:
+		return mdStaffHiltList.count;
 	case FEEDER_SABER_SINGLE_INFO:
 
 		for (i = 0; i < MAX_SABER_HILTS; i++)
@@ -10000,6 +10413,23 @@ static const char* UI_FeederItemText(float feederID, int index, int column,
 	if (feederID == FEEDER_MD_FACTION)
 	{
 		return index >= 0 && index < TOTAL_ERAS ? eraNames[index] : "";
+	}
+	if (feederID == FEEDER_SINGLE_SABER_HILTS || feederID == FEEDER_STAFF_SABER_HILTS)
+	{
+		const mdSaberHiltList_t* list = feederID == FEEDER_STAFF_SABER_HILTS ? &mdStaffHiltList : &mdSingleHiltList;
+		if (index < 0 || index >= list->count)
+		{
+			return "";
+		}
+		if (list->name[index] && list->name[index][0] == '@')
+		{
+			trap->SE_GetStringTextString(&list->name[index][1], info, sizeof info);
+		}
+		else if (!UI_SaberProperNameForSaber(list->hilt[index], info) || !info[0])
+		{
+			Q_strncpyz(info, list->hilt[index], sizeof info);
+		}
+		return info;
 	}
 	if (feederID == FEEDER_SABER_SINGLE_INFO)
 	{
@@ -11026,6 +11456,16 @@ qboolean UI_FeederSelection(float feederFloat, int index, itemDef_t* item)
 	{
 		uiInfo.holocronIndex = index;  // store the selection
 		trap->Cvar_Set("ui_selectedHolocron", uiInfo.holocronNames[index]);
+	}
+	else if (feederID == FEEDER_SINGLE_SABER_HILTS || feederID == FEEDER_STAFF_SABER_HILTS)
+	{
+		// as SP: the md_assignsaber scripts of the list's action set the hilt
+		const mdSaberHiltList_t* list = feederID == FEEDER_STAFF_SABER_HILTS ? &mdStaffHiltList : &mdSingleHiltList;
+		if (index >= 0 && index < list->count)
+		{
+			mdSaberHiltIndex = index;
+			trap->S_StartLocalSound(trap->S_RegisterSound("sound/interface/choose_hilt.wav"), CHAN_LOCAL);
+		}
 	}
 
 	return qtrue;

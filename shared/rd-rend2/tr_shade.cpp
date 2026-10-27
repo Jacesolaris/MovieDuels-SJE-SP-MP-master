@@ -1134,7 +1134,13 @@ static void ProjectPshadowVBOGLSL(const shaderCommands_t* input, const VertexArr
 		VectorScale(ps->lightViewAxis[2], 1.0f / ps->viewRadius, vector);
 		uniformDataWriter.SetUniformVec3(UNIFORM_LIGHTUP, vector);
 
-		uniformDataWriter.SetUniformFloat(UNIFORM_LIGHTRADIUS, radius);
+		uniformDataWriter.SetUniformFloat(UNIFORM_LIGHTRADIUS, radius);
+
+		// pshadow.glsl u_Color: x = edge blur scale, y = darkest shadow. cg_shadows 2 = softer and lighter,
+		// 3 = sharp and darker (DH 2026-10-26)
+		vec4_t quality;
+		VectorSet4(quality, r_shadows->integer >= 3 ? 0.6f : 2.5f, r_shadows->integer >= 3 ? 0.8f : 0.6f, 0.0f, 0.0f);
+		uniformDataWriter.SetUniformVec4(UNIFORM_COLOR, quality);
 
 		// include GLS_DEPTHFUNC_EQUAL so alpha tested surfaces don't add light
 		// where they aren't rendered
@@ -2294,7 +2300,7 @@ void RB_StageIteratorGeneric(void)
 		//
 		// pshadows!
 		//
-		if (r_shadows->integer == 4 &&
+		if (r_shadows->integer >= 2 && // cg_shadows 2/3 (DH 2026-10-26)
 			tess.pshadowBits &&
 			tess.shader->sort <= SS_OPAQUE &&
 			!(tess.shader->surfaceFlags & (SURF_NODLIGHT | SURF_SKY)) &&

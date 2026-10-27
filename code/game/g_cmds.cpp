@@ -50,6 +50,7 @@ extern void ItemUse_Bacta(gentity_t* ent);
 extern gentity_t* G_GetSelfForPlayerCmd();
 extern void ForceDestruction(gentity_t* self);
 extern void ForceStasis(gentity_t* self);
+extern void ForceDarkStasis(gentity_t* self);
 extern void ItemUse_Jetpack(const gentity_t* ent);
 extern cvar_t* g_SerenityJediEngineMode;
 extern cvar_t* g_AllowReload;
@@ -3346,6 +3347,11 @@ void ClientCommand(const int clientNum)
 	{
 		ent = G_GetSelfForPlayerCmd();
 		ForceFear(ent);
+	}
+	else if (Q_stricmp(cmd, "force_darkstasis") == 0)
+	{
+		ent = G_GetSelfForPlayerCmd();
+		ForceDarkStasis(ent);
 	}
 	else if (Q_stricmp(cmd, "force_deadlysight") == 0)
 	{

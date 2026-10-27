@@ -2433,7 +2433,7 @@ void WP_HandleBoltBlock(gentity_t* bolt, gentity_t* blocker, trace_t* trace, vec
 
 	if (in_joystick.integer && accurate_missile_blocking)
 	{
-		if (level.time - blocker->client->ps.ManualblockStartTime < 500)
+		if (level.time - blocker->client->ps.ManualblockStartTime < 1500)
 		{
 			saber_block_reflection = qfalse;
 			bolt_block_reflection = qtrue;
@@ -2535,7 +2535,7 @@ void WP_HandleBoltBlock(gentity_t* bolt, gentity_t* blocker, trace_t* trace, vec
 		//
 		// Manual / running / NPC blocking: send to enemy
 		//
-		else if (manual_proj_blocking || manual_run_blocking || npc_reflection)
+		else if (bolt_block_reflection || npc_reflection)
 		{
 			g_reflect_missile_to_attacker(blocker, bolt, fwd);
 
@@ -2598,7 +2598,7 @@ void WP_HandleBoltBlock(gentity_t* bolt, gentity_t* blocker, trace_t* trace, vec
 				Com_Printf(S_COLOR_YELLOW "GOES TO CROSSHAIR\n");
 			}
 
-			if (level.time - blocker->client->ps.ManualBlockingTime < 6000)
+			if (level.time - blocker->client->ps.ManualblockStartTime < 3000)
 			{
 				// Good: early manual block, minimal slop
 				vectoangles(fwd, angs);
@@ -2695,7 +2695,7 @@ void WP_HandleBoltBlock(gentity_t* bolt, gentity_t* blocker, trace_t* trace, vec
 				Com_Printf(S_COLOR_YELLOW "GOES TO CROSSHAIR\n");
 			}
 
-			if (level.time - blocker->client->ps.ManualBlockingTime < 6000)
+			if (level.time - blocker->client->ps.ManualblockStartTime < 3000)
 			{
 				// Good: early manual block, minimal slop
 				vectoangles(fwd, angs);

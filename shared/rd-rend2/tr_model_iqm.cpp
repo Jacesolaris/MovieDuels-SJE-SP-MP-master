@@ -403,7 +403,7 @@ qboolean R_LoadIQM(model_t* mod, void* buffer, int filesize, const char* mod_nam
 			mesh->material >= header->num_text) {
 			return qfalse;
 		}
-	}
+		}
 
 #ifdef REND2_SP
 	if (header->num_poses != header->num_joints && header->num_poses != 0) {
@@ -807,7 +807,7 @@ qboolean R_LoadIQM(model_t* mod, void* buffer, int filesize, const char* mod_nam
 	}
 
 	return qtrue;
-}
+	}
 
 /*
 =============
@@ -815,10 +815,10 @@ R_CullIQM
 =============
 */
 #ifdef REND2_SP
-static int R_CullIQM(iqmData_t* data, trRefEntity_t* ent) {
+static int R_CullIQM(iqmData_t * data, trRefEntity_t * ent) {
 	vec3_t		bounds[2];
 #else // !REND2_SP
-static int R_CullIQM(iqmData_t* data, trRefEntity_t* ent)
+static int R_CullIQM(iqmData_t * data, trRefEntity_t * ent)
 {
 	vec3_t		bounds[2]{};
 #endif // REND2_SP
@@ -861,7 +861,7 @@ R_ComputeIQMFogNum
 
 =================
 */
-int R_ComputeIQMFogNum(iqmData_t* data, trRefEntity_t* ent) {
+int R_ComputeIQMFogNum(iqmData_t * data, trRefEntity_t * ent) {
 	int			i = 0, j = 0;
 	fog_t* fog = nullptr;
 	const float* bounds = nullptr;
@@ -911,7 +911,7 @@ R_AddIQMSurfaces
 Add all surfaces of this model
 =================
 */
-void R_AddIQMSurfaces(trRefEntity_t* ent, int entityNum) {
+void R_AddIQMSurfaces(trRefEntity_t * ent, int entityNum) {
 	iqmData_t* data = nullptr;
 	srfIQModel_t* surface = nullptr;
 	int			i = 0, j = 0;
@@ -1044,9 +1044,9 @@ void R_AddIQMSurfaces(trRefEntity_t* ent, int entityNum) {
 
 		surface++;
 	}
-}
+	}
 
-static void ComputePoseMats(iqmData_t* data, int frame, int oldframe,
+static void ComputePoseMats(iqmData_t * data, int frame, int oldframe,
 	float backlerp, float* mat) {
 	float* mat1 = nullptr, * mat2 = nullptr;
 	int* joint = data->jointParents;
@@ -1097,7 +1097,7 @@ static void ComputePoseMats(iqmData_t* data, int frame, int oldframe,
 	}
 }
 
-static void ComputeJointMats(iqmData_t* data, int frame, int oldframe,
+static void ComputeJointMats(iqmData_t * data, int frame, int oldframe,
 	float backlerp, float* mat) {
 	float* mat1 = nullptr;
 	int	i = 0;
@@ -1121,7 +1121,7 @@ RB_AddIQMSurfaces
 Compute vertices for this model surface
 =================
 */
-void RB_IQMSurfaceAnim(surfaceType_t* surface) {
+void RB_IQMSurfaceAnim(surfaceType_t * surface) {
 	srfIQModel_t* surf = (srfIQModel_t*)surface;
 	iqmData_t* data = surf->data;
 	float		jointMats[IQM_MAX_JOINTS * 12];
@@ -1261,7 +1261,7 @@ void RB_IQMSurfaceAnim(surfaceType_t* surface) {
 	tess.numVertexes += surf->numVertexes;
 }
 
-int R_IQMLerpTag(orientation_t* tag, iqmData_t* data,
+int R_IQMLerpTag(orientation_t * tag, iqmData_t * data,
 	int startFrame, int endFrame,
 	float frac, const char* tagName) {
 	float	jointMats[IQM_MAX_JOINTS * 12];

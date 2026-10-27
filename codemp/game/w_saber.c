@@ -8805,7 +8805,6 @@ void WP_saberReactivate(gentity_t* saberent, gentity_t* saber_owner)
 	}
 	else
 	{
-
 		if (g_overpoweredsaberthrow.integer == 1)// this is normal saberthrow jka style, where the saber spins on the Y axis as it flies.
 		{
 			switch (saber_owner->client->ps.fd.forcePowerLevel[FP_SABERTHROW])

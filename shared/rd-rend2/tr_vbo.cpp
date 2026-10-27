@@ -162,14 +162,14 @@ VBO_t* R_CreateVBO(byte* vertexes, size_t vertexesSize, vboUsage_t usage, const 
 	GL_CheckErrors();
 
 	return vbo;
-}
+	}
 
 /*
 ============
 R_CreateIBO
 ============
 */
-IBO_t* R_CreateIBO(byte* indexes, size_t indexesSize, vboUsage_t usage, const char* debugName)
+IBO_t* R_CreateIBO(byte * indexes, size_t indexesSize, vboUsage_t usage, const char* debugName)
 {
 	IBO_t* ibo = nullptr;
 
@@ -246,14 +246,14 @@ IBO_t* R_CreateIBO(byte* indexes, size_t indexesSize, vboUsage_t usage, const ch
 	GL_CheckErrors();
 
 	return ibo;
-}
+	}
 
 /*
 ============
 R_BindVBO
 ============
 */
-void R_BindVBO(VBO_t* vbo)
+void R_BindVBO(VBO_t * vbo)
 {
 	if (!vbo)
 	{
@@ -310,7 +310,7 @@ void R_BindNullVBO(void)
 R_BindIBO
 ============
 */
-void R_BindIBO(IBO_t* ibo)
+void R_BindIBO(IBO_t * ibo)
 {
 	if (!ibo)
 	{
@@ -528,7 +528,7 @@ void R_VBOList_f(void)
 }
 
 static void AddVertexArray(
-	VertexArraysProperties* properties,
+	VertexArraysProperties * properties,
 	int attributeIndex,
 	size_t size,
 	size_t stride,
@@ -549,7 +549,7 @@ static void AddVertexArray(
 	properties->numVertexArrays++;
 }
 
-void CalculateVertexArraysProperties(uint32_t attributes, VertexArraysProperties* properties)
+void CalculateVertexArraysProperties(uint32_t attributes, VertexArraysProperties * properties)
 {
 	properties->vertexDataSize = 0;
 	properties->numVertexArrays = 0;
@@ -686,8 +686,8 @@ void CalculateVertexArraysProperties(uint32_t attributes, VertexArraysProperties
 
 void CalculateVertexArraysFromVBO(
 	uint32_t attributes,
-	const VBO_t* vbo,
-	VertexArraysProperties* properties)
+	const VBO_t * vbo,
+	VertexArraysProperties * properties)
 {
 	properties->vertexDataSize = 0;
 	properties->numVertexArrays = 0;
@@ -847,7 +847,7 @@ void RB_UpdateVBOs(unsigned int attribBits)
 }
 
 #ifdef _G2_GORE
-void RB_UpdateGoreVertexData(gpuFrame_t* currentFrame, srfG2GoreSurface_t* goreSurface, bool updateFirstVertAndIndex)
+void RB_UpdateGoreVertexData(gpuFrame_t * currentFrame, srfG2GoreSurface_t * goreSurface, bool updateFirstVertAndIndex)
 {
 	if (updateFirstVertAndIndex)
 	{
@@ -977,7 +977,7 @@ size_t RB_AddShaderInstanceBlock(void* data)
 	return writeOffset;
 }
 
-void RB_BeginConstantsUpdate(gpuFrame_t* frame)
+void RB_BeginConstantsUpdate(gpuFrame_t * frame)
 {
 	const byte currentFrameScene = frame->currentScene;
 	if (glState.currentGlobalUBO != frame->ubo[currentFrameScene])
@@ -1000,7 +1000,7 @@ void RB_BeginConstantsUpdate(gpuFrame_t* frame)
 }
 
 size_t RB_AppendConstantsData(
-	gpuFrame_t* frame, const void* data, size_t dataSize)
+	gpuFrame_t * frame, const void* data, size_t dataSize)
 {
 	const byte currentFrameScene = frame->currentScene;
 	const size_t writeOffset = frame->uboWriteOffset[currentFrameScene];
@@ -1016,7 +1016,7 @@ size_t RB_AppendConstantsData(
 	return writeOffset;
 }
 
-void RB_EndConstantsUpdate(const gpuFrame_t* frame)
+void RB_EndConstantsUpdate(const gpuFrame_t * frame)
 {
 	const byte currentFrameScene = frame->currentScene;
 	qglFlushMappedBufferRange(

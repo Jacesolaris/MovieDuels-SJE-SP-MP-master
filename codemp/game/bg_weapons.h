@@ -69,7 +69,7 @@ typedef enum
 	WP_BRYAR_OLD,        // Only BCLASS_SBD can select this from WP_MELEE and back to WP_MELEE if cycling weapons
 	WP_EMPLACED_GUN,     // Not selectable in any cases even with cheats on
 	WP_TURRET,           // Not selectable in any cases even with cheats on. Slot 32 since the noghri stick: never owned,
-	                     // so never in STAT_WEAPONS (32 bits, sent in MAX_WEAPONS bits) or a weapon disable mask
+	// so never in STAT_WEAPONS (32 bits, sent in MAX_WEAPONS bits) or a weapon disable mask
 
 	WP_NUM_WEAPONS
 } weapon_t;

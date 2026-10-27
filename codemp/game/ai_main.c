@@ -10553,6 +10553,8 @@ static int bot_sp_power(bot_state_t* bs, vec3_t toEnemyAngles)
 		cand[n++] = FP_GRASP;
 	if (dist < 300 && bot_sp_power_ready(bs, FP_REPULSE, 20))
 		cand[n++] = FP_REPULSE;
+	if (!enemyStunned && dist < 512 && bot_sp_power_ready(bs, FP_DARK_STASIS, 10))
+		cand[n++] = FP_DARK_STASIS;
 	if (!n)
 	{
 		return -1;
@@ -11414,11 +11416,11 @@ static int should_secondary_fire(const bot_state_t* bs)
 		return 1;
 	}
 	if (weap == WP_ROCKET_LAUNCHER && bs->frame_Enemy_Len > 250)
-	if (weap == WP_NOGHRI_STICK && bs->frame_Enemy_Len < 80)
-	{
-		// up close: swing the stick
-		return 1;
-	}
+		if (weap == WP_NOGHRI_STICK && bs->frame_Enemy_Len < 80)
+		{
+			// up close: swing the stick
+			return 1;
+		}
 	if (weap == WP_TUSKEN_RIFLE && bs->frame_Enemy_Len < 80)
 	{
 		// the tusken rifle: up close the alt fire bashes with the butt, further out the primary shoots
@@ -12592,7 +12594,7 @@ static qboolean bot_buy_item(bot_state_t* bs, const char* msg)
 				BG_GiveWeapon(bs->cur_ps.stats, tag);
 
 				// Fallthrough to ammo purchase for this weapon
-				tag = weaponData[tag].ammoIndex;
+				tag = (unsigned)tag < WP_NUM_WEAPONS ? weaponData[tag].ammoIndex : AMMO_NONE;
 				// fallthrough
 
 			// ------------------------------------------------------------
@@ -13602,7 +13604,7 @@ static qboolean bot_is_boba_class(const bot_state_t* bs)
 
 static qboolean bot_boba_has_weapon(const bot_state_t* bs, const int wp)
 {
-	if (!(BG_HasWeapon(bs->cur_ps.stats, wp)))
+	if ((unsigned)wp >= WP_NUM_WEAPONS || !(BG_HasWeapon(bs->cur_ps.stats, wp)))
 	{
 		return qfalse;
 	}

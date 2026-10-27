@@ -25,7 +25,7 @@ set(InMovieDuels TRUE)
 
 
 # Project name
-set(ProjectName "MovieDuels-SJE-SP+MP-Rend2-master-Working" CACHE STRING "Project Name")
+set(ProjectName "MD-SP-MP-Update 9.0" CACHE STRING "Project Name")
 project(${ProjectName})
 
 # C++ language standard: C++17 for every C++ project (shown in VS as "ISO C++17 Standard (/std:c++17)").

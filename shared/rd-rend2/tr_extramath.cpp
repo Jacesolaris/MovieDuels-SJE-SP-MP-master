@@ -217,37 +217,37 @@ unsigned short FloatToHalf(float in)
 #ifdef REND2_SP
 	} f32;
 #else // !REND2_SP
-	} f32{};
+} f32{};
 #endif // REND2_SP
 
-	int sign = 0, inExponent = 0, inFraction = 0;
-	int outExponent = 0, outFraction = 0;
+int sign = 0, inExponent = 0, inFraction = 0;
+int outExponent = 0, outFraction = 0;
 
-	f32.f = in;
+f32.f = in;
 
-	sign = (f32.i & 0x80000000) >> 31;
-	inExponent = (f32.i & 0x7F800000) >> 23;
-	inFraction = f32.i & 0x007FFFFF;
+sign = (f32.i & 0x80000000) >> 31;
+inExponent = (f32.i & 0x7F800000) >> 23;
+inFraction = f32.i & 0x007FFFFF;
 
-	outExponent = CLAMP(inExponent - 127, -15, 16) + 15;
+outExponent = CLAMP(inExponent - 127, -15, 16) + 15;
 
-	outFraction = 0;
-	if (outExponent == 0x1F)
-	{
-		if (inExponent == 0xFF && inFraction != 0)
-			outFraction = 0x3FF;
-	}
-	else if (outExponent == 0x00)
-	{
-		if (inExponent == 0x00 && inFraction != 0)
-			outFraction = 0x3FF;
-	}
-	else
-		outFraction = inFraction >> 13;
+outFraction = 0;
+if (outExponent == 0x1F)
+{
+	if (inExponent == 0xFF && inFraction != 0)
+		outFraction = 0x3FF;
+}
+else if (outExponent == 0x00)
+{
+	if (inExponent == 0x00 && inFraction != 0)
+		outFraction = 0x3FF;
+}
+else
+outFraction = inFraction >> 13;
 
-	out = (sign << 15) | (outExponent << 10) | outFraction;
+out = (sign << 15) | (outExponent << 10) | outFraction;
 
-	return out;
+return out;
 }
 
 uint32_t ReverseBits(uint32_t v)

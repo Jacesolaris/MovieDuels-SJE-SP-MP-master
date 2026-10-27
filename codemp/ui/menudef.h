@@ -140,6 +140,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define FEEDER_MD_FACTION					0x54	// 84
 #define FEEDER_MD_MODELS					0x55	// 85
 #define FEEDER_MD_VARIANTS				    0x56	// 86
+#define FEEDER_SINGLE_SABER_HILTS			0x58	// 88 - the SP saber menus' single saber hilts (MovieDuels)
+#define FEEDER_STAFF_SABER_HILTS			0x59	// 89 - the SP saber menus' staff saber hilts (MovieDuels)
 
 // Xbox specific, hope no one minds
 #define FEEDER_XBL_ACCOUNTS					0xA0			// list of available XBL accounts
@@ -355,6 +357,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define UI_FORCE_RANK_BLAST				347
 #define UI_FORCE_RANK_INSANITY			348
 #define UI_FORCE_RANK_BLINDING			349
+#define UI_FORCE_RANK_DARK_STASIS		350
 #define UI_VERSION					277
 #define UI_TOTALFORCESTARS			278
 #define UI_AUTOSWITCHLIST			279

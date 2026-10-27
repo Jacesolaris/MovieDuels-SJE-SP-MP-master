@@ -389,7 +389,7 @@ void R_CalcTbnFromNormalAndTexDirs(vec3_t tangent, vec3_t bitangent, vec3_t norm
 	VectorScale(bitangent, handedness, bitangent);
 }
 
-qboolean R_CalcTangentVectors(srfVert_t* dv[3])
+qboolean R_CalcTangentVectors(srfVert_t * dv[3])
 {
 	int             i = 0;
 	float           bb = 0.0f, s = 0.0f, t = 0.0f;
@@ -631,7 +631,7 @@ int R_CullLocalPointAndRadius(const vec3_t pt, const float radius)
 /*
 ** R_CullPointAndRadius
 */
-int R_CullPointAndRadiusEx(const vec3_t pt, float radius, const cplane_t* frustum, int numPlanes)
+int R_CullPointAndRadiusEx(const vec3_t pt, float radius, const cplane_t * frustum, int numPlanes)
 {
 	int		i = 0;
 	float	dist = 0.0f;
@@ -759,7 +759,7 @@ R_TransformClipToWindow
 
 ==========================
 */
-void R_TransformClipToWindow(const vec4_t clip, const viewParms_t* view, vec4_t normalized, vec4_t window) {
+void R_TransformClipToWindow(const vec4_t clip, const viewParms_t * view, vec4_t normalized, vec4_t window) {
 	normalized[0] = clip[0] / clip[3];
 	normalized[1] = clip[1] / clip[3];
 	normalized[2] = (clip[2] + clip[3]) / (2 * clip[3]);
@@ -805,8 +805,8 @@ Does NOT produce any GL calls
 Called by both the front end and the back end
 =================
 */
-void R_RotateForEntity(const trRefEntity_t* ent, const viewParms_t* viewParms,
-	orientationr_t* ori)
+void R_RotateForEntity(const trRefEntity_t * ent, const viewParms_t * viewParms,
+	orientationr_t * ori)
 {
 	vec3_t	delta;
 	float	axisLength = 0.0f;
@@ -872,7 +872,7 @@ R_RotateForViewer
 Sets up the modelview matrix for a given viewParm
 =================
 */
-static void R_RotateForViewer(orientationr_t* ori, viewParms_t* viewParms)
+static void R_RotateForViewer(orientationr_t * ori, viewParms_t * viewParms)
 {
 #ifdef REND2_SP
 	float	viewerMatrix[16];
@@ -919,7 +919,7 @@ static void R_RotateForViewer(orientationr_t* ori, viewParms_t* viewParms)
 /*
 ** SetFarClip
 */
-static void R_SetFarClip(viewParms_t* viewParms, const trRefdef_t* refdef)
+static void R_SetFarClip(viewParms_t * viewParms, const trRefdef_t * refdef)
 {
 	float	farthestCornerDistance = 0;
 	int		i = 0;
@@ -996,7 +996,7 @@ static void R_SetFarClip(viewParms_t* viewParms, const trRefdef_t* refdef)
 	// The sky renders at zFar so need to move it out a little
 	// ...and make sure there is a minimum zfar to prevent problems
 	viewParms->zFar = Com_Clamp(2048.0f, tr.distanceCull * (1.732), sqrtf(farthestCornerDistance));
-}
+		}
 
 /*
 =================
@@ -1007,9 +1007,9 @@ the projection matrix.
 =================
 */
 #ifdef REND2_SP
-void R_SetupFrustum(viewParms_t* dest, float xmin, float xmax, float ymax, float zProj, float zFar, float stereoSep)
+void R_SetupFrustum(viewParms_t * dest, float xmin, float xmax, float ymax, float zProj, float zFar, float stereoSep)
 #else // !REND2_SP
-static void R_SetupFrustum(viewParms_t* dest, float xmin, float xmax, float ymax, float zProj, float zFar, float stereoSep)
+static void R_SetupFrustum(viewParms_t * dest, float xmin, float xmax, float ymax, float zProj, float zFar, float stereoSep)
 #endif // REND2_SP
 {
 	vec3_t ofsorigin;
@@ -1083,7 +1083,7 @@ static void R_SetupFrustum(viewParms_t* dest, float xmin, float xmax, float ymax
 R_SetupProjection
 ===============
 */
-void R_SetupProjection(viewParms_t* dest, float zProj, float zFar, qboolean computeFrustum)
+void R_SetupProjection(viewParms_t * dest, float zProj, float zFar, qboolean computeFrustum)
 {
 	float	xmin = 0.0f, xmax = 0.0f, ymin = 0.0f, ymax = 0.0f;
 	float	width = 0.0f, height = 0.0f, stereoSep = r_stereoSeparation->value;
@@ -1140,9 +1140,9 @@ Sets the z-component transformation part in the projection matrix
 ===============
 */
 #ifdef REND2_SP
-void R_SetupProjectionZ(viewParms_t* dest)
+void R_SetupProjectionZ(viewParms_t * dest)
 #else // !REND2_SP
-static void R_SetupProjectionZ(viewParms_t* dest)
+static void R_SetupProjectionZ(viewParms_t * dest)
 #endif // REND2_SP
 {
 	float zNear = 0.0f, zFar = 0.0f, depth = 0.0f;
@@ -1202,9 +1202,9 @@ R_SetupProjectionOrtho
 ===============
 */
 #ifdef REND2_SP
-void R_SetupProjectionOrtho(viewParms_t* dest, const vec3_t viewBounds[2])
+void R_SetupProjectionOrtho(viewParms_t * dest, const vec3_t viewBounds[2])
 #else // !REND2_SP
-static void R_SetupProjectionOrtho(viewParms_t* dest, const vec3_t viewBounds[2])
+static void R_SetupProjectionOrtho(viewParms_t * dest, const vec3_t viewBounds[2])
 #endif // REND2_SP
 {
 	float xmin = 0.0f, xmax = 0.0f, ymin = 0.0f, ymax = 0.0f, znear = 0.0f, zfar = 0.0f;
@@ -1281,9 +1281,9 @@ R_MirrorPoint
 =================
 */
 #ifdef REND2_SP
-void R_MirrorPoint(vec3_t in, orientation_t* surface, orientation_t* camera, vec3_t out) {
+void R_MirrorPoint(vec3_t in, orientation_t * surface, orientation_t * camera, vec3_t out) {
 #else // !REND2_SP
-static void R_MirrorPoint(vec3_t in, const orientation_t* surface, const orientation_t* camera, vec3_t out)
+static void R_MirrorPoint(vec3_t in, const orientation_t * surface, const orientation_t * camera, vec3_t out)
 {
 #endif // REND2_SP
 	int		i = 0;
@@ -1303,9 +1303,9 @@ static void R_MirrorPoint(vec3_t in, const orientation_t* surface, const orienta
 }
 
 #ifdef REND2_SP
-void R_MirrorVector(vec3_t in, orientation_t* surface, orientation_t* camera, vec3_t out) {
+void R_MirrorVector(vec3_t in, orientation_t * surface, orientation_t * camera, vec3_t out) {
 #else // !REND2_SP
-static void R_MirrorVector(vec3_t in, const orientation_t* surface, const orientation_t* camera, vec3_t out)
+static void R_MirrorVector(vec3_t in, const orientation_t * surface, const orientation_t * camera, vec3_t out)
 {
 #endif // REND2_SP
 	int		i = 0;
@@ -1324,9 +1324,9 @@ R_PlaneForSurface
 =============
 */
 #ifdef REND2_SP
-void R_PlaneForSurface(surfaceType_t* surfType, cplane_t* plane) {
+void R_PlaneForSurface(surfaceType_t * surfType, cplane_t * plane) {
 #else // !REND2_SP
-static void R_PlaneForSurface(surfaceType_t* surfType, cplane_t* plane)
+static void R_PlaneForSurface(surfaceType_t * surfType, cplane_t * plane)
 {
 #endif // REND2_SP
 	srfBspSurface_t* tri = nullptr;
@@ -1376,11 +1376,11 @@ Returns qtrue if it should be mirrored
 =================
 */
 #ifdef REND2_SP
-qboolean R_GetPortalOrientations(const msurface_t* surf, int entityNum,
-	orientation_t* surface, orientation_t* camera,
-	vec3_t pvsOrigin, qboolean* mirror) {
+qboolean R_GetPortalOrientations(const msurface_t * surf, int entityNum,
+	orientation_t * surface, orientation_t * camera,
+	vec3_t pvsOrigin, qboolean * mirror) {
 #else // !REND2_SP
-static qboolean R_GetPortalOrientations(const msurface_t* surf, const int entityNum, orientation_t* surface, orientation_t* camera, vec3_t pvsOrigin, qboolean* mirror)
+static qboolean R_GetPortalOrientations(const msurface_t * surf, const int entityNum, orientation_t * surface, orientation_t * camera, vec3_t pvsOrigin, qboolean * mirror)
 {
 #endif // REND2_SP
 	int			i = 0;
@@ -1505,9 +1505,9 @@ static qboolean R_GetPortalOrientations(const msurface_t* surf, const int entity
 }
 
 #ifdef REND2_SP
-static qboolean IsMirror(const msurface_t* surface, int entityNum)
+static qboolean IsMirror(const msurface_t * surface, int entityNum)
 #else // !REND2_SP
-static qboolean IsMirror(const msurface_t* surface, const int entityNum)
+static qboolean IsMirror(const msurface_t * surface, const int entityNum)
 #endif // REND2_SP
 {
 	int			i = 0;
@@ -1572,7 +1572,7 @@ static qboolean IsMirror(const msurface_t* surface, const int entityNum)
 **
 ** Determines if a surface is completely offscreen.
 */
-static qboolean SurfIsOffscreen(const msurface_t* surface, int entityNum, vec4_t clipDest[128], int* numVertices) {
+static qboolean SurfIsOffscreen(const msurface_t * surface, int entityNum, vec4_t clipDest[128], int* numVertices) {
 	float shortest = 100000000;
 	int numTriangles = 0;
 	vec4_t clip, eye;
@@ -1680,9 +1680,9 @@ Returns qtrue if another view has been rendered
 ========================
 */
 #ifdef REND2_SP
-qboolean R_MirrorViewBySurface(msurface_t* surface, int entityNum) {
+qboolean R_MirrorViewBySurface(msurface_t * surface, int entityNum) {
 #else // !REND2_SP
-static qboolean R_MirrorViewBySurface(msurface_t* surface, int entityNum) {
+static qboolean R_MirrorViewBySurface(msurface_t * surface, int entityNum) {
 #endif // REND2_SP
 	vec4_t			clipDest[128];
 	int				numVertices = 0;
@@ -1823,7 +1823,7 @@ static qboolean R_MirrorViewBySurface(msurface_t* surface, int entityNum) {
 	tr.numCachedViewParms++;
 
 	return qtrue;
-}
+	}
 
 #ifdef REND2_SP
 /*
@@ -1833,7 +1833,7 @@ R_SpriteFogNum
 See if a sprite is inside a fog volume
 =================
 */
-int R_SpriteFogNum(trRefEntity_t* ent) {
+int R_SpriteFogNum(trRefEntity_t * ent) {
 	int				i = 0, j = 0;
 	float			frameRadius = 0.0f;
 	fog_t* fog = nullptr;
@@ -1885,7 +1885,7 @@ R_SpriteFogNum
 See if a sprite is inside a fog volume
 =================
 */
-static int R_SpriteFogNum(const trRefEntity_t* ent)
+static int R_SpriteFogNum(const trRefEntity_t * ent)
 {
 	int				i = 0, j = 0;
 	fog_t* fog = nullptr;
@@ -1927,9 +1927,9 @@ R_Radix
 ===============
 */
 #ifdef REND2_SP
-static QINLINE void R_Radix(int byte, int size, drawSurf_t* source, drawSurf_t* dest)
+static QINLINE void R_Radix(int byte, int size, drawSurf_t * source, drawSurf_t * dest)
 #else // !REND2_SP
-static QINLINE void R_Radix(const int byte, const int size, drawSurf_t* source, drawSurf_t* dest)
+static QINLINE void R_Radix(const int byte, const int size, drawSurf_t * source, drawSurf_t * dest)
 #endif // REND2_SP
 {
 	int           count[256] = { 0 };
@@ -1964,7 +1964,7 @@ R_RadixSort
 Radix sort with 4 byte size buckets
 ===============
 */
-static void R_RadixSort(drawSurf_t* source, int size)
+static void R_RadixSort(drawSurf_t * source, int size)
 {
 	static drawSurf_t scratch[MAX_DRAWSURFS];
 #ifdef Q3_LITTLE_ENDIAN
@@ -1982,7 +1982,7 @@ static void R_RadixSort(drawSurf_t* source, int size)
 
 //==========================================================================================
 
-bool R_IsPostRenderEntity(const trRefEntity_t* refEntity)
+bool R_IsPostRenderEntity(const trRefEntity_t * refEntity)
 {
 #ifdef REND2_SP
 	return (refEntity->e.renderfx & RF_DISTORTION) ||
@@ -1998,16 +1998,16 @@ bool R_IsPostRenderEntity(const trRefEntity_t* refEntity)
 R_DecomposeSort
 =================
 */
-void R_DecomposeSort(uint32_t sort, int* entityNum, shader_t** shader, int* cubemap, int* postRender)
+void R_DecomposeSort(uint32_t sort, int* entityNum, shader_t * *shader, int* cubemap, int* postRender)
 {
 	*shader = tr.sortedShaders[(sort >> QSORT_SHADERNUM_SHIFT) & QSORT_SHADERNUM_MASK];
 	*postRender = (sort >> QSORT_POSTRENDER_SHIFT) & QSORT_POSTRENDER_MASK;
 #ifdef REND2_SP
-	*entityNum = (sort >> QSORT_ENTITYNUM_SHIFT) & QSORT_ENTITYNUM_MASK;
+	* entityNum = (sort >> QSORT_ENTITYNUM_SHIFT) & QSORT_ENTITYNUM_MASK;
 #else // !REND2_SP
-	*entityNum = (sort >> QSORT_ENTITYNUM_SHIFT) & QSORT_entity_num_MASK;
+	* entityNum = (sort >> QSORT_ENTITYNUM_SHIFT) & QSORT_entity_num_MASK;
 #endif // REND2_SP
-	*cubemap = (sort >> QSORT_CUBEMAP_SHIFT) & QSORT_CUBEMAP_MASK;
+	* cubemap = (sort >> QSORT_CUBEMAP_SHIFT) & QSORT_CUBEMAP_MASK;
 }
 
 uint32_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex, int postRender)
@@ -2031,7 +2031,7 @@ uint32_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex,
 R_AddDrawSurf
 =================
 */
-void R_AddDrawSurf(surfaceType_t* surface, int entityNum, const shader_t* shader, int fogIndex, const int dlightMap, int postRender, int cubemap)
+void R_AddDrawSurf(surfaceType_t * surface, int entityNum, const shader_t * shader, int fogIndex, const int dlightMap, int postRender, int cubemap)
 {
 	int index = 0;
 	drawSurf_t* surf = nullptr;
@@ -2087,7 +2087,7 @@ void R_AddDrawSurf(surfaceType_t* surface, int entityNum, const shader_t* shader
 R_SortAndSubmitDrawSurfs
 =================
 */
-void R_SortAndSubmitDrawSurfs(drawSurf_t* drawSurfs, int numDrawSurfs) {
+void R_SortAndSubmitDrawSurfs(drawSurf_t * drawSurfs, int numDrawSurfs) {
 	// it is possible for some views to not have any surfaces
 	if (numDrawSurfs < 1)
 		return;
@@ -2103,7 +2103,7 @@ void R_SortAndSubmitDrawSurfs(drawSurf_t* drawSurfs, int numDrawSurfs) {
 	R_AddDrawSurfCmd(drawSurfs, numDrawSurfs);
 }
 
-static bool R_SunShadowNpcDistSq(const trRefEntity_t* ent)
+static bool R_SunShadowNpcDistSq(const trRefEntity_t * ent)
 {
 	static cvar_t* cv = nullptr;
 	if (!cv)
@@ -2123,7 +2123,7 @@ static bool R_SunShadowNpcDistSq(const trRefEntity_t* ent)
 	return DotProduct(d, d) > cv->value * cv->value;
 }
 
-static void R_AddEntitySurface(const trRefdef_t* refdef, trRefEntity_t* ent, int entityNum)
+static void R_AddEntitySurface(const trRefdef_t * refdef, trRefEntity_t * ent, int entityNum)
 {
 	shader_t* shader = nullptr;
 
@@ -2268,7 +2268,7 @@ static void R_AddEntitySurface(const trRefdef_t* refdef, trRefEntity_t* ent, int
 R_AddEntitySurfaces
 =============
 */
-static void R_AddEntitySurfaces(const trRefdef_t* refdef)
+static void R_AddEntitySurfaces(const trRefdef_t * refdef)
 {
 	if (!r_drawentities->integer)
 	{
@@ -2303,7 +2303,7 @@ static void R_AddEntitySurfaces(const trRefdef_t* refdef)
 R_GenerateDrawSurfs
 ====================
 */
-void R_GenerateDrawSurfs(viewParms_t* viewParms, trRefdef_t* refdef) {
+void R_GenerateDrawSurfs(viewParms_t * viewParms, trRefdef_t * refdef) {
 	// TODO: Get rid of this
 	if (viewParms->viewParmType == VPT_PLAYER_SHADOWS)
 	{
@@ -2409,9 +2409,9 @@ or a mirror / remote location
 ================
 */
 #ifdef REND2_SP
-void R_RenderView(viewParms_t* parms) {
+void R_RenderView(viewParms_t * parms) {
 #else // !REND2_SP
-void R_RenderView(const viewParms_t* parms)
+void R_RenderView(const viewParms_t * parms)
 {
 #endif // REND2_SP
 	if (parms->viewportWidth <= 0 || parms->viewportHeight <= 0) {
@@ -2516,7 +2516,7 @@ void R_RenderDlightCubemaps()
 }
 
 void R_SetOrientationOriginAndAxis(
-	orientationr_t& orientation,
+	orientationr_t & orientation,
 	const vec3_t origin,
 	const vec3_t forward,
 	const vec3_t left,
@@ -2529,7 +2529,7 @@ void R_SetOrientationOriginAndAxis(
 }
 
 void R_SetOrientationOriginAndAxis(
-	orientationr_t& orientation,
+	orientationr_t & orientation,
 	const vec3_t origin,
 	const matrix3_t axis)
 {
@@ -2539,9 +2539,9 @@ void R_SetOrientationOriginAndAxis(
 void R_SetupViewParmsForOrthoRendering(
 	int viewportWidth,
 	int viewportHeight,
-	FBO_t* fbo,
+	FBO_t * fbo,
 	viewParmFlags_t viewParmFlags,
-	const orientationr_t& orientation,
+	const orientationr_t & orientation,
 	const vec3_t viewBounds[2])
 {
 	viewParms_t& viewParms = tr.viewParms;
@@ -2567,7 +2567,7 @@ void R_SetupViewParmsForOrthoRendering(
 	R_SetupProjectionOrtho(&viewParms, viewBounds);
 }
 
-void R_SetupPshadowMaps(trRefdef_t* refdef)
+void R_SetupPshadowMaps(trRefdef_t * refdef)
 {
 	/*viewParms_t		shadowParms;*/
 	int i = 0;
@@ -2682,10 +2682,11 @@ void R_SetupPshadowMaps(trRefdef_t* refdef)
 		}
 	}
 
-	// cap number of drawn pshadows
-	if (refdef->num_pshadows > MAX_DRAWN_PSHADOWS)
+	// cap number of drawn pshadows: cg_shadows 2 = the 8 nearest characters, 3 = up to 32 (DH 2026-10-26)
+	const int maxDrawnPshadows = r_shadows->integer == 2 ? 8 : MAX_DRAWN_PSHADOWS;
+	if (refdef->num_pshadows > maxDrawnPshadows)
 	{
-		refdef->num_pshadows = MAX_DRAWN_PSHADOWS;
+		refdef->num_pshadows = maxDrawnPshadows;
 	}
 
 	// next, fill up the rest of the shadow info
@@ -2711,6 +2712,13 @@ void R_SetupPshadowMaps(trRefdef_t* refdef)
 		if (shadow->viewRadius * 3.0f > shadow->lightRadius)
 		{
 			shadow->lightRadius = shadow->viewRadius * 3.0f;
+		}
+
+		// cg_shadows 3: the shadow reaches further (further down steps and ledges, and stays dark further from the
+		// feet) (DH 2026-10-26)
+		if (r_shadows->integer >= 3)
+		{
+			shadow->lightRadius = MAX(shadow->lightRadius, MAX(shadow->viewRadius * 5.0f, 256.0f));
 		}
 
 		VectorMA(shadow->viewOrigin, shadow->viewRadius, lightDir, shadow->lightOrigin);
@@ -2816,9 +2824,9 @@ void R_RenderCubemapSide(int cubemapIndex, int cubemapSide, bool bounce)
 }
 
 #ifdef REND2_SP
-void R_SetupViewParms(const trRefdef_t* refdef)
+void R_SetupViewParms(const trRefdef_t * refdef)
 #else // !REND2_SP
-static void R_SetupViewParms(const trRefdef_t* refdef)
+static void R_SetupViewParms(const trRefdef_t * refdef)
 #endif // REND2_SP
 {
 	tr.viewCount++;
@@ -2864,9 +2872,9 @@ static void R_SetupViewParms(const trRefdef_t* refdef)
 }
 
 #ifdef REND2_SP
-qboolean R_AddPortalView(const trRefdef_t* refdef)
+qboolean R_AddPortalView(const trRefdef_t * refdef)
 #else // !REND2_SP
-static qboolean R_AddPortalView(const trRefdef_t* refdef)
+static qboolean R_AddPortalView(const trRefdef_t * refdef)
 #endif // REND2_SP
 {
 	if (!tr.world || refdef->rdflags & RDF_NOWORLDMODEL)
@@ -2978,7 +2986,7 @@ static float CalcSplit(float n, float f, float i, float m)
 // r_dlightShadowMax (default 4, 0 = every light, as before): with r_dlightMode 2 every dynamic light renders
 // a 6-sided shadow map of everything around it. A big saber battle has a light per blade, so 15 lights made
 // 90 shadow views a frame. Only the lights nearest the camera cast shadows; the others still light.
-static void R_PickShadowedDlights(trRefdef_t* refdef)
+static void R_PickShadowedDlights(trRefdef_t * refdef)
 {
 	static cvar_t* maxShadowed = nullptr;
 	if (!maxShadowed)
@@ -3018,7 +3026,7 @@ static void R_PickShadowedDlights(trRefdef_t* refdef)
 	}
 }
 
-void R_GatherFrameViews(trRefdef_t* refdef)
+void R_GatherFrameViews(trRefdef_t * refdef)
 {
 	int mainFlags = 0;
 	// skyportal view
@@ -3143,8 +3151,9 @@ void R_GatherFrameViews(trRefdef_t* refdef)
 			}
 		}
 
-		// pshadow shadowmaps
-		if (r_shadows->integer == 4)
+		// pshadow shadowmaps: rend2 character shadows for cg_shadows 2 and 3 (stencil volumes can't be built from
+		// GPU-skinned ghoul2 models, so 2/3 drew nothing; 4 was the only setting with shadows) (DH 2026-10-26)
+		if (r_shadows->integer >= 2 && tr.pshadowArrayImage)
 		{
 			R_SetupPshadowMaps(refdef);
 

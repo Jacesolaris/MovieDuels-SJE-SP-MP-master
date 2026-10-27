@@ -1877,7 +1877,6 @@ static void CG_ClothBlast(const int weapon, const qboolean altFire, const vec3_t
 		strength * cg_clothExplosion.value, radius));
 }
 
-
 // SS_BLASTER: sounds and muzzle flash of the left hand pistol (the bolt itself is a server missile)
 static void CG_SaberBlasterEvent(const int owner_num, const int parm)
 {

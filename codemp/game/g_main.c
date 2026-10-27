@@ -4580,6 +4580,8 @@ extern void TieFighterThink(gentity_t* self);
 #define SPRINT_DEFUEL_RATE		150
 #define ENHANCED_REFUEL_RATE	75 //seems fair
 
+void G_RancorPitThink(void);
+
 void G_RunFrame(const int levelTime)
 {
 	int i = 0;
@@ -4761,6 +4763,8 @@ void G_RunFrame(const int levelTime)
 
 	// get any cvar changes
 	G_UpdateCvars();
+
+	G_RancorPitThink(); // the rancor that lives on mp/duel7 (NPC_spawn.c)
 
 #ifdef _G_FRAME_PERFANAL
 	trap->PrecisionTimer_Start(&timer_ItemRun);

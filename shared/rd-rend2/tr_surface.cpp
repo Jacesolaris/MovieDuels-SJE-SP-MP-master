@@ -22,6 +22,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // tr_surf.c
 #include "tr_local.h"
 #include "tr_weather.h"
+#ifndef REND2_SP
+#include "ghoul2/g2_local.h"
+#endif
 
 /*
 
@@ -365,7 +368,7 @@ static void RB_SurfaceOrientedQuad(void)
 RB_SurfacePolychain
 =============
 */
-static void RB_SurfacePolychain(srfPoly_t* p) {
+static void RB_SurfacePolychain(srfPoly_t * p) {
 	int		i = 0;
 	int		numv = 0;
 
@@ -396,7 +399,7 @@ static void RB_SurfacePolychain(srfPoly_t* p) {
 	tess.numVertexes = numv;
 }
 
-static void RB_SurfaceVertsAndIndexes(int numVerts, srfVert_t* verts, int numIndexes, glIndex_t* indexes, int dlightBits, int pshadowBits)
+static void RB_SurfaceVertsAndIndexes(int numVerts, srfVert_t * verts, int numIndexes, glIndex_t * indexes, int dlightBits, int pshadowBits)
 {
 	int             i = 0;
 	glIndex_t* inIndex = nullptr;
@@ -493,12 +496,12 @@ static void RB_SurfaceVertsAndIndexes(int numVerts, srfVert_t* verts, int numInd
 
 #ifdef REND2_SP
 static qboolean RB_SurfaceVbo(
-	VBO_t* vbo, IBO_t* ibo, int numVerts, int numIndexes, int firstIndex,
+	VBO_t * vbo, IBO_t * ibo, int numVerts, int numIndexes, int firstIndex,
 	int minIndex, int maxIndex, int dlightBits, int pshadowBits, qboolean shaderCheck)
 {
 #else // !REND2_SP
 static qboolean RB_SurfaceVbo(
-	VBO_t* vbo, IBO_t* ibo, uint32_t numVerts, uint32_t numIndexes, uint32_t firstIndex,
+	VBO_t * vbo, IBO_t * ibo, uint32_t numVerts, uint32_t numIndexes, uint32_t firstIndex,
 	uint32_t minIndex, uint32_t maxIndex, int dlightBits, int pshadowBits, qboolean shaderCheck)
 {
 #endif // REND2_SP
@@ -612,7 +615,7 @@ static qboolean RB_SurfaceVbo(
 RB_SurfaceBSPTriangles
 =============
 */
-static void RB_SurfaceBSPTriangles(srfBspSurface_t* srf) {
+static void RB_SurfaceBSPTriangles(srfBspSurface_t * srf) {
 	if (RB_SurfaceVbo(srf->vbo, srf->ibo, srf->numVerts, srf->numIndexes,
 		srf->firstIndex, srf->minIndex, srf->maxIndex, srf->dlightBits, srf->pshadowBits, qtrue))
 	{
@@ -997,7 +1000,7 @@ RB_SurfaceCylinder
 #define NUM_CYLINDER_SEGMENTS 32
 
 // FIXME: use quad stamp?
-static void DoCylinderPart(polyVert_t* verts)
+static void DoCylinderPart(polyVert_t * verts)
 {
 	int			vbase = 0;
 	int			i = 0;
@@ -1302,7 +1305,6 @@ static void DoBoltSeg(vec3_t start, vec3_t end, vec3_t right, float radius)
 	VectorSubtract(end, start, fwd);
 	dis = VectorNormalize(fwd);
 
-
 	MakeNormalVectors(fwd, rt, up);
 
 	VectorCopy(start, old);
@@ -1414,7 +1416,7 @@ static void DoBoltSeg(vec3_t start, vec3_t end, vec3_t right, float radius)
 		oldPerc = perc;
 	}
 #ifdef REND2_SP
-}
+	}
 
 static void DoRailCore(const vec3_t start, const vec3_t end, const vec3_t up, const float len, const float spanWidth)
 {
@@ -1562,7 +1564,7 @@ static void RB_SurfaceLightningBolt()
 * The inputs to this routing seem to always be close to length = 1.0 (about 0.6 to 2.0)
 * This means that we don't have to worry about zero length or enormously long vectors.
 */
-static void VectorArrayNormalize(vec4_t* normals, unsigned int count)
+static void VectorArrayNormalize(vec4_t * normals, unsigned int count)
 {
 	//    assert(count);
 
@@ -1617,7 +1619,7 @@ static void VectorArrayNormalize(vec4_t* normals, unsigned int count)
 */
 #if 0
 #if idppc_altivec
-static void LerpMeshVertexes_altivec(md3Surface_t* surf, float backlerp)
+static void LerpMeshVertexes_altivec(md3Surface_t * surf, float backlerp)
 {
 	short* oldXyz, * newXyz, * oldNormals, * newNormals;
 	float* outXyz, * outNormal;
@@ -1748,7 +1750,7 @@ static void LerpMeshVertexes_altivec(md3Surface_t* surf, float backlerp)
 #endif
 #endif
 
-static void LerpMeshVertexes_scalar(mdvSurface_t* surf, float backlerp)
+static void LerpMeshVertexes_scalar(mdvSurface_t * surf, float backlerp)
 {
 #if 0
 	short* oldXyz, * newXyz, * oldNormals, * newNormals;
@@ -1905,7 +1907,7 @@ static void LerpMeshVertexes_scalar(mdvSurface_t* surf, float backlerp)
 	}
 }
 
-static void LerpMeshVertexes(mdvSurface_t* surf, float backlerp)
+static void LerpMeshVertexes(mdvSurface_t * surf, float backlerp)
 {
 	LerpMeshVertexes_scalar(surf, backlerp);
 }
@@ -1915,7 +1917,7 @@ static void LerpMeshVertexes(mdvSurface_t* surf, float backlerp)
 RB_SurfaceMesh
 =============
 */
-static void RB_SurfaceMesh(mdvSurface_t* surface) {
+static void RB_SurfaceMesh(mdvSurface_t * surface) {
 	int				j = 0;
 	float			backlerp = 0.0f;
 	mdvSt_t* texCoords = nullptr;
@@ -1957,7 +1959,7 @@ static void RB_SurfaceMesh(mdvSurface_t* surface) {
 RB_SurfaceFace
 ==============
 */
-static void RB_SurfaceBSPFace(srfBspSurface_t* srf)
+static void RB_SurfaceBSPFace(srfBspSurface_t * srf)
 {
 	if (RB_SurfaceVbo(srf->vbo, srf->ibo, srf->numVerts, srf->numIndexes,
 		srf->firstIndex, srf->minIndex, srf->maxIndex, srf->dlightBits, srf->pshadowBits, qtrue))
@@ -2006,7 +2008,7 @@ RB_SurfaceGrid
 Just copy the grid of points and triangulate
 =============
 */
-static void RB_SurfaceBSPGrid(srfBspSurface_t* srf) {
+static void RB_SurfaceBSPGrid(srfBspSurface_t * srf) {
 	int		i = 0, j = 0;
 	float* xyz = nullptr;
 	float* texCoords = nullptr, * lightCoords[MAXLIGHTMAPS]{};
@@ -2512,8 +2514,8 @@ static void RB_SurfaceClouds()
 			oldVerts++;
 			outXyz += 4;
 			outNormal++;
-		}
-	}
+}
+}
 }
 
 static void LerpMeshVertexes(mdvSurface_t * surf, float backlerp)
@@ -3165,7 +3167,7 @@ RB_SurfaceEntity
 Entities that have a single procedurally generated surface
 ====================
 */
-static void RB_SurfaceEntity(surfaceType_t* surfType)
+static void RB_SurfaceEntity(surfaceType_t * surfType)
 {
 	switch (backEnd.currentEntity->e.reType)
 	{
@@ -3246,7 +3248,7 @@ static void RB_SurfaceEntity(surfaceType_t* surfType)
 	}
 }
 
-static void RB_SurfaceBad(surfaceType_t* surfType) {
+static void RB_SurfaceBad(surfaceType_t * surfType) {
 #ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "Bad surface tesselated.\n");
 #else // !REND2_SP
@@ -3254,19 +3256,19 @@ static void RB_SurfaceBad(surfaceType_t* surfType) {
 #endif // REND2_SP
 }
 
-static void RB_SurfaceFlare(srfFlare_t* surf)
+static void RB_SurfaceFlare(srfFlare_t * surf)
 {
 	if (r_flares->integer)
 		RB_AddFlare(surf, tess.fogNum, surf->origin, surf->color, surf->normal);
 }
 
-static void RB_SurfaceVBOMesh(srfBspSurface_t* srf)
+static void RB_SurfaceVBOMesh(srfBspSurface_t * srf)
 {
 	RB_SurfaceVbo(srf->vbo, srf->ibo, srf->numVerts, srf->numIndexes, srf->firstIndex,
 		srf->minIndex, srf->maxIndex, srf->dlightBits, srf->pshadowBits, qfalse);
 }
 
-static void RB_SurfaceVBOMDVMesh(srfVBOMDVMesh_t* surface)
+static void RB_SurfaceVBOMDVMesh(srfVBOMDVMesh_t * surface)
 {
 	int i = 0, mergeForward = 0, mergeBack = 0;
 	GLvoid* firstIndexOffset = nullptr, * lastIndexOffset = nullptr;
@@ -3379,7 +3381,195 @@ static void RB_SurfaceVBOMDVMesh(srfVBOMDVMesh_t* surface)
 
 static void RB_SurfaceSkip(void* surf) {}
 
-static void RB_SurfaceSprites(srfSprites_t* surf)
+// Grass wind and bending (2026-10-26).
+// r_grassWind: sway + gusts rolling across all grass (0 = old look; ssWindIdle sway alone was too small to see).
+// r_grassPush: grass bends away from players, NPCs, bots and creatures (the ghoul2 models in the scene; 0 = off).
+// r_grassPushRadius scales the bend radius (32 units at model scale 1).
+extern cvar_t* r_grassWind;
+extern cvar_t* r_grassPush;
+extern cvar_t* r_grassPushRadius;
+
+// Grass force waves (2026-10-27): the cgame sends grass_wave (renderer command, tr_init.cpp) when someone uses force
+// push, pull or repulse, and a wave runs out from them through the grass (surface_sprites.glsl), flattens it and lets
+// it spring back. r_grassForceWave scales it (up to 2, 0 = off).
+extern cvar_t* r_grassForceWave;
+
+static constexpr int GRASS_MAX_WAVES = 4;	// u_GrassWaves[8] in surface_sprites.glsl, two vec4 each
+static constexpr float GRASS_WAVE_SPEED = 1400.0f;	// units a second, as in the shader
+static constexpr float GRASS_WAVE_SETTLE = 1.6f;	// seconds until the grass stands still again
+
+struct grassWave_t
+{
+	int time;		// cg.time when it started
+	float org[3];
+	float dir[2];	// flat direction of a push or pull
+	int type;		// 0 push (cone, away), 1 pull (cone, toward), 2 repulse (all round, away)
+	float range;
+};
+
+static grassWave_t grassWaves[GRASS_MAX_WAVES];
+static int grassNumWaves = 0;
+static int grassWaveTime = -1;
+static vec4_t grassWaveUniforms[GRASS_MAX_WAVES * 2];
+static int grassNumActiveWaves = 0;
+
+void R_GrassAddWave(const int time, const float* org, const float* dir, const int type, const float range)
+{
+	int slot = grassNumWaves;
+	if (slot == GRASS_MAX_WAVES)
+	{	// replace the oldest
+		slot = 0;
+		for (int i = 1; i < GRASS_MAX_WAVES; i++)
+		{
+			if (grassWaves[i].time < grassWaves[slot].time)
+				slot = i;
+		}
+	}
+	else
+	{
+		grassNumWaves++;
+	}
+
+	grassWave_t* w = &grassWaves[slot];
+	w->time = time;
+	VectorCopy(org, w->org);
+	w->type = type >= 0 && type <= 2 ? type : 0;
+	const float len = sqrtf(dir[0] * dir[0] + dir[1] * dir[1]);
+	if (len > 0.001f)
+	{
+		w->dir[0] = dir[0] / len;
+		w->dir[1] = dir[1] / len;
+	}
+	else
+	{	// no flat direction (looking straight up or down): all round
+		w->dir[0] = 1.0f;
+		w->dir[1] = 0.0f;
+		w->type = w->type == 1 ? 1 : 2;
+	}
+	w->range = range < 64.0f ? 64.0f : range > 2048.0f ? 2048.0f : range;
+	grassWaveTime = -1;
+}
+
+// Once a frame: drops finished waves (and ones from before a map change or restart, when cg.time starts again) and
+// fills the shader's u_GrassWaves.
+static void RB_GrassGatherWaves()
+{
+	const int now = backEnd.refdef.time;
+	if (grassWaveTime == now)
+		return;
+	grassWaveTime = now;
+	grassNumActiveWaves = 0;
+
+	for (int i = 0; i < grassNumWaves;)
+	{
+		const grassWave_t* w = &grassWaves[i];
+		const float age = static_cast<float>(now - w->time) * 0.001f;
+		if (now < w->time - 250 || age > w->range / GRASS_WAVE_SPEED + GRASS_WAVE_SETTLE)
+		{
+			grassWaves[i] = grassWaves[--grassNumWaves];
+			continue;
+		}
+		if (r_grassForceWave && r_grassForceWave->value > 0.0f && !(backEnd.refdef.rdflags & RDF_NOWORLDMODEL))
+		{
+			float* u = grassWaveUniforms[grassNumActiveWaves * 2];
+			u[0] = w->org[0];
+			u[1] = w->org[1];
+			u[2] = w->org[2];
+			u[3] = age;
+			u[4] = w->dir[0];
+			u[5] = w->dir[1];
+			u[6] = static_cast<float>(w->type);
+			u[7] = w->range;
+			grassNumActiveWaves++;
+		}
+		i++;
+	}
+}
+
+static constexpr int GRASS_MAX_PUSHERS = 16;	// u_GrassPushers[16] in surface_sprites.glsl
+static constexpr float GRASS_PUSH_RADIUS = 32.0f;
+static constexpr float GRASS_PUSH_RANGE = 2048.0f;
+
+static vec4_t grassPushers[GRASS_MAX_PUSHERS];	// x, y, z (model origin), radius
+static int grassNumPushers = 0;
+static int grassPusherTime = -1;
+static const trRefEntity_t* grassPusherEnts = nullptr;
+static int grassPusherNumEnts = -1;
+
+static void RB_GrassGatherPushers()
+{
+	if (grassPusherTime == backEnd.refdef.time && grassPusherEnts == backEnd.refdef.entities
+		&& grassPusherNumEnts == backEnd.refdef.num_entities)
+	{
+		return;
+	}
+	grassPusherTime = backEnd.refdef.time;
+	grassPusherEnts = backEnd.refdef.entities;
+	grassPusherNumEnts = backEnd.refdef.num_entities;
+	grassNumPushers = 0;
+
+	if (!r_grassPush || r_grassPush->value <= 0.0f || !r_grassPushRadius || backEnd.refdef.rdflags & RDF_NOWORLDMODEL)
+	{
+		return;
+	}
+
+	float dists[GRASS_MAX_PUSHERS];
+	for (int i = 0; i < backEnd.refdef.num_entities; i++)
+	{
+		const trRefEntity_t* ent = &backEnd.refdef.entities[i];
+		if (ent->e.reType != RT_MODEL || ent->e.renderfx & RF_FIRST_PERSON || !ent->e.ghoul2
+			|| !G2API_HaveWeGhoul2Models(*((CGhoul2Info_v*)ent->e.ghoul2)))
+		{
+			continue;
+		}
+
+		vec3_t delta;
+		VectorSubtract(ent->e.origin, backEnd.viewParms.ori.origin, delta);
+		const float dist = VectorLengthSquared(delta);
+		if (dist > GRASS_PUSH_RANGE * GRASS_PUSH_RANGE)
+		{
+			continue;
+		}
+
+		float scale = ent->e.modelScale[0] > 0.0f ? ent->e.modelScale[0] : 1.0f;
+		if (scale > 4.0f)
+		{
+			scale = 4.0f;
+		}
+		const float radius = GRASS_PUSH_RADIUS * scale * r_grassPushRadius->value;
+		if (radius < 1.0f)
+		{
+			continue;
+		}
+
+		// keep the ones nearest the camera
+		int slot = grassNumPushers;
+		if (slot == GRASS_MAX_PUSHERS)
+		{
+			slot = 0;
+			for (int j = 1; j < GRASS_MAX_PUSHERS; j++)
+			{
+				if (dists[j] > dists[slot])
+				{
+					slot = j;
+				}
+			}
+			if (dist >= dists[slot])
+			{
+				continue;
+			}
+		}
+		else
+		{
+			grassNumPushers++;
+		}
+		VectorCopy(ent->e.origin, grassPushers[slot]);
+		grassPushers[slot][3] = radius;
+		dists[slot] = dist;
+	}
+}
+
+static void RB_SurfaceSprites(srfSprites_t * surf)
 {
 	if (!r_surfaceSprites->integer || surf->numSprites == 0)
 		return;
@@ -3435,6 +3625,28 @@ static void RB_SurfaceSprites(srfSprites_t* surf)
 
 	uniformDataWriter.SetUniformInt(
 		UNIFORM_ALPHA_TEST_TYPE, surf->alphaTestType);
+
+	RB_GrassGatherPushers();
+	{
+		float push = r_grassPush ? r_grassPush->value : 0.0f;
+		if (push > 2.0f)
+			push = 2.0f;
+		const int numPushers = push > 0.0f ? grassNumPushers : 0;
+		uniformDataWriter.SetUniformVec4(UNIFORM_GRASSPARAMS, static_cast<float>(numPushers),
+			r_grassWind && r_grassWind->value > 0.0f ? r_grassWind->value : 0.0f, push, 0.0f);
+		if (numPushers > 0)
+			uniformDataWriter.SetUniformVec4(UNIFORM_GRASSPUSHERS, grassPushers[0], numPushers);
+	}
+
+	RB_GrassGatherWaves();
+	{
+		float strength = r_grassForceWave ? r_grassForceWave->value : 0.0f;
+		if (strength > 2.0f)
+			strength = 2.0f;
+		uniformDataWriter.SetUniformVec4(UNIFORM_GRASSWAVEPARAMS, static_cast<float>(grassNumActiveWaves), strength, 0.0f, 0.0f);
+		if (grassNumActiveWaves > 0)
+			uniformDataWriter.SetUniformVec4(UNIFORM_GRASSWAVES, grassWaveUniforms[0], grassNumActiveWaves * 2);
+	}
 
 	if (surf->fogIndex != -1)
 	{

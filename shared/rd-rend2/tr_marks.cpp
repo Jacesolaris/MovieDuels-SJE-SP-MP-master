@@ -94,9 +94,9 @@ static void R_ChopPolyBehindPlane(const int numInPoints, vec3_t inPoints[MAX_VER
 	dists[i] = dists[0];
 
 #ifdef REND2_SP
-	*num_out_points = 0;
+	* num_out_points = 0;
 #else // !REND2_SP
-	*numOutPoints = 0;
+	* numOutPoints = 0;
 #endif // REND2_SP
 
 	if (!counts[0]) {
@@ -104,10 +104,10 @@ static void R_ChopPolyBehindPlane(const int numInPoints, vec3_t inPoints[MAX_VER
 	}
 	if (!counts[1]) {
 #ifdef REND2_SP
-		*num_out_points = num_in_points;
+		* num_out_points = num_in_points;
 		Com_Memcpy(out_points, in_points, num_in_points * sizeof(vec3_t));
 #else // !REND2_SP
-		*numOutPoints = numInPoints;
+		* numOutPoints = numInPoints;
 		Com_Memcpy(outPoints, inPoints, numInPoints * sizeof(vec3_t));
 #endif // REND2_SP
 		return;
@@ -175,7 +175,7 @@ static void R_ChopPolyBehindPlane(const int numInPoints, vec3_t inPoints[MAX_VER
 		(*numOutPoints)++;
 #endif // REND2_SP
 	}
-}
+	}
 
 /*
 =================
@@ -184,9 +184,9 @@ R_BoxSurfaces_r
 =================
 */
 #ifdef REND2_SP
-void R_BoxSurfaces_r(const mnode_t* node, vec3_t mins, vec3_t maxs, surfaceType_t** list, const int listsize, int* listlength, vec3_t dir)
+void R_BoxSurfaces_r(const mnode_t * node, vec3_t mins, vec3_t maxs, surfaceType_t * *list, const int listsize, int* listlength, vec3_t dir)
 #else // !REND2_SP
-static void R_BoxSurfaces_r(const mnode_t* node, vec3_t mins, vec3_t maxs, surfaceType_t** list, const int listsize, int* listlength, vec3_t dir)
+static void R_BoxSurfaces_r(const mnode_t * node, vec3_t mins, vec3_t maxs, surfaceType_t * *list, const int listsize, int* listlength, vec3_t dir)
 #endif // REND2_SP
 {
 	int			s = 0, c = 0;
@@ -256,9 +256,9 @@ R_AddMarkFragments
 =================
 */
 #ifdef REND2_SP
-void R_AddMarkFragments(int num_clip_points, vec3_t clip_points[2][MAX_VERTS_ON_POLY], const int numPlanes, vec3_t* normals, const float* dists, const int max_points, vec3_t point_buffer, int max_fragments, markFragment_t* fragment_buffer, int* returned_points, int* returned_fragments, vec3_t mins, vec3_t maxs)
+void R_AddMarkFragments(int num_clip_points, vec3_t clip_points[2][MAX_VERTS_ON_POLY], const int numPlanes, vec3_t * normals, const float* dists, const int max_points, vec3_t point_buffer, int max_fragments, markFragment_t * fragment_buffer, int* returned_points, int* returned_fragments, vec3_t mins, vec3_t maxs)
 #else // !REND2_SP
-static void R_AddMarkFragments(int numClipPoints, vec3_t clipPoints[2][MAX_VERTS_ON_POLY], const int numPlanes, vec3_t* normals, const float* dists, const int maxPoints, vec3_t pointBuffer, int maxFragments, markFragment_t* fragmentBuffer, int* returnedPoints, int* returnedFragments, vec3_t mins, vec3_t maxs)
+static void R_AddMarkFragments(int numClipPoints, vec3_t clipPoints[2][MAX_VERTS_ON_POLY], const int numPlanes, vec3_t * normals, const float* dists, const int maxPoints, vec3_t pointBuffer, int maxFragments, markFragment_t * fragmentBuffer, int* returnedPoints, int* returnedFragments, vec3_t mins, vec3_t maxs)
 #endif // REND2_SP
 {
 	int pingPong = 0, i = 0;
@@ -302,7 +302,7 @@ static void R_AddMarkFragments(int numClipPoints, vec3_t clipPoints[2][MAX_VERTS
 #endif // REND2_SP
 			break;
 		}
-	}
+		}
 	// completely clipped away?
 #ifdef REND2_SP
 	if (num_clip_points == 0) {
@@ -352,7 +352,7 @@ static void R_AddMarkFragments(int numClipPoints, vec3_t clipPoints[2][MAX_VERTS
 	(*returnedPoints) += numClipPoints;
 	(*returnedFragments)++;
 #endif // REND2_SP
-}
+	}
 
 /*
 =================
@@ -378,9 +378,9 @@ static bool R_MarkTriangleOutside(const vec3_t a, const vec3_t b, const vec3_t c
 	return false;
 }
 
-int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection, const int max_points, vec3_t point_buffer, const int max_fragments, markFragment_t* fragment_buffer)
+int R_MarkFragments(int numPoints, const vec3_t * points, const vec3_t projection, const int max_points, vec3_t point_buffer, const int max_fragments, markFragment_t * fragment_buffer)
 #else // !REND2_SP
-int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection, const int maxPoints, vec3_t pointBuffer, const int maxFragments, markFragment_t* fragmentBuffer)
+int R_MarkFragments(int numPoints, const vec3_t * points, const vec3_t projection, const int maxPoints, vec3_t pointBuffer, const int maxFragments, markFragment_t * fragmentBuffer)
 #endif // REND2_SP
 {
 	int				numsurfaces = 0, numPlanes = 0;
@@ -565,7 +565,7 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
 							return returnedFragments;	// not enough space for more fragments
 #endif // REND2_SP
 						}
-					}
+						}
 
 #ifdef REND2_SP
 					VectorCopy(dv[1].xyz, clip_points[0][0]);
@@ -617,10 +617,10 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
 							return returnedFragments;	// not enough space for more fragments
 #endif // REND2_SP
 						}
+						}
+					}
 					}
 				}
-			}
-		}
 		else if (*surfaces[i] == SF_FACE) {
 			srfBspSurface_t* surf = (srfBspSurface_t*)surfaces[i];
 
@@ -661,8 +661,8 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
 					return returnedFragments;	// not enough space for more fragments
 #endif // REND2_SP
 				}
+				}
 			}
-		}
 		else if (*surfaces[i] == SF_TRIANGLES && r_marksOnTriangleMeshes->integer) {
 			srfBspSurface_t* surf = (srfBspSurface_t*)surfaces[i];
 
@@ -702,10 +702,10 @@ int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection
 				}
 			}
 		}
-	}
+		}
 #ifdef REND2_SP
 	return returned_fragments;
 #else // !REND2_SP
 	return returnedFragments;
 #endif // REND2_SP
-}
+			}

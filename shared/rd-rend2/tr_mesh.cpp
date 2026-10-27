@@ -86,7 +86,7 @@ R_CullModel
 static int R_CullModel(mdvModel_t* model, trRefEntity_t* ent) {
 	vec3_t		bounds[2];
 #else // !REND2_SP
-static int R_CullModel(mdvModel_t* model, const trRefEntity_t* ent)
+static int R_CullModel(mdvModel_t * model, const trRefEntity_t * ent)
 {
 	vec3_t		bounds[2]{};
 #endif // REND2_SP
@@ -180,7 +180,7 @@ RE_GetModelBounds
 =================
 */
 
-void RE_GetModelBounds(const refEntity_t* refEnt, vec3_t bounds1, vec3_t bounds2)
+void RE_GetModelBounds(const refEntity_t * refEnt, vec3_t bounds1, vec3_t bounds2)
 {
 	assert(refEnt);
 
@@ -201,7 +201,7 @@ R_ComputeLOD
 
 =================
 */
-int R_ComputeLOD(trRefEntity_t* ent)
+int R_ComputeLOD(trRefEntity_t * ent)
 {
 	float radius = 0.0f;
 	float flod = 0.0f, lodscale = 0.0f;
@@ -216,7 +216,7 @@ R_ComputeLOD
 
 =================
 */
-int R_ComputeLOD(trRefEntity_t* ent) {
+int R_ComputeLOD(trRefEntity_t * ent) {
 	float radius = 0.0f;
 	float flod = 0.0f, lodscale = 0.0f;
 	float projectedRadius = 0.0f;
@@ -297,7 +297,7 @@ R_ComputeFogNum
 
 =================
 */
-int R_ComputeFogNum(mdvModel_t* model, trRefEntity_t* ent) {
+int R_ComputeFogNum(mdvModel_t * model, trRefEntity_t * ent) {
 	int				i = 0, j = 0;
 	float			frameRadius = 0.0f;
 	fog_t* fog = nullptr;
@@ -361,7 +361,7 @@ R_ComputeFogNum
 
 =================
 */
-static int R_ComputeFogNum(mdvModel_t* model, trRefEntity_t* ent) {
+static int R_ComputeFogNum(mdvModel_t * model, trRefEntity_t * ent) {
 	int				i = 0, j = 0;
 	fog_t* fog = nullptr;
 	mdvFrame_t* mdvFrame = nullptr;
@@ -399,7 +399,7 @@ R_AddMD3Surfaces
 =================
 */
 #endif // REND2_SP
-void R_AddMD3Surfaces(trRefEntity_t* ent, int entityNum)
+void R_AddMD3Surfaces(trRefEntity_t * ent, int entityNum)
 {
 	// don't add third_person objects if not in a portal
 	qboolean personalModel = (qboolean)((ent->e.renderfx & RF_THIRD_PERSON) && !(tr.viewParms.isPortal || (tr.viewParms.flags & VPF_DEPTHSHADOW)));

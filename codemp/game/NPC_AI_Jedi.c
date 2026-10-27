@@ -105,7 +105,9 @@ extern qboolean in_camera;
 
 extern int bg_parryDebounce[];
 
-static int jediSpeechDebounceTime[TEAM_NUM_TEAMS]; //used to stop several jedi from speaking all at once
+static int jediSpeechDebounceTime[NPCTEAM_NUM_TEAMS]; //used to stop several jedi from speaking all at once
+// playerTeam as an index into it (NPCTEAM_SOLO was past the end of the old TEAM_NUM_TEAMS array)
+#define JEDI_SPEECH_TEAM(team) ((unsigned)(team) < NPCTEAM_NUM_TEAMS ? (team) : NPCTEAM_FREE)
 //Local state enums
 enum
 {
@@ -167,7 +169,6 @@ static int jedi_engine_mode = 2;
 // SP's in_camera: MP has no SP cinematic camera
 static qboolean jedi_in_camera = qfalse;
 
-
 // ---- SP top-level declarations (ported) ----
 /*
 ===========================================================================
@@ -191,7 +192,6 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 ===========================================================================
 */
 
-
 /// /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// ///
 ///																																///
 ///																																///
@@ -207,97 +207,6 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 //Locals
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /*
 -------------------------
 Jedi_SaberBlock
@@ -311,69 +220,15 @@ NOTE: always blocking projectiles in this func!
 -------------------------
 */
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ////////////////////////////////////////////////////////////////////////////////////////
 //
 ////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-
-
-
-
-
-
-
-
-
 
 /*
 -------------------------
 NPC_BSJedi_FollowLeader
 -------------------------
 */
-
-
-
-
-
-
-
-
 
 /*
 -------------------------
@@ -384,10 +239,6 @@ Jedi_Attack
 // =====================================================
 // Jedi_Attack Cinematic Hybrid System
 // =====================================================
-
-
-
-
 
 // =====================
 // Combo Container
@@ -515,14 +366,6 @@ static const saberMoveName_t s_duelistCounterPool[][3] =
 	{ LS_A_LUNGE, LS_A_T2B,   LS_NONE }
 };
 
-
-
-
-
-
-
-
-
 // =====================
 // Counterattack Handler
 // =====================
@@ -532,37 +375,13 @@ static const saberMoveName_t s_duelistCounterPool[][3] =
 #define AIFLAG_FORCECOUNTER ((1 << 23))
 #define AIFLAG_SPINCOUNTER ((1 << 24))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // ---- MP top-level declarations ----
-
 
 extern void G_Knockdown(gentity_t* self, gentity_t* attacker, const vec3_t push_dir, float strength, const qboolean breakSaberLock);
 
-
 extern void ChangeWeapon(const gentity_t* ent, int new_weapon);
 
-
 float G_GroundDistance(const gentity_t* self);
-
 
 #define	BOBA_FLAMEDURATION			3000
 
@@ -597,7 +416,6 @@ wristWeapon_t missileStates[4] =
 
 extern void WP_FireWristMissile(gentity_t* ent, vec3_t start, vec3_t dir);
 
-
 ////////////////////////////////////////////////////////////////////////////////////////
 // Defines
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -609,22 +427,16 @@ extern void WP_FireWristMissile(gentity_t* ent, vec3_t start, vec3_t dir);
 #define		BOBA_ROCKETRANGEMIN			300
 #define		BOBA_ROCKETRANGEMAX			2000
 
-
 #define SPHERESHIELD_COOLDOWN 10000; // 10 seconds
 
-
 extern qboolean PM_PainAnim(int anim);
-
 
 extern qboolean WP_SaberCanTurnOffSomeBlades(const saberInfo_t* saber);
 extern qboolean G_ValidSaberStyle(const gentity_t* ent, int saber_style);
 
-
 extern qboolean G_InGetUpAnim(const playerState_t* ps);
 
-
 extern qboolean PM_InOnGroundAnim(const int anim);
-
 
 extern qboolean G_CanKickEntity(const gentity_t* self, const gentity_t* target);
 extern saberMoveName_t G_PickAutoKick(gentity_t* self, const gentity_t* enemy);
@@ -636,9 +448,7 @@ static qboolean shoot;
 static float enemyDist;
 #define MELEE_DIST_SQUARED 6400
 
-
 extern int PM_AnimLength(const animNumber_t anim);
-
 
 extern qboolean PM_InRollIgnoreTimer(const playerState_t* ps);
 extern qboolean PM_InAirKickingAnim(int anim);
@@ -646,11 +456,9 @@ extern qboolean BG_StabDownAnim(int anim);
 extern qboolean PM_SuperBreakLoseAnim(int anim);
 extern qboolean PM_SuperBreakWinAnim(int anim);
 
-
 extern qboolean FlyingCreature(const gentity_t* ent);
 extern qboolean NAV_DirSafe(const gentity_t* self, vec3_t dir, float dist);
 extern qboolean NAV_MoveDirSafe(const gentity_t* self, const usercmd_t* cmd, float distScale);
-
 
 /*
 -------------------------
@@ -667,44 +475,32 @@ NOTE: always blocking projectiles in this func!
 extern qboolean PM_LockedAnim(int anim);
 extern qboolean G_FindClosestPointOnLineSegment(const vec3_t start, const vec3_t end, const vec3_t from, vec3_t result);
 
-
 extern float wp_saber_length(const gentity_t* ent);
-
 
 extern float ShortestLineSegBewteen2LineSegs(vec3_t start1, vec3_t end1, vec3_t start2, vec3_t end2, vec3_t close_pnt1,
 	vec3_t close_pnt2);
 
-
 extern qboolean NPC_CheckFallPositionOK(const gentity_t* NPC, vec3_t position);
-
 
 static qboolean enemy_in_striking_range = qfalse;
 
-
 extern float WP_SpeedOfMissileForWeapon(int wp, qboolean alt_fire);
-
 
 #define	APEX_HEIGHT		200.0f
 #define	PARA_WIDTH		(sqrt(APEX_HEIGHT)+sqrt(APEX_HEIGHT))
 #define	JUMP_SPEED		200.0f
 
-
 extern void G_UcmdMoveForDir(const gentity_t* self, usercmd_t* cmd, vec3_t dir);
-
 
 extern void RT_FireDecide(void);
 
-
 extern qboolean G_ClearLineOfSight(const vec3_t point1, const vec3_t point2, int ignore, int clipmask);
-
 
 #define TWINS_DANGER_DIST_EASY (128.0f*128.0f)
 #define TWINS_DANGER_DIST_MEDIUM (192.0f*192.0f)
 #define TWINS_DANGER_DIST_HARD (256.0f*256.0f)
 
-
 extern void WP_Explode(gentity_t* self);
-
 
 extern void NPC_BSST_Patrol(void);
 extern void NPC_BSSniper_Default(void);
@@ -912,8 +708,6 @@ static qboolean jedi_being_drained(const gentity_t* ent)
 	return qfalse;
 }
 
-
-
 // Difficulty-based special attack helpers
 static int jedi_get_kata_cooldown_duration(void)
 {
@@ -944,8 +738,6 @@ static animFlags_t Jedi_Animationstyletable(const gentity_t* NPC)
 	return BG_AnimStyleFlags(NPC && NPC->client ? NPC->client->ps.animStyle : ANIMSTYLE_DEFAULT);
 }
 
-
-
 // For anims picked at random or by a switch before they are played (melee slaps and kicks): Galen's
 // version when the animation style is on, the NPCS.NPC uses Galen's style and his model has the anim.
 static int Jedi_GalenAnim(const gentity_t* self, const int anim)
@@ -967,8 +759,6 @@ static int Jedi_GalenAnim(const gentity_t* self, const int anim)
 	return BG_HasAnimation(self->localAnimIndex, galen_anim) ? galen_anim : anim;
 }
 
-
-
 static qboolean npc_is_sith_lord(const gentity_t* self)
 {
 	switch (self->client->NPC_class)
@@ -984,8 +774,6 @@ static qboolean npc_is_sith_lord(const gentity_t* self)
 
 	return qfalse;
 }
-
-
 
 static qboolean npc_should_not_throw_saber(const gentity_t* self)
 {
@@ -1005,8 +793,6 @@ static qboolean npc_should_not_throw_saber(const gentity_t* self)
 	return qfalse;
 }
 
-
-
 static qboolean npc_is_projected(const gentity_t* self)
 {
 	switch (self->client->NPC_class)
@@ -1019,8 +805,6 @@ static qboolean npc_is_projected(const gentity_t* self)
 
 	return qfalse;
 }
-
-
 
 qboolean npc_is_light_jedi(const gentity_t* self)
 {
@@ -1042,8 +826,6 @@ qboolean npc_is_light_jedi(const gentity_t* self)
 	return qfalse;
 }
 
-
-
 qboolean npc_is_dark_jedi(const gentity_t* self)
 {
 	switch (self->client->NPC_class)
@@ -1064,8 +846,6 @@ qboolean npc_is_dark_jedi(const gentity_t* self)
 
 	return qfalse;
 }
-
-
 
 static qboolean NPC_IsJedi(const gentity_t* self)
 {
@@ -1093,8 +873,6 @@ static qboolean NPC_IsJedi(const gentity_t* self)
 	return qfalse;
 }
 
-
-
 static qboolean npc_force_master(const gentity_t* self)
 {
 	switch (self->client->NPC_class)
@@ -1109,8 +887,6 @@ static qboolean npc_force_master(const gentity_t* self)
 
 	return qfalse;
 }
-
-
 
 static qboolean npc_is_staff_style(const gentity_t* self)
 {
@@ -1201,8 +977,6 @@ static qboolean npc_is_staff_style(const gentity_t* self)
 	return qfalse;
 }
 
-
-
 static qboolean npc_is_dual_style(const gentity_t* self)
 {
 	// holding two sabers (an NPCS.NPC file's saber2, or a script's SET_SABER2 - e.g. Barriss in the Clone Wars
@@ -1292,8 +1066,6 @@ static qboolean npc_is_dual_style(const gentity_t* self)
 	return qfalse;
 }
 
-
-
 static qboolean npc_can_do_slap(void)
 {
 	if (NPCS.NPC->health <= 1
@@ -1350,14 +1122,11 @@ static qboolean npc_can_do_slap(void)
 	return qfalse;
 }
 
-
 void npc_cultist_destroyer_precache(void)
 {
 	G_SoundIndex("sound/movers/objects/green_beam_lp2.wav");
 	G_EffectIndex("force/destruction_exp");
 }
-
-
 
 void npc_shadow_trooper_precache(void)
 {
@@ -1366,15 +1135,11 @@ void npc_shadow_trooper_precache(void)
 	G_SoundIndex("sound/chars/shadowtrooper/decloak.wav");
 }
 
-
-
 void npc_rosh_dark_precache(void)
 {
 	G_EffectIndex("force/kothos_recharge.efx");
 	G_EffectIndex("force/kothos_beam.efx");
 }
-
-
 
 void Jedi_ClearTimers(const gentity_t* ent)
 {
@@ -1412,8 +1177,6 @@ void Jedi_ClearTimers(const gentity_t* ent)
 	TIMER_Set(ent, "grasping", 0);
 }
 
-
-
 qboolean Jedi_CultistDestroyer(const gentity_t* self)
 {
 	if (!self || !self->client)
@@ -1428,8 +1191,6 @@ qboolean Jedi_CultistDestroyer(const gentity_t* self)
 	}
 	return qfalse;
 }
-
-
 
 static qboolean jedi_cultist_dark_force_user(const gentity_t* self)
 {
@@ -1447,8 +1208,6 @@ static qboolean jedi_cultist_dark_force_user(const gentity_t* self)
 	return qfalse;
 }
 
-
-
 static qboolean jedi_forbidden_kicker(const gentity_t* self)
 {
 	if (!self || !self->client)
@@ -1463,8 +1222,6 @@ static qboolean jedi_forbidden_kicker(const gentity_t* self)
 	}
 	return qfalse;
 }
-
-
 
 void Jedi_PlayBlockedPushSound(const gentity_t* self)
 {
@@ -1493,8 +1250,6 @@ void Jedi_PlayBlockedPushSound(const gentity_t* self)
 	}
 }
 
-
-
 void Jedi_PlayDeflectSound(const gentity_t* self)
 {
 	if (self->s.number >= 0 && self->s.number < MAX_CLIENTS)
@@ -1521,8 +1276,6 @@ void Jedi_PlayDeflectSound(const gentity_t* self)
 		self->NPC->blockedSpeechDebounceTime = level.time + 3000;
 	}
 }
-
-
 
 void NPC_Jedi_PlayConfusionSound(const gentity_t* self)
 {
@@ -1561,8 +1314,6 @@ void NPC_Jedi_PlayConfusionSound(const gentity_t* self)
 		}
 	}
 }
-
-
 
 qboolean Jedi_StopKnockdown(gentity_t* self, const vec3_t push_dir)
 {
@@ -1652,8 +1403,6 @@ qboolean Jedi_StopKnockdown(gentity_t* self, const vec3_t push_dir)
 	return qtrue;
 }
 
-
-
 //===============================================================================================
 //TAVION BOSS
 //===============================================================================================
@@ -1670,8 +1419,6 @@ void NPC_TavionScepter_Precache(void)
 	G_SoundIndex("sound/weapons/scepter/beam_warmup.wav");
 }
 
-
-
 void NPC_TavionSithSword_Precache(void)
 {
 	//precashe tavion boss sithsword effects
@@ -1680,7 +1427,6 @@ void NPC_TavionSithSword_Precache(void)
 	G_EffectIndex("scepter/sword.efx");
 	G_SoundIndex("sound/weapons/scepter/recharge.wav");
 }
-
 
 void Tavion_ScepterDamage(void)
 {
@@ -1758,8 +1504,6 @@ void Tavion_ScepterDamage(void)
 		}
 	}
 }
-
-
 
 // ============================================================================
 // Tavion_ScepterSlam
@@ -1985,8 +1729,6 @@ static void Tavion_ScepterSlam(void)
 	}
 }
 
-
-
 void Tavion_StartScepterBeam(void)
 {
 	//Activate the scepter beam for the current NPC.
@@ -2013,8 +1755,6 @@ void Tavion_StartScepterBeam(void)
 	VectorClear(NPCS.NPC->client->ps.moveDir);
 }
 
-
-
 void Tavion_StartScepterSlam(void)
 {
 	mdxaBone_t boltMatrix;
@@ -2039,8 +1779,6 @@ void Tavion_StartScepterSlam(void)
 	VectorClear(NPCS.NPC->client->ps.moveDir);
 	NPCS.NPC->count = 0;
 }
-
-
 
 void Tavion_SithSwordRecharge(void)
 {
@@ -2081,8 +1819,6 @@ void Tavion_SithSwordRecharge(void)
 	}
 }
 
-
-
 //======================================================================================
 //END TAVION BOSS
 //======================================================================================
@@ -2101,8 +1837,6 @@ static void player_Decloak(gentity_t* self)
 		}
 	}
 }
-
-
 
 static qboolean self_is_gunner(const gentity_t* self)
 {
@@ -2141,8 +1875,6 @@ static qboolean self_is_gunner(const gentity_t* self)
 	return qfalse;
 }
 
-
-
 void player_Cloak(gentity_t* self)
 {
 	if (self)
@@ -2161,8 +1893,6 @@ void player_Cloak(gentity_t* self)
 		}
 	}
 }
-
-
 
 void Jedi_Cloak(gentity_t* self)
 {
@@ -2188,8 +1918,6 @@ void Jedi_Cloak(gentity_t* self)
 	}
 }
 
-
-
 void Jedi_Decloak(gentity_t* self)
 {
 	if (self)
@@ -2213,8 +1941,6 @@ void Jedi_Decloak(gentity_t* self)
 		}
 	}
 }
-
-
 
 static void Jedi_CheckCloak(void)
 {
@@ -2250,8 +1976,6 @@ static void Jedi_CheckCloak(void)
 	}
 }
 
-
-
 static void self_check_cloak(gentity_t* self)
 {
 	if (self && self->client)
@@ -2278,8 +2002,6 @@ static void self_check_cloak(gentity_t* self)
 		}
 	}
 }
-
-
 
 /*
 ==========================================================================================
@@ -2322,8 +2044,6 @@ static void Jedi_Aggression(const gentity_t* self, const int change)
 		self->NPC->stats.aggression = lower_threshold;
 	}
 }
-
-
 
 static void Jedi_AggressionErosion(const int amt)
 {
@@ -2402,8 +2122,6 @@ static void Jedi_AggressionErosion(const int amt)
 	}
 }
 
-
-
 void NPC_Jedi_RateNewEnemy(const gentity_t* self, const gentity_t* enemy)
 {
 	float health_aggression = 0.0f;
@@ -2441,8 +2159,6 @@ void NPC_Jedi_RateNewEnemy(const gentity_t* self, const gentity_t* enemy)
 	TIMER_Set(self, "chatter", Q_irand(4000, 7000));
 }
 
-
-
 static void Jedi_Rage(void)
 {
 	Jedi_Aggression(NPCS.NPC, 10 - NPCS.NPCInfo->stats.aggression + Q_irand(-2, 2));
@@ -2459,8 +2175,6 @@ static void Jedi_Rage(void)
 	ForceRage(NPCS.NPC);
 }
 
-
-
 static void Jedi_RageStop(const gentity_t* self)
 {
 	if (self->NPC)
@@ -2470,8 +2184,6 @@ static void Jedi_RageStop(const gentity_t* self)
 		Jedi_Aggression(self, Q_irand(-5, 0));
 	}
 }
-
-
 
 /*
 ==========================================================================================
@@ -2484,7 +2196,7 @@ static qboolean Jedi_BattleTaunt(void)
 	if (TIMER_Done(NPCS.NPC, "chatter")
 		&& !Q_irand(0, 3)
 		&& NPCS.NPCInfo->blockedSpeechDebounceTime < level.time
-		&& jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] < level.time)
+		&& jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] < level.time)
 	{
 		int event = -1;
 		if (NPCS.NPC->enemy
@@ -2526,7 +2238,7 @@ static qboolean Jedi_BattleTaunt(void)
 			if (event != -1)
 			{
 				G_AddVoiceEvent(NPCS.NPC, event, 3000);
-				jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] = NPCS.NPCInfo->blockedSpeechDebounceTime = level.time + 6000;
+				jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] = NPCS.NPCInfo->blockedSpeechDebounceTime = level.time + 6000;
 				if (NPCS.NPCInfo->aiFlags & NPCAI_ROSH)
 				{
 					TIMER_Set(NPCS.NPC, "chatter", Q_irand(15000, 20000));
@@ -2547,8 +2259,6 @@ static qboolean Jedi_BattleTaunt(void)
 	}
 	return qfalse;
 }
-
-
 
 /*
 ==========================================================================================
@@ -2617,8 +2327,6 @@ static qboolean Jedi_ClearPathToSpot(vec3_t dest, const int impact_ent_num)
 	//we made it!
 	return qtrue;
 }
-
-
 
 qboolean NPC_MoveDirClear(const int forwardmove, const int rightmove, const qboolean reset)
 {
@@ -2748,8 +2456,6 @@ qboolean NPC_MoveDirClear(const int forwardmove, const int rightmove, const qboo
 	return qfalse;
 }
 
-
-
 /*
 -------------------------
 Jedi_HoldPosition
@@ -2760,8 +2466,6 @@ static void Jedi_HoldPosition(void)
 {
 	NPCS.NPCInfo->goalEntity = NULL;
 }
-
-
 
 /*
 -------------------------
@@ -2801,8 +2505,6 @@ static qboolean Jedi_Move(gentity_t* goal, const qboolean retreat)
 	return moved;
 }
 
-
-
 static qboolean Jedi_Hunt(void)
 {
 	if (NPCS.NPCInfo->stats.aggression > 1)
@@ -2834,8 +2536,6 @@ static qboolean Jedi_Hunt(void)
 	}
 	return qfalse;
 }
-
-
 
 // ---------------------------------------------------------
 // RETREAT MODE STARTS HERE
@@ -2924,7 +2624,6 @@ static void JediDirectionalDashDodge(gentity_t* NPC, gentity_t* enemy)
 	}
 }
 
-
 // ---------------------------------------------------------
 // RETREAT MODE ENDS HERE
 // ---------------------------------------------------------
@@ -2978,8 +2677,6 @@ static void JediDirectionalDashAttack(gentity_t* NPC, gentity_t* enemy)
 	}
 }
 
-
-
 static qboolean Jedi_Track(void)
 {
 	if (NPCS.NPC->s.weapon == WP_SABER && (jedi_engine_mode > 1) && (g_npc_is_smart.integer != 0))
@@ -2999,8 +2696,6 @@ static qboolean Jedi_Track(void)
 	return qfalse;
 }
 
-
-
 static qboolean Jedi_Retreat(void)
 {
 	if (!TIMER_Done(NPCS.NPC, "noRetreat"))
@@ -3010,8 +2705,6 @@ static qboolean Jedi_Retreat(void)
 	}
 	return Jedi_Move(NPCS.NPC->enemy, qtrue);
 }
-
-
 
 static qboolean Jedi_Advance(void)
 {
@@ -3025,7 +2718,6 @@ static qboolean Jedi_Advance(void)
 	}
 	return Jedi_Move(NPCS.NPC->enemy, qfalse);
 }
-
 
 static void Jedi_AdjustSaberAnimLevel(const gentity_t* self, int new_level)
 {
@@ -3401,8 +3093,6 @@ static void Jedi_AdjustSaberAnimLevel(const gentity_t* self, int new_level)
 	}
 }
 
-
-
 static void Jedi_CheckDecreasesaber_anim_level(void)
 {
 	if (NPCS.NPC->client->ps.fd.saberAnimLevel == SS_DUAL || NPCS.NPC->client->ps.fd.saberAnimLevel == SS_STAFF)
@@ -3436,7 +3126,6 @@ static void Jedi_CheckDecreasesaber_anim_level(void)
 		TIMER_Set(NPCS.NPC, "saberLevelDebounce", Q_irand(1000, 5000));
 	}
 }
-
 
 static qboolean Jedi_DecideKick(void)
 {
@@ -3521,8 +3210,6 @@ static qboolean Jedi_DecideKick(void)
 	return qtrue;
 }
 
-
-
 /*
 ==========================================================================================
 KYLE GRAPPLE CODE
@@ -3534,17 +3221,12 @@ void Kyle_GrabEnemy(void)
 	TIMER_Set(NPCS.NPC, "grabEnemyDebounce", NPCS.NPC->client->ps.torsoTimer + Q_irand(4000, 20000));
 }
 
-
-
 static void npc_grab_player(void)
 {
 	// SP grabs the player with a saber-lock grab (LOCK_KYLE_GRAB1/2), which MP's saber locks don't have
 	Kyle_GrabEnemy();
 	TIMER_Set(NPCS.NPC, "NPC_GrabPlayerDebounce", NPCS.NPC->client->ps.torsoTimer + Q_irand(20000, 30000));
 }
-
-
-
 
 void Kyle_TryGrab(void)
 {
@@ -3559,8 +3241,6 @@ void Kyle_TryGrab(void)
 	NPCS.NPC->painDebounceTime = level.time + NPCS.NPC->client->ps.torsoTimer;
 	NPCS.NPC->client->ps.saberHolstered = 2;
 }
-
-
 
 static qboolean Kyle_CanDoGrab(void)
 {
@@ -3725,7 +3405,7 @@ static qboolean NPC_HandleSlapMelee(gentity_t* NPC, gentity_t* enemy, int enemyD
 
 				// Pain sound
 				G_Sound(enemy, CHAN_AUTO, G_SoundIndex(va("sound/chars/%s/misc/pain0%d",
-						enemy->NPC_type, Q_irand(1, 3))));
+					enemy->NPC_type, Q_irand(1, 3))));
 
 				G_Damage(enemy, NPC, NPC, smack_dir, NPC->r.currentOrigin,
 					(g_npcspskill.integer + 1) * Q_irand(2, 5),
@@ -3816,8 +3496,6 @@ static qboolean NPC_HandleSlapMelee(gentity_t* NPC, gentity_t* enemy, int enemyD
 
 	return qfalse;     // no slap action taken
 }
-
-
 
 static void Jedi_CombatDistance(const int enemy_dist)
 {
@@ -4246,7 +3924,6 @@ static void Jedi_CombatDistance(const int enemy_dist)
 				NPCS.NPC->client->renderInfo.eyeAngles,
 				0.6f))
 			{
-
 				if (jedi_engine_mode)
 				{
 					if (NPCS.NPC->client->NPC_class == CLASS_GALEN &&
@@ -4449,14 +4126,14 @@ static void Jedi_CombatDistance(const int enemy_dist)
 		{
 			if (!Q_irand(0, 10) &&
 				NPCS.NPCInfo->blockedSpeechDebounceTime < level.time &&
-				jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] < level.time)
+				jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] < level.time)
 			{
 				if (NPC_ClearLOS4(NPCS.NPC->enemy))
 				{
 					G_AddVoiceEvent(NPCS.NPC, Q_irand(EV_JCHASE1, EV_JCHASE3), 3000);
 				}
 
-				jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] =
+				jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] =
 					NPCS.NPCInfo->blockedSpeechDebounceTime = level.time + 3000;
 			}
 		}
@@ -4548,11 +4225,11 @@ static void Jedi_CombatDistance(const int enemy_dist)
 		{
 			//They're throwing their saber, grip them!
 			//taunt
-			if (TIMER_Done(NPCS.NPC, "chatter") && jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] < level.time && NPCS.NPCInfo->
+			if (TIMER_Done(NPCS.NPC, "chatter") && jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] < level.time && NPCS.NPCInfo->
 				blockedSpeechDebounceTime < level.time)
 			{
 				G_AddVoiceEvent(NPCS.NPC, Q_irand(EV_TAUNT1, EV_TAUNT3), 13000);
-				jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] = NPCS.NPCInfo->blockedSpeechDebounceTime = level.time +
+				jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] = NPCS.NPCInfo->blockedSpeechDebounceTime = level.time +
 					3000;
 				if (NPCS.NPCInfo->aiFlags & NPCAI_ROSH)
 				{
@@ -4579,11 +4256,11 @@ static void Jedi_CombatDistance(const int enemy_dist)
 		{
 			//They're throwing their saber, grip them!
 			//taunt
-			if (TIMER_Done(NPCS.NPC, "chatter") && jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] < level.time && NPCS.NPCInfo->
+			if (TIMER_Done(NPCS.NPC, "chatter") && jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] < level.time && NPCS.NPCInfo->
 				blockedSpeechDebounceTime < level.time)
 			{
 				G_AddVoiceEvent(NPCS.NPC, Q_irand(EV_TAUNT1, EV_TAUNT3), 13000);
-				jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] = NPCS.NPCInfo->blockedSpeechDebounceTime = level.time +
+				jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] = NPCS.NPCInfo->blockedSpeechDebounceTime = level.time +
 					3000;
 				if (NPCS.NPCInfo->aiFlags & NPCAI_ROSH)
 				{
@@ -4819,11 +4496,11 @@ static void Jedi_CombatDistance(const int enemy_dist)
 							&& !Q_irand(0, 2))
 						{
 							//taunt
-							if (TIMER_Done(NPCS.NPC, "chatter") && jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] < level.
+							if (TIMER_Done(NPCS.NPC, "chatter") && jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] < level.
 								time && NPCS.NPCInfo->blockedSpeechDebounceTime < level.time)
 							{
 								G_AddVoiceEvent(NPCS.NPC, Q_irand(EV_TAUNT1, EV_TAUNT3), 13000);
-								jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] = NPCS.NPCInfo->blockedSpeechDebounceTime =
+								jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] = NPCS.NPCInfo->blockedSpeechDebounceTime =
 									level.time + 3000;
 								if (NPCS.NPCInfo->aiFlags & NPCAI_ROSH)
 								{
@@ -4847,11 +4524,11 @@ static void Jedi_CombatDistance(const int enemy_dist)
 							&& NPCS.NPC->enemy && InFOV3(NPCS.NPC->enemy->r.currentOrigin, NPCS.NPC->r.currentOrigin, NPCS.NPC->client->ps.viewangles, 20, 30))
 						{
 							//taunt
-							if (TIMER_Done(NPCS.NPC, "chatter") && jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] < level.
+							if (TIMER_Done(NPCS.NPC, "chatter") && jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] < level.
 								time && NPCS.NPCInfo->blockedSpeechDebounceTime < level.time)
 							{
 								G_AddVoiceEvent(NPCS.NPC, Q_irand(EV_TAUNT1, EV_TAUNT3), 13000);
-								jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] = NPCS.NPCInfo->blockedSpeechDebounceTime =
+								jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] = NPCS.NPCInfo->blockedSpeechDebounceTime =
 									level.time + 3000;
 								if (NPCS.NPCInfo->aiFlags & NPCAI_ROSH)
 								{
@@ -4975,8 +4652,6 @@ static void Jedi_CombatDistance(const int enemy_dist)
 	}
 }
 
-
-
 static qboolean jedi_strafe(const int strafe_time_min, const int strafe_time_max, const int next_strafe_time_min,
 	const int next_strafe_time_max, const qboolean walking)
 {
@@ -5036,8 +4711,6 @@ static qboolean jedi_strafe(const int strafe_time_min, const int strafe_time_max
 	}
 	return qfalse;
 }
-
-
 
 static evasionType_t Jedi_CheckFlipEvasions(gentity_t* self, const float rightdot)
 {
@@ -5367,8 +5040,6 @@ static evasionType_t Jedi_CheckFlipEvasions(gentity_t* self, const float rightdo
 	return EVASION_NONE;
 }
 
-
-
 int Jedi_ReCalcParryTime(const gentity_t* self, const evasionType_t evasion_type)
 {
 	if (!self->client)
@@ -5461,8 +5132,6 @@ int Jedi_ReCalcParryTime(const gentity_t* self, const evasionType_t evasion_type
 	return 0;
 }
 
-
-
 static qboolean Jedi_SaberBusy(const gentity_t* self)
 {
 	if (self->client->ps.torsoTimer > 300
@@ -5478,8 +5147,6 @@ static qboolean Jedi_SaberBusy(const gentity_t* self)
 	}
 	return qfalse;
 }
-
-
 
 static qboolean Jedi_InNoAIAnim(const gentity_t* self)
 {
@@ -5567,8 +5234,6 @@ static qboolean Jedi_InNoAIAnim(const gentity_t* self)
 	return qfalse;
 }
 
-
-
 static void Jedi_CheckJumpEvasionSafety(usercmd_t* cmd, const evasionType_t evasion_type)
 {
 	if (evasion_type != EVASION_OTHER //not a FlipEvasion, which does it's own safety checks
@@ -5615,7 +5280,6 @@ static void Jedi_CheckJumpEvasionSafety(usercmd_t* cmd, const evasionType_t evas
 		}
 	}
 }
-
 
 evasionType_t jedi_saber_block_go(gentity_t* self, usercmd_t* cmd, vec3_t p_hitloc, vec3_t phit_dir,
 	const gentity_t* incoming,
@@ -6244,8 +5908,6 @@ evasionType_t jedi_saber_block_go(gentity_t* self, usercmd_t* cmd, vec3_t p_hitl
 				// Flip evasions (rare cinematic flips)
 				if ((evasion_type = Jedi_CheckFlipEvasions(self, rightdot)) != EVASION_NONE)
 				{
-					
-
 					if (d_JediAI.integer)
 					{
 						Com_Printf("[DODGE] Low Flip Evasion\n");
@@ -6422,8 +6084,6 @@ evasionType_t jedi_saber_block_go(gentity_t* self, usercmd_t* cmd, vec3_t p_hitl
 
 		// dodged, not block
 		self->client->ps.pm_flags |= PMF_TIME_KNOCKBACK;
-
-		
 	}
 	else
 	{
@@ -6473,8 +6133,6 @@ evasionType_t jedi_saber_block_go(gentity_t* self, usercmd_t* cmd, vec3_t p_hitl
 
 	return evasion_type;
 }
-
-
 
 static evasionType_t Jedi_CheckEvadeSpecialAttacks(void)
 {
@@ -6692,7 +6350,6 @@ static evasionType_t Jedi_CheckEvadeSpecialAttacks(void)
 	return EVASION_NONE;
 }
 
-
 static qboolean Jedi_SaberBlock(void)
 {
 	vec3_t hitloc, saber_tip_old, saber_tip, top, bottom, axis_point, saber_point, dir;
@@ -6832,8 +6489,6 @@ static qboolean Jedi_SaberBlock(void)
 		VectorCopy(tr.endpos, hitloc);
 	}
 
-	
-
 	evasionType_t evasion_type;
 
 	if ((evasion_type = jedi_saber_block_go(NPCS.NPC, &NPCS.ucmd, hitloc, dir, NULL, dist)) != EVASION_NONE)
@@ -6922,7 +6577,6 @@ static qboolean Jedi_SaberBlock(void)
 	}
 	return qtrue;
 }
-
 
 static qboolean Jedi_EvasionRoll(gentity_t* ai_ent)
 {
@@ -7097,8 +6751,6 @@ static qboolean Jedi_EvasionRoll(gentity_t* ai_ent)
 	}
 	return qfalse;
 }
-
-
 
 /*
 -------------------------
@@ -7541,8 +7193,6 @@ static void Jedi_EvasionSaber(vec3_t enemy_movedir, const float enemy_dist, vec3
 	}
 }
 
-
-
 /*
 ==========================================================================================
 INTERNAL AI ROUTINES
@@ -7670,8 +7320,6 @@ static gentity_t* Jedi_FindEnemyInCone(const gentity_t* self, gentity_t* fallbac
 	return bestEnemy;
 }
 
-
-
 static void jedi_set_enemy_info(vec3_t enemy_dest, vec3_t enemy_dir, float* enemy_dist, vec3_t enemy_movedir,
 	float* enemy_movespeed, const int prediction)
 {
@@ -7756,8 +7404,6 @@ static void jedi_set_enemy_info(vec3_t enemy_dest, vec3_t enemy_dir, float* enem
 	}
 }
 
-
-
 void NPC_EvasionSaber(void)
 {
 	if (NPCS.ucmd.upmove <= 0 //not jumping
@@ -7771,7 +7417,6 @@ void NPC_EvasionSaber(void)
 		Jedi_EvasionSaber(enemy_movedir, enemy_dist, enemy_dir);
 	}
 }
-
 
 // ============================================================================
 // Jedi_FaceEnemy
@@ -7915,8 +7560,6 @@ static void Jedi_FaceEnemy(const qboolean doPitch)
 		}
 	}
 }
-
-
 
 static void Jedi_DebounceDirectionChanges(void)
 {
@@ -8107,8 +7750,6 @@ static void Jedi_DebounceDirectionChanges(void)
 	}
 }
 
-
-
 void Jedi_TimersApply(void)
 {
 	//use careful anim/slower movement if not already moving
@@ -8182,8 +7823,6 @@ void Jedi_TimersApply(void)
 		NPCS.ucmd.buttons |= BUTTON_FORCE_LIGHTNING;
 	}
 }
-
-
 
 static void Jedi_CombatTimersUpdate(const int enemy_dist)
 {
@@ -8405,11 +8044,11 @@ static void Jedi_CombatTimersUpdate(const int enemy_dist)
 
 				if (Q_irand(0, 3) == 0 &&
 					NPCS.NPCInfo->blockedSpeechDebounceTime < level.time &&
-					jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] < level.time &&
+					jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] < level.time &&
 					NPCS.NPC->painDebounceTime < level.time - 1000)
 				{
 					G_AddVoiceEvent(NPCS.NPC, Q_irand(EV_GLOAT1, EV_GLOAT3), 13000);
-					jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] =
+					jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] =
 						NPCS.NPCInfo->blockedSpeechDebounceTime = level.time + 13000;
 				}
 			}
@@ -8547,8 +8186,6 @@ static void Jedi_CombatTimersUpdate(const int enemy_dist)
 	}
 }
 
-
-
 static void Jedi_CombatIdle(const int enemy_dist)
 {
 	if (!TIMER_Done(NPCS.NPC, "parryTime"))
@@ -8625,8 +8262,6 @@ static void Jedi_CombatIdle(const int enemy_dist)
 		}
 	}
 }
-
-
 
 static qboolean Jedi_AttackDecide(const int enemy_dist)
 {
@@ -8945,7 +8580,6 @@ static qboolean Jedi_AttackDecide(const int enemy_dist)
 	return qfalse;
 }
 
-
 static qboolean Jedi_Jump(vec3_t dest, const int goal_ent_num)
 {
 	if (qtrue)
@@ -9087,8 +8721,6 @@ static qboolean Jedi_Jump(vec3_t dest, const int goal_ent_num)
 	}
 	return qtrue;
 }
-
-
 
 static qboolean Jedi_TryJump(const gentity_t* goal)
 {
@@ -9277,8 +8909,6 @@ static qboolean Jedi_TryJump(const gentity_t* goal)
 	return qfalse;
 }
 
-
-
 static qboolean Jedi_Jumping(const gentity_t* goal)
 {
 	if (!TIMER_Done(NPCS.NPC, "forceJumpChasing") && goal)
@@ -9297,7 +8927,6 @@ static qboolean Jedi_Jumping(const gentity_t* goal)
 	}
 	return qfalse;
 }
-
 
 static void Jedi_CheckEnemyMovement(const float enemy_dist)
 {
@@ -9453,8 +9082,6 @@ static void Jedi_CheckEnemyMovement(const float enemy_dist)
 	//		If enemy doing back-attack and we're behind him keep running forward toward his back, don't strafe
 }
 
-
-
 static void Jedi_CheckJumps(void)
 {
 	if (NPCS.NPCInfo->scriptFlags & SCF_NO_ACROBATICS)
@@ -9579,7 +9206,6 @@ jump_unsafe:
 	NPCS.ucmd.upmove = 0;
 }
 
-
 void RT_CheckJump(void)
 {
 	int jump_ent_num = ENTITYNUM_NONE;
@@ -9671,7 +9297,6 @@ void RT_CheckJump(void)
 		if ((NPC_ClearLOS4(NPCS.NPC->enemy) || NPCS.NPCInfo->enemyLastSeenTime > level.time - 500)
 			&& InFOV3(jump_pos, NPCS.NPC->r.currentOrigin, NPCS.NPC->client->ps.viewangles, 20, 60))
 		{
-			
 		}
 
 		if (Jedi_Hunt() && !(NPCS.NPCInfo->aiFlags & NPCAI_BLOCKED))
@@ -9680,10 +9305,8 @@ void RT_CheckJump(void)
 			return;
 		}
 		//try to find a waypoint that can see enemy, jump from there
-		
 	}
 }
-
 
 static void Jedi_Combat(void)
 {
@@ -9783,11 +9406,11 @@ static void Jedi_Combat(void)
 					if (enemy_dist < 384.0f &&
 						Q_irand(0, 10) == 0 &&
 						NPCS.NPCInfo->blockedSpeechDebounceTime < level.time &&
-						jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] < level.time &&
+						jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] < level.time &&
 						NPC_ClearLOS4(NPCS.NPC->enemy) == qfalse)
 					{
 						G_AddVoiceEvent(NPCS.NPC, Q_irand(EV_JLOST1, EV_JLOST3), 3000);
-						jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] =
+						jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] =
 							NPCS.NPCInfo->blockedSpeechDebounceTime = level.time + 3000;
 					}
 
@@ -9821,7 +9444,6 @@ static void Jedi_Combat(void)
 						}
 						G_FreeEntity(temp_goal);
 					}
-					
 				}
 			}
 		}
@@ -10058,8 +9680,6 @@ static void Jedi_Combat(void)
 	}
 }
 
-
-
 /*
 ==========================================================================================
 EXTERNALLY CALLED BEHAVIOR STATES
@@ -10283,8 +9903,6 @@ void NPC_Jedi_Pain(gentity_t* self, gentity_t* attacker, const int damage)
 	}
 }
 
-
-
 static qboolean Jedi_CheckDanger(void)
 {
 	const int alert_event = NPC_CheckAlertEvents(qtrue, qtrue, -1, qfalse, AEL_MINOR);
@@ -10307,8 +9925,6 @@ static qboolean Jedi_CheckDanger(void)
 	}
 	return qfalse;
 }
-
-
 
 qboolean Jedi_CheckAmbushPlayer(void)
 {
@@ -10391,8 +10007,6 @@ qboolean Jedi_CheckAmbushPlayer(void)
 	return qfalse;
 }
 
-
-
 void Jedi_Ambush(gentity_t* self)
 {
 	animFlags_t flags = Jedi_Animationstyletable(self);
@@ -10429,8 +10043,6 @@ void Jedi_Ambush(gentity_t* self)
 	G_AddVoiceEvent(self, Q_irand(EV_ANGER1, EV_ANGER3), 10000);
 }
 
-
-
 qboolean Jedi_WaitingAmbush(const gentity_t* self)
 {
 	if (self->spawnflags & JSF_AMBUSH && self->client->noclip)
@@ -10439,8 +10051,6 @@ qboolean Jedi_WaitingAmbush(const gentity_t* self)
 	}
 	return qfalse;
 }
-
-
 
 /*
 -------------------------
@@ -10670,8 +10280,6 @@ finish:
 	}
 }
 
-
-
 static qboolean Jedi_CanPullBackSaber(const gentity_t* self)
 {
 	if (self->client->ps.saberBlocked == BLOCKED_PARRY_BROKEN && !TIMER_Done(self, "parryTime"))
@@ -10691,8 +10299,6 @@ static qboolean Jedi_CanPullBackSaber(const gentity_t* self)
 
 	return qtrue;
 }
-
-
 
 /*
 -------------------------
@@ -10820,8 +10426,6 @@ void NPC_BSJedi_FollowLeader(void)
 	}
 }
 
-
-
 // return qtrue if NPCS.NPC is allowed to perform a kata now
 static qboolean NPC_CanDoKata(gentity_t* self)
 {
@@ -10851,8 +10455,6 @@ static qboolean NPC_CanDoKata(gentity_t* self)
 
 	return qtrue;
 }
-
-
 
 static qboolean Jedi_CheckKataAttack(void)
 {
@@ -10909,8 +10511,6 @@ static qboolean Jedi_CheckKataAttack(void)
 	return qfalse;
 }
 
-
-
 // Helper: return qtrue if the NPC class is one of the excluded large/animal/boss types
 static qboolean NPC_IsExcludedForGestures(gentity_t* NPC)
 {
@@ -10930,8 +10530,6 @@ static qboolean NPC_IsExcludedForGestures(gentity_t* NPC)
 		return qfalse;
 	}
 }
-
-
 
 // Helper: return qtrue if both NPC and enemy are on the ground and NPC is in a neutral state
 static qboolean NPC_CanReactToEnemy(gentity_t* NPC, gentity_t* enemy)
@@ -10966,8 +10564,6 @@ static qboolean NPC_CanReactToEnemy(gentity_t* NPC, gentity_t* enemy)
 	return qtrue;
 }
 
-
-
 // Helper: play gloat voice and optionally deactivate saber
 static void NPC_PlayGloatAndMaybeSheathe(gentity_t* NPC)
 {
@@ -10983,8 +10579,6 @@ static void NPC_PlayGloatAndMaybeSheathe(gentity_t* NPC)
 
 	G_AddVoiceEvent(NPC, Q_irand(EV_GLOAT1, EV_GLOAT3), Q_irand(12000, 15000));
 }
-
-
 
 static void NPC_HandleSpeechDebounceAndIncrement(gentity_t* NPC)
 {
@@ -11050,13 +10644,10 @@ static inline void JediPressAttack(void)
 	NPCS.ucmd.buttons |= BUTTON_ATTACK;
 }
 
-
-
 static inline void JediPressAltAttack(void)
 {
 	NPCS.ucmd.buttons |= BUTTON_ALT_ATTACK;
 }
-
 
 // =====================
 // Distance Helpers
@@ -11074,15 +10665,11 @@ static float JediDistanceToEnemy(gentity_t* self)
 	return VectorLength(diff);
 }
 
-
-
 static qboolean JediInAttackRange(gentity_t* self, float minDist, float maxDist)
 {
 	const float dist = JediDistanceToEnemy(self);
 	return (dist >= minDist && dist <= maxDist) ? qtrue : qfalse;
 }
-
-
 
 static qboolean JediHasLineOfSight(gentity_t* self)
 {
@@ -11102,8 +10689,6 @@ static qboolean JediHasLineOfSight(gentity_t* self)
 	return InFront(enemyOrg, selfOrg, viewAngles, 0.5f);
 }
 
-
-
 // =====================
 // Cooldown Helpers
 // =====================
@@ -11113,14 +10698,10 @@ static qboolean JediAttackCooldownReady(gentity_t* self)
 	return TIMER_Done(self, "cinematicAttackCooldown") ? qtrue : qfalse;
 }
 
-
-
 static void JediSetAttackCooldown(gentity_t* self, int ms)
 {
 	TIMER_Set(self, "cinematicAttackCooldown", ms);
 }
-
-
 
 // =====================
 // Kata Helpers
@@ -11173,8 +10754,6 @@ static qboolean Jedi_CanUseKata(gentity_t* self)
 
 	return qtrue;
 }
-
-
 
 // =====================
 // Spacing Handler
@@ -11364,7 +10943,6 @@ static void JediHandleSpacing(gentity_t* self)
 	// Let attack logic take over
 }
 
-
 static void JediHandleCounterattacks(gentity_t* self)
 {
 	if (!self || !self->enemy || !self->client)
@@ -11416,8 +10994,6 @@ static void JediHandleCounterattacks(gentity_t* self)
 	self->client->ps.saberBlockingTime = level.time + 500;
 }
 
-
-
 static saberCombo_t JediBuildCombo(const saberMoveName_t* moves, int maxLen)
 {
 	saberCombo_t combo = { 0 };
@@ -11437,8 +11013,6 @@ static saberCombo_t JediBuildCombo(const saberMoveName_t* moves, int maxLen)
 	combo.length = maxLen;
 	return combo;
 }
-
-
 
 // =====================
 // Combo Selection Logic
@@ -11645,8 +11219,6 @@ static saberCombo_t JediChooseCombo(gentity_t* self)
 	return combo;
 }
 
-
-
 // =====================
 // Combo Execution Logic
 // =====================
@@ -11692,8 +11264,6 @@ static void JediExecuteCombo(gentity_t* self, const saberCombo_t* combo)
 	// Apply cooldown so we don't spam combos
 	JediSetAttackCooldown(self, Q_irand(40000, 90000));
 }
-
-
 
 // =====================
 // Should the Jedi attempt a cinematic combo?
@@ -11770,8 +11340,6 @@ static qboolean JediShouldAttack(gentity_t* self)
 
 	return qtrue;
 }
-
-
 
 static void Jedi_Attack(void)
 {
@@ -11999,7 +11567,7 @@ static void Jedi_Attack(void)
 				{
 					NPCS.NPCInfo->walkDebounceTime = -2;
 					G_AddVoiceEvent(NPCS.NPC, Q_irand(EV_VICTORY1, EV_VICTORY3), 3000);
-					jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] = level.time + 3000;
+					jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] = level.time + 3000;
 					NPCS.NPCInfo->desiredPitch = 0;
 					NPCS.NPCInfo->goalEntity = NULL;
 				}
@@ -12027,7 +11595,7 @@ static void Jedi_Attack(void)
 				{
 					// Saber turned off in hand, gloat
 					G_AddVoiceEvent(NPCS.NPC, Q_irand(EV_VICTORY1, EV_VICTORY3), 6000);
-					jediSpeechDebounceTime[NPCS.NPC->client->playerTeam] = level.time + 6000;
+					jediSpeechDebounceTime[JEDI_SPEECH_TEAM(NPCS.NPC->client->playerTeam)] = level.time + 6000;
 					NPCS.NPCInfo->desiredPitch = 0;
 					NPCS.NPCInfo->goalEntity = NULL;
 				}
@@ -12524,8 +12092,6 @@ static void Jedi_Attack(void)
 	}
 }
 
-
-
 //added all SP code used for the Rosh boss fight
 qboolean Rosh_BeingHealed(const gentity_t* self)
 {
@@ -12541,8 +12107,6 @@ qboolean Rosh_BeingHealed(const gentity_t* self)
 	}
 	return qfalse;
 }
-
-
 
 static qboolean Rosh_TwinPresent(void)
 {
@@ -12560,8 +12124,6 @@ static qboolean Rosh_TwinPresent(void)
 	}
 	return qtrue;
 }
-
-
 
 static qboolean rosh_twin_near_by(const gentity_t* self)
 {
@@ -12591,7 +12153,6 @@ static qboolean rosh_twin_near_by(const gentity_t* self)
 	}
 	return qfalse;
 }
-
 
 qboolean Kothos_HealRosh(void)
 {
@@ -12668,8 +12229,6 @@ qboolean Kothos_HealRosh(void)
 	return qfalse;
 }
 
-
-
 void Kothos_PowerRosh(void)
 {
 	if (NPCS.NPC->client
@@ -12691,8 +12250,6 @@ void Kothos_PowerRosh(void)
 	}
 }
 
-
-
 static qboolean Kothos_Retreat(void)
 {
 	if (NPCS.NPCInfo->aiFlags & NPCAI_BLOCKED)
@@ -12704,7 +12261,6 @@ static qboolean Kothos_Retreat(void)
 	}
 	return qtrue;
 }
-
 
 static float Twins_DangerDist(void)
 {
@@ -12719,7 +12275,6 @@ static float Twins_DangerDist(void)
 		return TWINS_DANGER_DIST_HARD;
 	}
 }
-
 
 qboolean Jedi_InSpecialMove(void)
 {
@@ -13111,8 +12666,6 @@ qboolean Jedi_InSpecialMove(void)
 	return qfalse;
 }
 
-
-
 // ============================================================================
 // NPC_CheckEvasion
 //
@@ -13268,7 +12821,6 @@ void NPC_CheckEvasion(void)
 		}
 	}
 }
-
 
 void NPC_BSJedi_Default(void)
 {
@@ -13471,8 +13023,6 @@ void NPC_BSJedi_Default(void)
 	}
 }
 
-
-
 void Boba_Precache(void)
 {
 	G_SoundIndex("sound/jetpack/ignite.wav");
@@ -13496,7 +13046,6 @@ void Boba_Precache(void)
 	G_EffectIndex("flamethrower/flame_impact");
 }
 
-
 void Boba_ChangeWeapon(const int wp)
 {
 	if (NPCS.NPC->s.weapon == wp)
@@ -13506,8 +13055,6 @@ void Boba_ChangeWeapon(const int wp)
 	NPC_ChangeWeapon(wp);
 	G_AddEvent(NPCS.NPC, EV_GENERAL_SOUND, G_SoundIndex("sound/weapons/change.wav"));
 }
-
-
 
 qboolean Boba_StopKnockdown(gentity_t* self, const gentity_t* pusher, const vec3_t push_dir,
 	const qboolean force_knockdown)
@@ -13591,8 +13138,6 @@ qboolean Boba_StopKnockdown(gentity_t* self, const gentity_t* pusher, const vec3
 	return qtrue;
 }
 
-
-
 void Boba_SetJetpackAnims(const gentity_t* self)
 {
 	vec3_t angs, mvnt;
@@ -13636,8 +13181,6 @@ void Boba_SetJetpackAnims(const gentity_t* self)
 	}
 }
 
-
-
 void Boba_FlyStart(gentity_t* self)
 {
 	//switch to seeker AI for a while
@@ -13661,8 +13204,6 @@ void Boba_FlyStart(gentity_t* self)
 	}
 }
 
-
-
 void Boba_ForceFlyStart(gentity_t* self, const int jetTime)
 {
 	//switch to seeker AI for a while
@@ -13685,8 +13226,6 @@ void Boba_ForceFlyStart(gentity_t* self, const int jetTime)
 	}
 }
 
-
-
 void Boba_FlyStop(gentity_t* self)
 {
 	self->client->ps.gravity = g_gravity.value;
@@ -13706,14 +13245,10 @@ void Boba_FlyStop(gentity_t* self)
 	}
 }
 
-
-
 qboolean Boba_Flying(const gentity_t* self)
 {
 	return self->client->ps.eFlags2 & EF2_FLYING;
 }
-
-
 
 void Boba_FlyThink(gentity_t* self)
 {
@@ -13724,8 +13259,6 @@ void Boba_FlyThink(gentity_t* self)
 		}
 }
 
-
-
 void Boba_SetBolts(const gentity_t* self)
 {
 	if (self && self->client)
@@ -13734,7 +13267,6 @@ void Boba_SetBolts(const gentity_t* self)
 		self->client->renderInfo.handRBolt = trap->G2API_AddBolt(self->ghoul2, 0, "*r_hand");
 	}
 }
-
 
 void Boba_JetpackDecideDefault(void)
 {
@@ -13789,8 +13321,6 @@ void Boba_JetpackDecideDefault(void)
 	}
 }
 
-
-
 void Boba_JetpackDecideCombat(void)
 {
 	const float gDist = G_GroundDistance(NPCS.NPC);
@@ -13810,8 +13340,6 @@ void Boba_JetpackDecideCombat(void)
 
 	Boba_FlyThink(NPCS.NPC);
 }
-
-
 
 void Boba_ChooseWeapon(void)
 {
@@ -13844,8 +13372,6 @@ void Boba_ChooseWeapon(void)
 		TIMER_Set(NPCS.NPC, "nextWeaponDelay", Q_irand(5000, 12000));
 	}
 }
-
-
 
 void Boba_FireFlameThrower(gentity_t* self)
 {
@@ -13898,8 +13424,6 @@ void Boba_FireFlameThrower(gentity_t* self)
 	}
 }
 
-
-
 static void Boba_StartFlameThrower(gentity_t* self)
 {
 	const int flameTime = 4000; //Q_irand( 1000, 3000 );
@@ -13925,8 +13449,6 @@ static void Boba_StartFlameThrower(gentity_t* self)
 	G_PlayEffectID(G_EffectIndex("flamethrower/flamethrower_mp"), org, dir);
 }
 
-
-
 static void Boba_DoFlameThrower(gentity_t* self)
 {
 	if (self->client->ps.jetpackFuel < 10)
@@ -13940,8 +13462,6 @@ static void Boba_DoFlameThrower(gentity_t* self)
 	}
 	Boba_FireFlameThrower(self);
 }
-
-
 
 static void Boba_DoSniper(const gentity_t* self)
 {
@@ -13968,7 +13488,6 @@ static void Boba_DoSniper(const gentity_t* self)
 	NPC_FaceEnemy(qtrue);
 	NPC_UpdateAngles(qtrue, qtrue);
 }
-
 
 void Boba_FireWristMissile(gentity_t* self, const int whichMissile)
 {
@@ -14082,8 +13601,6 @@ void Boba_FireWristMissile(gentity_t* self, const int whichMissile)
 	self->s.weapon = oldWeapon;
 }
 
-
-
 void Boba_EndWristMissile(const gentity_t* self, const int which_missile)
 {
 	if (missileStates[which_missile].hold)
@@ -14092,7 +13609,6 @@ void Boba_EndWristMissile(const gentity_t* self, const int which_missile)
 		self->client->ps.torsoTimer = 0;
 	}
 }
-
 
 void Boba_TacticsSelect()
 {
@@ -14209,12 +13725,8 @@ void Boba_TacticsSelect()
 	}
 }
 
-
-
 void Boba_DoAmbushWait(gentity_t* self)
 {}
-
-
 
 void Boba_Tactics()
 {
@@ -14264,8 +13776,6 @@ void Boba_Tactics()
 	NPC_UpdateAngles(qtrue, qtrue);
 }
 
-
-
 float G_GroundDistance(const gentity_t* self)
 {
 	if (!self)
@@ -14287,8 +13797,6 @@ float G_GroundDistance(const gentity_t* self)
 
 	return VectorLength(down);
 }
-
-
 
 void Boba_FireDecide(void)
 {
@@ -14613,7 +14121,6 @@ void Boba_FireDecide(void)
 	}
 }
 
-
 void Sphereshield_On(gentity_t* self)
 {//cloak this entity
 	if (!self || !self->client)
@@ -14634,8 +14141,6 @@ void Sphereshield_On(gentity_t* self)
 	}
 }
 
-
-
 void Sphereshield_Off(gentity_t* self)
 {//decloak this entity
 	if (!self || !self->client)
@@ -14652,14 +14157,10 @@ void Sphereshield_Off(gentity_t* self)
 	}
 }
 
-
-
 saberMoveName_t G_PickAutoMultiKick(gentity_t* self, qboolean allowSingles, qboolean storeMove)
 {
 	return LS_NONE;
 }
-
-
 
 qboolean Jedi_QuickReactions(gentity_t* self)
 {
@@ -14670,7 +14171,6 @@ qboolean Jedi_QuickReactions(gentity_t* self)
 	return qfalse;
 }
 
-
 // The per-level tables (forceJumpHeight[], mindTrickTime[], forceGripDamage[], ...) only have entries for
 // FORCE_LEVEL_0..FORCE_LEVEL_3, but levels 4 and 5 exist (NPCS.NPC files allow up to 5, setForceMindTrick and
 // setforceall give level 4). Indexing a table with those read past its end into the next table (a level-4
@@ -14680,8 +14180,6 @@ static int FP_TableLevel(const int level)
 {
 	return level < FORCE_LEVEL_0 ? FORCE_LEVEL_0 : level > FORCE_LEVEL_3 ? FORCE_LEVEL_3 : level;
 }
-
-
 
 static qboolean PM_EvasionAnim(const int anim)
 {
@@ -14703,8 +14201,6 @@ static qboolean PM_EvasionAnim(const int anim)
 	}
 }
 
-
-
 static qboolean PM_EvasionHoldAnim(const int anim)
 {
 	switch (anim)
@@ -14725,17 +14221,12 @@ static qboolean PM_EvasionHoldAnim(const int anim)
 	return qfalse;
 }
 
-
-
 static qboolean char_is_force_user_attacker(const gentity_t* self)
 {
 	// SP NPC files' "forceUser" key (client->charForceUser) isn't read by MP yet
 	(void)self;
 	return qfalse;
 }
-
-
-
 
 static qboolean NPC_Should_Block(const gentity_t* npc)
 {
@@ -14858,8 +14349,6 @@ static qboolean NPC_Should_Block(const gentity_t* npc)
 	// If already blocking and still within the window → stay blocking
 	return blockActive;
 }
-
-
 
 static qboolean wp_saber_Off_Dash_Evasion(gentity_t* self, vec3_t hitloc)
 {
@@ -15124,8 +14613,6 @@ static qboolean wp_saber_Off_Dash_Evasion(gentity_t* self, vec3_t hitloc)
 
 	return qtrue;
 }
-
-
 
 static qboolean wp_saber_block_check_random(gentity_t* self, vec3_t hitloc)
 {

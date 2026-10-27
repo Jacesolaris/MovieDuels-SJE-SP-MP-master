@@ -71,6 +71,7 @@ const char* showLoadPowersName[] =
 	"SP_INGAME_FEAR2",
 	"SP_INGAME_DEADLYSIGHT2",
 	"SP_INGAME_PROJECTION2",
+	"DARKSTASIS_NAME",
 	nullptr,
 };
 

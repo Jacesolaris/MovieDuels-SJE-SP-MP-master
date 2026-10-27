@@ -5461,6 +5461,7 @@ static const char* g_bindCommands[] =
 	"force_deadlysight",
 	"force_projection",
 	"force_blast",
+	"force_darkstasis",
 #endif
 	"force_throw",
 	"forcenext",

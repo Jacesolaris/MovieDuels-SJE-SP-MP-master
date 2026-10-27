@@ -812,7 +812,7 @@ static constexpr charMD_t charMD[] = {
 	{ "Rebel Alliance Officer",			"[Mysteries of the Sith]",				"",				"rebel_officer1",				"mots_rebel_officer",	"model_default",				"menu_wp_rebelblaster",		"",						"",				"",			0,		0,		ERA_REBELS,			TORSO_WEAPONREST2,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/rebel1/misc/anger3.mp3",				"",		1.0f,	"@MD_CHAR_DESC_REBEL_ALLIANCE_OFFICER",		 qtrue },
 	{ "Rebel Alliance Officer",			"[Mysteries of the Sith]",				"",				"rebel_officer2",				"mots_rebel_officer2",	"model_default",				"menu_wp_rebelblaster",		"",						"",				"",			0,		0,		ERA_REBELS,			TORSO_WEAPONREST2,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/rebel1/misc/anger3.mp3",				"",		1.0f,	"@MD_CHAR_DESC_REBEL_ALLIANCE_OFFICER",		 qtrue },
 	{ "Kota's Militia",					"[The Force Unleashed - Saboteur]",		"",				"militiasaboteur",				"militiasaboteur",		"model_default",				"menu_wp_rebelblaster",		"",						"",				"",			0,		0,		ERA_REBELS,			TORSO_WEAPONREST2,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/militiasaboteur/misc/taunt1.mp3",		"",		1.0f,	"@MD_CHAR_DESC_KOTAS_MILITIA",				 qtrue },
-	{ "Kota's Militia",					"[The Force Unleashed - Trooper]",		"",				"militiatrooper",				"militiatrooper",		"model_default",				"militia_baton",			"",						"",				"",			0,		0,		ERA_REBELS,			BOTH_MD_CIN_1,						BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/militiasaboteur/misc/taunt1.mp3",		"",		1.0f,	"@MD_CHAR_DESC_KOTAS_MILITIA",				 qtrue },	
+	{ "Kota's Militia",					"[The Force Unleashed - Trooper]",		"",				"militiatrooper",				"militiatrooper",		"model_default",				"militia_baton",			"",						"",				"",			0,		0,		ERA_REBELS,			BOTH_MD_CIN_1,						BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/militiasaboteur/misc/taunt1.mp3",		"",		1.0f,	"@MD_CHAR_DESC_KOTAS_MILITIA",				 qtrue },
 	{ "Rosh Penin",						"[Jedi Academy]",						"",				"rosh_penin",					"rosh_penin_new",		"model_default",				"training",					"",						"yellow",		"",			3,		8,		ERA_REBELS,			BOTH_SABERFAST_STANCE_JKA,			BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/rosh/misc/victory2.mp3",				"",		1.0f,	"@MD_CHAR_DESC_ROSH_PENIN",					qfalse },
 	{ "Sabine Wren",					"[Rebels]",								"",				"md_sabine",					"sabine",				"model_default",				"darksaber_reb",			"",						"black",		"",			1,		6,		ERA_REBELS,			BOTH_SABERFAST_STANCE_JKA,			BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/sabine/misc/taunt4.mp3",				"",		1.0f,	"@MD_CHAR_DESC_SABINE_WREN",				qfalse },
 	{ "Sabine Wren",					"[Rebels - Helmet]",					"",				"md_sabine_helmet",				"sabine",				"model_helmet",					"menu_wp_clonepistol",		"menu_wp_clonepistol",	"",				"",			0,		0,		ERA_REBELS,			BOTH_WEAPONREST2P,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/sabine/misc/taunt4.mp3",				"",		1.0f,	"@MD_CHAR_DESC_SABINE_WREN",				 qtrue },
@@ -889,7 +889,7 @@ static constexpr charMD_t charMD[] = {
 	{ "Mercenary",						"[Jedi Academy - Bowcaster]",			"",				"human_merc_bow",				"human_merc",			"model_default",				"menu_wp_bowcaster",		"",						"",				"",			0,		0,		ERA_EMPIRE,			TORSO_WEAPONREST3,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/humanmerc1/misc/taunt.mp3",			"",		1.0f,	"@MD_CHAR_DESC_HUMAN_MERCENARY",			 qtrue },
 	{ "Mercenary",						"[Jedi Academy - Repeater]",			"",				"human_merc_rep",				"human_merc",			"model_default",				"menu_wp_repeater",			"",						"",				"",			0,		0,		ERA_EMPIRE,			TORSO_WEAPONREST3,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/humanmerc1/misc/taunt.mp3",			"",		1.0f,	"@MD_CHAR_DESC_HUMAN_MERCENARY",			 qtrue },
 	{ "Mercenary",						"[Jedi Academy - Flechette]",			"",				"human_merc_flc",				"human_merc",			"model_default",				"menu_wp_flechette",		"",						"",				"",			0,		0,		ERA_EMPIRE,			TORSO_WEAPONREST3,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/humanmerc1/misc/taunt.mp3",			"",		1.0f,	"@MD_CHAR_DESC_HUMAN_MERCENARY",			 qtrue },
-	{ "Mercenary",						"[Jedi Academy - Concussion]",			"",				"human_merc_cnc",				"human_merc",			"model_default",				"menu_wp_concussion",		"",						"",				"",			0,		0,		ERA_EMPIRE,			TORSO_WEAPONREST3,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/humanmerc1/misc/taunt.mp3",			"",		1.0f,	"@MD_CHAR_DESC_HUMAN_MERCENARY",			 qtrue },	
+	{ "Mercenary",						"[Jedi Academy - Concussion]",			"",				"human_merc_cnc",				"human_merc",			"model_default",				"menu_wp_concussion",		"",						"",				"",			0,		0,		ERA_EMPIRE,			TORSO_WEAPONREST3,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/humanmerc1/misc/taunt.mp3",			"",		1.0f,	"@MD_CHAR_DESC_HUMAN_MERCENARY",			 qtrue },
 	{ "Moff Gideon",					"[The Mandalorian]",					"",				"md_gideon",					"gideon",				"model_default",				"darksaber_tm",				"",						"black",		"",			2,		4,		ERA_EMPIRE,			BOTH_SABERSLOW_STANCE_JKA,			BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/finn/gideon/taunt4.mp3",				"",		1.0f,	"@MD_CHAR_DESC_MOFF_GIDEON",				qfalse },
 	{ "Noghri",							"[Jedi Academy]",						"",				"Noghri",						"noghri",				"model_default",				"",							"",						"",				"",			0,		0,		ERA_EMPIRE,			BOTH_MD_CIN_1,						BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/noghri1/misc/taunt1.mp3",				"",		1.0f,	"@MD_CHAR_DESC_NOGHRI",						qfalse },
 	{ "Pic",							"[Dark Forces II]",						"",				"md_pic",						"Pic",					"model_default",				"",							"",						"",				"",			1,		2,		ERA_EMPIRE,			BOTH_MD_CIN_1,						BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/pic/misc/taunt1.mp3",					"",		0.6f,	"@MD_CHAR_DESC_PIC",						qfalse },
@@ -912,7 +912,7 @@ static constexpr charMD_t charMD[] = {
 	{ "Purge Trooper",					"[Jedi Fallen Order]",					"",				"purge_trooper",				"purgetrooper",			"model_staff",					"purge_staff",				"",						"",				"",			7,		128,	ERA_EMPIRE,			BOTH_STAND_BLOCKING_ON_STAFF,		BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/purgetrooper/misc/taunt4.mp3",			"",		1.0f,	"@MD_CHAR_DESC_PURGE_TROOPER",				qfalse },
 	{ "Purge Trooper",					"[Jedi Fallen Order - Commander]",		"",				"purge_trooper_comm",			"purgetrooper",			"model_default",				"menu_wp_clonerifle",		"",						"",				"",			0,		0,		ERA_EMPIRE,			TORSO_WEAPONREST3,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/purgetrooper/misc/taunt4.mp3",			"",		1.0f,	"@MD_CHAR_DESC_PURGE_TROOPER",				 qtrue },
 	{ "Purge Trooper",					"[Jedi Fallen Order - Hammer]",			"",				"purge_trooper_hammer",			"purgetrooper",			"model_hammer",					"purge_hammer",				"",						"",				"",			7,		128,	ERA_EMPIRE,			BOTH_STAND_BLOCKING_ON_STAFF,		BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/purgetrooper/misc/taunt4.mp3",			"",		1.0f,	"@MD_CHAR_DESC_PURGE_TROOPER",				 qtrue },
-	{ "Purge Trooper",					"[Jedi Fallen Order - Dagger]",			"",				"purge_trooper_dual",			"purgetrooper",			"model_baton",					"purge_dagger",				"purge_dagger",			"",				"",			6,		64,		ERA_EMPIRE,			BOTH_SABERDUAL_STANCE_JKA,			BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/purgetrooper/misc/taunt4.mp3",			"",		1.0f,	"@MD_CHAR_DESC_PURGE_TROOPER",				 qtrue },	
+	{ "Purge Trooper",					"[Jedi Fallen Order - Dagger]",			"",				"purge_trooper_dual",			"purgetrooper",			"model_baton",					"purge_dagger",				"purge_dagger",			"",				"",			6,		64,		ERA_EMPIRE,			BOTH_SABERDUAL_STANCE_JKA,			BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/purgetrooper/misc/taunt4.mp3",			"",		1.0f,	"@MD_CHAR_DESC_PURGE_TROOPER",				 qtrue },
 	{ "Rax Joris",						"[Jedi Academy]",						"",				"rax",							"rax_joris",			"model_default",				"",							"",						"",				"",			0,		0,		ERA_EMPIRE,			BOTH_STAND4,						BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/rax/misc/taunt.mp3",					"",		1.0f,	"@MD_CHAR_DESC_RAX_JORIS",					qfalse },
 	{ "Saber Training Droid",			"[The Force Unleashed]",				"",				"sabertraining_droid",			"sabertraining_droid",	"model_default",				"training",					"",						"blue",			"",			2,		4,		ERA_EMPIRE,			BOTH_SABERFAST_STANCE_JKA,			BOTH_PAIN1,			BOTH_PAIN2,			"",													"",		1.0f,	"@MD_CHAR_DESC_SABER_TRAINING_DROID",		qfalse },
 	{ "Force Training Droid",			"[The Force Unleashed]",				"",				"combattraining_droid",			"sabertraining_droid",	"model_default",				"",							"",						"",				"",			0,		0,		ERA_EMPIRE,			BOTH_MD_CIN_1,						BOTH_PAIN1,			BOTH_PAIN2,			"",													"",		1.0f,	"@MD_CHAR_DESC_FORCE_TRAINING_DROID",		 qtrue },
@@ -931,7 +931,7 @@ static constexpr charMD_t charMD[] = {
 	{ "Scout Trooper",					"[Episode IV-VI - Scout]",				"",				"scouttrooper",					"scouttrooper",			"model_default",				"menu_wp_disruptor",		"",						"",				"",			0,		0,		ERA_EMPIRE,			TORSO_WEAPONREST3,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/st1/misc/anger3.mp3",					"",		1.0f,	"@MD_CHAR_DESC_STORMTROOPER",				 qtrue },
 	{ "Scout Trooper",					"[Episode IV-VI - Scout Commander]",	"",				"scouttrooper_officer",			"scouttrooper",			"model_captain",				"militia_baton",			"",						"",				"",			0,		0,		ERA_EMPIRE,			BOTH_MD_CIN_1,						BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/st1/misc/anger3.mp3",					"",		1.0f,	"@MD_CHAR_DESC_STORMTROOPER",				 qtrue },
 	{ "Snowtrooper",					"[Episode IV-VI]",						"",				"SnowTrooper",					"snowtrooper",			"model_default",				"menu_wp_blaster",			"",						"",				"",			0,		0,		ERA_EMPIRE,			TORSO_WEAPONREST3,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/st1/misc/anger3.mp3",					"",		1.0f,	"@MD_CHAR_DESC_STORMTROOPER",				 qtrue },
-	{ "Tie Fighter Pilot",				"[Episode IV-VI - Pilot]",				"",				"StormPilot",					"stormpilot",			"model_default",				"menu_wp_blaster_pistol",	"",						"",				"",			0,		0,		ERA_EMPIRE,			TORSO_WEAPONREST2,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/stofficer1/misc/victory1.mp3",			"",		1.0f,	"@MD_CHAR_DESC_STORMTROOPER",				 qtrue },	
+	{ "Tie Fighter Pilot",				"[Episode IV-VI - Pilot]",				"",				"StormPilot",					"stormpilot",			"model_default",				"menu_wp_blaster_pistol",	"",						"",				"",			0,		0,		ERA_EMPIRE,			TORSO_WEAPONREST2,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/stofficer1/misc/victory1.mp3",			"",		1.0f,	"@MD_CHAR_DESC_STORMTROOPER",				 qtrue },
 	{ "Shock Trooper",					"[Coruscant Guard]",					"",				"stshock",						"stshock",				"model_default",				"menu_wp_repeater",			"",						"",				"",			0,		0,		ERA_EMPIRE,			TORSO_WEAPONREST3,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/st1/misc/anger3.mp3",					"",		1.0f,	"@MD_CHAR_DESC_STORMTROOPER",				 qtrue },
 	{ "Shock Trooper Commander",		"[Coruscant Guard]",					"",				"stshock2",						"stshock",				"model_commander",				"menu_wp_flechette",		"",						"",				"",			0,		0,		ERA_EMPIRE,			TORSO_WEAPONREST3,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/st1/misc/anger3.mp3",					"",		1.0f,	"@MD_CHAR_DESC_STORMTROOPER",				 qtrue },
 	{ "Stormtrooper",					"[Vader's Fist]",						"",				"501st_st",						"501st_stormie",		"model_stcommando",				"menu_wp_blaster",			"",						"",				"",			0,		0,		ERA_EMPIRE,			TORSO_WEAPONREST3,					BOTH_PAIN1,			BOTH_PAIN2,			"sound/chars/st1/misc/anger3.mp3",					"",		1.0f,	"@MD_CHAR_DESC_STORMTROOPER",				 qtrue },
@@ -4036,7 +4036,8 @@ static void UI_CalcForceStatus()
 		pState->forcePowerLevel[FP_DESTRUCTION] +
 		pState->forcePowerLevel[FP_LIGHTNING_STRIKE] +
 		pState->forcePowerLevel[FP_FEAR] +
-		pState->forcePowerLevel[FP_DEADLYSIGHT];
+		pState->forcePowerLevel[FP_DEADLYSIGHT] +
+		pState->forcePowerLevel[FP_DARK_STASIS];
 
 	const float total = lightSide + darkSide;
 
@@ -5757,8 +5758,8 @@ void UI_LoadMenus(const char* menuFile, const qboolean reset)
 	Com_Printf("----------------------- MovieDuels-SJE-SP -----------------------\n");
 	Com_Printf("-----------------------------------------------------------------\n");
 	Com_Printf("-------------------------- Update 9.0 ---------------------------\n");
-	Com_Printf("--------------------- Build Date 25/10/2026 ---------------------\n");// build date
-	Com_Printf("--------------------------- Build 05 ----------------------------\n");
+	Com_Printf("--------------------- Build Date 27/10/2026 ---------------------\n");// build date
+	Com_Printf("--------------------------- Build 07 ----------------------------\n");
 	Com_Printf("-----------------------------------------------------------------\n");
 	Com_Printf("-------------------------- Lightsaber ---------------------------\n");
 	Com_Printf("---------- An elegant weapon for a more civilized age -----------\n");
@@ -7499,7 +7500,7 @@ static void UI_UpdateFightingStyleChoices()
 }
 #endif // !JK2_MODE
 
-constexpr auto MAX_POWER_ENUMS = 25;
+constexpr auto MAX_POWER_ENUMS = 26;
 
 using powerEnum_t = struct
 {
@@ -7554,6 +7555,7 @@ static powerEnum_t powerEnums[MAX_POWER_ENUMS] =
 	{ "deadlysight", FP_DEADLYSIGHT },
 	{ "projection", FP_PROJECTION },
 	{ "blast", FP_BLAST },
+	{ "darkstasis", FP_DARK_STASIS },
 #endif // !JK2_MODE
 };
 
@@ -7992,6 +7994,7 @@ static void UI_DemoSetForceLevels()
 		uiInfo.forcePowerLevel[FP_DEADLYSIGHT] = 0;
 		uiInfo.forcePowerLevel[FP_BLAST] = 0;
 		uiInfo.forcePowerLevel[FP_PROJECTION] = 0;
+		uiInfo.forcePowerLevel[FP_DARK_STASIS] = 0;
 	}
 	else
 	{
@@ -8028,6 +8031,7 @@ static void UI_DemoSetForceLevels()
 		uiInfo.forcePowerLevel[FP_DEADLYSIGHT] = 0;
 		uiInfo.forcePowerLevel[FP_BLAST] = 0;
 		uiInfo.forcePowerLevel[FP_PROJECTION] = 0;
+		uiInfo.forcePowerLevel[FP_DARK_STASIS] = 0;
 	}
 
 	if (pState)
@@ -8063,6 +8067,8 @@ static void UI_DemoSetForceLevels()
 		uiInfo.forcePowerLevel[FP_PROJECTION] = Q_max(pState->forcePowerLevel[FP_PROJECTION],
 			uiInfo.forcePowerLevel[FP_PROJECTION]);
 		uiInfo.forcePowerLevel[FP_BLAST] = Q_max(pState->forcePowerLevel[FP_BLAST], uiInfo.forcePowerLevel[FP_BLAST]);
+		uiInfo.forcePowerLevel[FP_DARK_STASIS] = Q_max(pState->forcePowerLevel[FP_DARK_STASIS],
+			uiInfo.forcePowerLevel[FP_DARK_STASIS]);
 	}
 }
 #endif // !JK2_MODE

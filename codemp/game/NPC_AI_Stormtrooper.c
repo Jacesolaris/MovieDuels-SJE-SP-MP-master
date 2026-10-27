@@ -90,7 +90,6 @@ static int st_engine_mode = 2;
 // SP's in_camera: MP has no SP cinematic camera
 static qboolean st_in_camera = qfalse;
 
-
 // ---- SP top-level declarations (ported) ----
 /*
 ===========================================================================
@@ -114,40 +113,13 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 ===========================================================================
 */
 
-
-
-
 //(100 squared) don't stop running backwards if your goal is less than 100 away;
 #define SABER_AVOID_DIST (128.0f) //256.0f;
 #define SABER_AVOID_DIST_SQ (SABER_AVOID_DIST*SABER_AVOID_DIST)
 
-
-
-
-
 static qboolean doMove;
 
-
-
-
-
-
 //Local state enums
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /*
 -------------------------
@@ -155,26 +127,11 @@ ST_Move
 -------------------------
 */
 
-
-
-
-
-
-
-
-
 /*
 -------------------------
 NPC_ST_InvestigateEvent
 -------------------------
 */
-
-
-
-
-
-
-
 
 /*
 -------------------------
@@ -199,58 +156,17 @@ void NPC_BSST_Idle( void )
 	NPC_UpdateAngles( qtrue, qtrue );
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /*
 -------------------------
 NPC_BSST_Attack
 -------------------------
 */
 
-
-
-
-
 //===========Enhanced AI====================
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // ---- MP top-level declarations ----
 
-
 extern void G_SoundOnEnt(gentity_t* ent, soundChannel_t channel, const char* sound_path);
-
 
 //Local state enums
 enum
@@ -259,7 +175,6 @@ enum
 	LSTATE_UNDERFIRE,
 	LSTATE_INVESTIGATE,
 };
-
 
 enum
 {
@@ -279,9 +194,7 @@ enum
 	SPEECH_PUSHED
 };
 
-
 extern qboolean PM_InOnGroundAnim(const int anim);
-
 
 /*
 -------------------------
@@ -290,9 +203,7 @@ ST_Move
 */
 void ST_TransferMoveGoal(const gentity_t* self, const gentity_t* other);
 
-
 extern float Q_flrand(float min, float max);
-
 
 /*
 -------------------------
@@ -301,7 +212,6 @@ NPC_ST_InvestigateEvent
 */
 
 #define	MAX_CHECK_THRESHOLD	1
-
 
 /*
 -------------------------
@@ -318,9 +228,7 @@ FIXME: work in pairs?
 */
 extern qboolean AI_RefreshGroup(AIGroupInfo_t* group);
 
-
 extern void G_Knockdown(gentity_t* self, gentity_t* attacker, const vec3_t push_dir, float strength, const qboolean breakSaberLock);
-
 
 /*
 -------------------------
@@ -350,9 +258,7 @@ extern qboolean Droideka_IsNPC(const gentity_t* ent); //NPC_AI_AssassinDroid.c
 
 static qboolean dekaRolled; // ST_DekaTactics moved the droideka this think, ST_Move must not move it again
 
-
 static vec3_t dekaRelocateSpot[MAX_GENTITIES]; // where each droideka's reposition roll goes
-
 
 extern qboolean PM_CrouchAnim(const int anim);
 #define MELEE_DIST_SQUARED 6400
@@ -420,15 +326,11 @@ static qboolean ST_DekaStartRelocate(void);
 static void ST_DekaTactics(void);
 static void npc_check_speak(gentity_t* speaker_npc);
 
-
-
 void NPC_Saboteur_Precache(void)
 {
 	G_SoundIndex("sound/chars/shadowtrooper/cloak.wav");
 	G_SoundIndex("sound/chars/shadowtrooper/decloak.wav");
 }
-
-
 
 static void Saboteur_Decloak(gentity_t* self, const int uncloak_time)
 {
@@ -444,8 +346,6 @@ static void Saboteur_Decloak(gentity_t* self, const int uncloak_time)
 		}
 	}
 }
-
-
 
 void Saboteur_Cloak(gentity_t* self)
 {
@@ -473,7 +373,6 @@ void Saboteur_Cloak(gentity_t* self)
 		}
 	}
 }
-
 
 void ST_AggressionAdjust(const gentity_t* self, const int change)
 {
@@ -505,8 +404,6 @@ void ST_AggressionAdjust(const gentity_t* self, const int change)
 	}
 }
 
-
-
 void ST_ClearTimers(const gentity_t* ent)
 {
 	TIMER_Set(ent, "chatter", 0);
@@ -526,7 +423,6 @@ void ST_ClearTimers(const gentity_t* ent)
 	TIMER_Set(ent, "strafeRight", 0);
 	TIMER_Set(ent, "strafeLeft", 0);
 }
-
 
 static qboolean NPC_IsGunner(const gentity_t* self)
 {
@@ -571,8 +467,6 @@ static qboolean NPC_IsGunner(const gentity_t* self)
 
 	return qfalse;
 }
-
-
 
 static void ST_Speech(const gentity_t* self, const int speech_type, const float fail_chance)
 {
@@ -673,8 +567,6 @@ static void ST_Speech(const gentity_t* self, const int speech_type, const float 
 	self->NPC->blockedSpeechDebounceTime = level.time + 2000;
 }
 
-
-
 void ST_MarkToCover(const gentity_t* self)
 {
 	if (!self || !self->NPC)
@@ -690,8 +582,6 @@ void ST_MarkToCover(const gentity_t* self)
 	}
 }
 
-
-
 void ST_StartFlee(gentity_t* self, gentity_t* enemy, vec3_t danger_point, const int danger_level, const int min_time,
 	const int max_time)
 {
@@ -705,8 +595,6 @@ void ST_StartFlee(gentity_t* self, gentity_t* enemy, vec3_t danger_point, const 
 		ST_Speech(self, SPEECH_COVER, 0); //FIXME: flee sound?
 	}
 }
-
-
 
 /*
 -------------------------
@@ -730,8 +618,6 @@ void NPC_ST_Pain(gentity_t* self, gentity_t* attacker, const int damage)
 		G_AddVoiceEvent(self, Q_irand(EV_PUSHED1, EV_PUSHED3), 2000);
 	}
 }
-
-
 
 /*
 -------------------------
@@ -758,8 +644,6 @@ static void ST_HoldPosition(void)
 	ST_Speech(NPCS.NPC, SPEECH_COVER, 0);
 }
 
-
-
 static void NPC_ST_SayMovementSpeech(void)
 {
 	if (!NPCS.NPCInfo->movementSpeech)
@@ -785,14 +669,11 @@ static void NPC_ST_SayMovementSpeech(void)
 	NPCS.NPCInfo->movementSpeechChance = 0.0f;
 }
 
-
-
 static void NPC_ST_StoreMovementSpeech(const int speech, const float chance)
 {
 	NPCS.NPCInfo->movementSpeech = speech;
 	NPCS.NPCInfo->movementSpeechChance = chance;
 }
-
 
 static qboolean ST_Move(void)
 {
@@ -849,8 +730,6 @@ static qboolean ST_Move(void)
 	return moved;
 }
 
-
-
 /*
 -------------------------
 NPC_ST_SleepShuffle
@@ -881,8 +760,6 @@ static void NPC_ST_SleepShuffle(void)
 	}
 }
 
-
-
 /*
 -------------------------
 NPC_ST_Sleep
@@ -912,8 +789,6 @@ void NPC_BSST_Sleep(void)
 		NPC_ST_SleepShuffle();
 	}
 }
-
-
 
 // -----------------------------------------------------------------------------
 // NPC_CheckEnemyStealth_Smart
@@ -1261,8 +1136,6 @@ static qboolean NPC_CheckEnemyStealth_Smart(gentity_t* target)
 	return qfalse;
 }
 
-
-
 // -----------------------------------------------------------------------------
 // NPC_CheckEnemyStealth
 // Determines whether an NPCS.NPC should detect a potential enemy (player or NPCS.NPC)
@@ -1543,8 +1416,6 @@ static qboolean NPC_CheckEnemyStealth(gentity_t* target)
 	return qfalse;
 }
 
-
-
 qboolean NPC_CheckPlayerTeamStealth(void)
 {
 	gentity_t* enemy = NULL;
@@ -1580,8 +1451,6 @@ qboolean NPC_CheckPlayerTeamStealth(void)
 	}
 	return qfalse;
 }
-
-
 
 static qboolean NPC_CheckEnemiesInSpotlight(void)
 {
@@ -1817,7 +1686,6 @@ static qboolean NPC_CheckEnemiesInSpotlight(void)
 	return qfalse;
 }
 
-
 static qboolean NPC_ST_InvestigateEvent(const int event_id, const qboolean extra_suspicious)
 {
 	//If they've given themselves away, just take them as an enemy
@@ -1994,8 +1862,6 @@ static qboolean NPC_ST_InvestigateEvent(const int event_id, const qboolean extra
 	return qtrue;
 }
 
-
-
 /*
 -------------------------
 ST_OffsetLook
@@ -2014,8 +1880,6 @@ static void ST_OffsetLook(const float offset, vec3_t out)
 	CalcEntitySpot(NPCS.NPC, SPOT_HEAD, temp);
 	out[2] = temp[2];
 }
-
-
 
 /*
 -------------------------
@@ -2049,8 +1913,6 @@ static void ST_LookAround(void)
 
 	NPC_FacePosition(look_pos, qtrue);
 }
-
-
 
 /*
 -------------------------
@@ -2151,8 +2013,6 @@ void NPC_BSST_Investigate(void)
 	//Look around
 	ST_LookAround();
 }
-
-
 
 /*
 -------------------------
@@ -2344,8 +2204,6 @@ void NPC_BSST_Patrol(void)
 	}
 }
 
-
-
 /*
 -------------------------
 ST_CheckMoveState
@@ -2419,8 +2277,6 @@ static void ST_CheckMoveState(void)
 	}
 }
 
-
-
 static void ST_ResolveBlockedShot(const int hit)
 {
 	int stuck_time = 0;
@@ -2470,8 +2326,6 @@ static void ST_ResolveBlockedShot(const int hit)
 	TIMER_Set(NPCS.NPC, "duck", -1);
 	TIMER_Set(NPCS.NPC, "attakDelay", Q_irand(1000, 3000));
 }
-
-
 
 /*
 -------------------------
@@ -2625,8 +2479,6 @@ static void ST_CheckFireState(void)
 	}
 }
 
-
-
 static void ST_TrackEnemy(const gentity_t* self, vec3_t enemy_pos)
 {
 	//clear timers
@@ -2645,8 +2497,6 @@ static void ST_TrackEnemy(const gentity_t* self, vec3_t enemy_pos)
 	}
 }
 
-
-
 static int ST_ApproachEnemy(const gentity_t* self)
 {
 	TIMER_Set(self, "attackDelay", Q_irand(250, 500));
@@ -2659,8 +2509,6 @@ static int ST_ApproachEnemy(const gentity_t* self)
 	//return the relevant combat point flags
 	return CP_CLEAR | CP_CLOSEST;
 }
-
-
 
 static void ST_HuntEnemy(const gentity_t* self)
 {
@@ -2678,8 +2526,6 @@ static void ST_HuntEnemy(const gentity_t* self)
 	}
 }
 
-
-
 static void ST_TransferTimers(const gentity_t* self, const gentity_t* other)
 {
 	TIMER_Set(other, "attackDelay", TIMER_Get(self, "attackDelay") - level.time);
@@ -2695,8 +2541,6 @@ static void ST_TransferTimers(const gentity_t* self, const gentity_t* other)
 	TIMER_Set(self, "roamTime", -1);
 	TIMER_Set(self, "stand", -1);
 }
-
-
 
 void ST_TransferMoveGoal(const gentity_t* self, const gentity_t* other)
 {
@@ -2733,8 +2577,6 @@ void ST_TransferMoveGoal(const gentity_t* self, const gentity_t* other)
 	AI_GroupUpdateSquadstates(self->NPC->group, self, SQUAD_STAND_AND_SHOOT);
 	TIMER_Set(self, "stand", Q_irand(1000, 3000));
 }
-
-
 
 static int ST_GetCPFlags(void)
 {
@@ -2861,8 +2703,6 @@ static int ST_GetCPFlags(void)
 
 	return cpFlags;
 }
-
-
 
 /*
 -------------------------
@@ -3714,7 +3554,6 @@ static void ST_Commander(void)
 	RestoreNPCGlobals();
 }
 
-
 static qboolean Melee_CanDoGrab(void)
 {
 	if (NPCS.NPC->client->NPC_class == CLASS_STORMTROOPER || NPCS.NPC->client->NPC_class == CLASS_CLONETROOPER)
@@ -3751,13 +3590,10 @@ static qboolean Melee_CanDoGrab(void)
 	return qfalse;
 }
 
-
-
 static void Melee_GrabEnemy(void)
 {
 	TIMER_Set(NPCS.NPC, "grabEnemyDebounce", NPCS.NPC->client->ps.torsoTimer + Q_irand(4000, 20000));
 }
-
 
 void NPC_BSST_Attack(void)
 {
@@ -5179,7 +5015,6 @@ void NPC_BSST_Attack(void)
 					NPCS.NPC->client->ps.weaponTime = Q_irand(1000, 2500);
 				}
 			}
-			
 		}
 	}
 	else
@@ -5193,7 +5028,6 @@ void NPC_BSST_Attack(void)
 		}
 	}
 }
-
 
 static void Gunner_HoldPosition(void)
 {
@@ -5209,8 +5043,6 @@ static void Gunner_HoldPosition(void)
 	// Holding position means no active combat movement
 	NPCS.NPCInfo->combatMove = qfalse;
 }
-
-
 
 static qboolean Gunner_Move(gentity_t* goal, const qboolean retreat)
 {
@@ -5279,8 +5111,6 @@ static qboolean Gunner_Move(gentity_t* goal, const qboolean retreat)
 	return qtrue;
 }
 
-
-
 static void Gunner_FaceEnemy(const qboolean do_pitch)
 {
 	// Safety: ensure NPCS.NPC, NPCS.NPCInfo, and enemy exist
@@ -5341,8 +5171,6 @@ static void Gunner_FaceEnemy(const qboolean do_pitch)
 	}
 }
 
-
-
 static float GunnerDistanceToEnemy(gentity_t* self)
 {
 	if (self == NULL || self->enemy == NULL)
@@ -5354,8 +5182,6 @@ static float GunnerDistanceToEnemy(gentity_t* self)
 	VectorSubtract(self->enemy->r.currentOrigin, self->r.currentOrigin, diff);
 	return VectorLength(diff);
 }
-
-
 
 // Can we hit the enemy from here? (Same test the normal stormtrooper AI uses: the shot trace hits the
 // enemy, one of the enemy's team, or something minor/breakable in between.)
@@ -5380,8 +5206,6 @@ static qboolean Gunner_HasClearShot(void)
 		|| (hit_ent->client && hit_ent->client->playerTeam == NPCS.NPC->client->enemyTeam)
 		|| (hit_ent->takedamage && ((hit_ent->r.svFlags & SVF_GLASS_BRUSH) || hit_ent->health < 40))) ? qtrue : qfalse;
 }
-
-
 
 // Advanced (g_npc_is_smart) gunners shoot whenever they have a clear shot within their weapon's range,
 // also while moving. They used to fire only inside 64-192 units, so at mid range they stood and waited.
@@ -5413,8 +5237,6 @@ static void Gunner_FireIfClearShot(const float enemy_dist)
 		NPC_AimAdjust(-1);
 	}
 }
-
-
 
 static void Enhanced_Gunner_SetEnemyInfo(vec3_t enemy_dest,
 	vec3_t enemy_dir,
@@ -5481,8 +5303,6 @@ static void Enhanced_Gunner_SetEnemyInfo(vec3_t enemy_dest,
 
 	*enemy_dist = VectorNormalize(enemy_dir) - muzzleOffset;
 }
-
-
 
 static qboolean Gunner_Strafe(const int strafeTimeMin,
 	const int strafeTimeMax,
@@ -5558,8 +5378,6 @@ static qboolean Gunner_Strafe(const int strafeTimeMin,
 
 	return qfalse;
 }
-
-
 
 static void Gunner_CombatTimersUpdate(const int enemy_dist)
 {
@@ -5665,7 +5483,6 @@ static void Gunner_CombatTimersUpdate(const int enemy_dist)
 	}
 }
 
-
 // Straight move towards (or away from) the enemy when the nav system has no route (e.g. maps without
 // waypoints). Uses the world direction to the enemy, not our view, so it is right while we are still
 // turning to face him.
@@ -5691,8 +5508,6 @@ static void Gunner_DirectMove(const qboolean away)
 		NPCS.ucmd.rightmove = test.rightmove;
 	}
 }
-
-
 
 // Movement for advanced gunners. The choice (advance, back off, or hold and strafe) is kept for a
 // short time instead of being re-made every frame: re-deciding every frame is what made them stand and
@@ -5764,8 +5579,6 @@ static void Gunner_CombatDistance(const float enemy_dist)
 	Gunner_FaceEnemy(qtrue);
 	Gunner_FireIfClearShot(enemy_dist);
 }
-
-
 
 static void Enhanced_Gunner_Combat(void)
 {
@@ -5846,8 +5659,6 @@ static void Enhanced_Gunner_Combat(void)
 		TIMER_Set(NPCS.NPC, "strafeRight", 0);
 	}
 }
-
-
 
 static void Enhanced_Attack(void)
 {
@@ -5965,8 +5776,6 @@ static void Enhanced_Attack(void)
 	}
 }
 
-
-
 static void NPC_BSST_AttackAdvanced(void)
 {
 	// Thin wrapper around Enhanced_Attack with evasion and post‑kill enemy swap
@@ -6017,8 +5826,6 @@ static void NPC_BSST_AttackAdvanced(void)
 	}
 }
 
-
-
 void NPC_BSST_Default(void)
 {
 	if (NPCS.NPCInfo->scriptFlags & SCF_FIRE_WEAPON)
@@ -6043,8 +5850,6 @@ void NPC_BSST_Default(void)
 			Saboteur_Cloak(NPCS.NPC);
 		}
 	}
-
-	
 
 	if (!NPCS.NPC->enemy)
 	{//don't have an enemy, look for one
@@ -6102,7 +5907,6 @@ void NPC_BSST_Default(void)
 	}
 }
 
-
 static qboolean ST_DekaInBallAnim(const playerState_t* ps)
 {
 	if (ps->legsAnim == BOTH_RUN1 || ps->legsAnim == BOTH_RUNBACK1 || ps->legsAnim == BOTH_RUN1START)
@@ -6111,8 +5915,6 @@ static qboolean ST_DekaInBallAnim(const playerState_t* ps)
 	}
 	return ps->legsAnim == BOTH_RUN1STOP && ps->legsTimer > 0 ? qtrue : qfalse; // still unfolding
 }
-
-
 
 // is the next stretch in this direction walkable (steps allowed, ground under it)?
 static qboolean ST_DekaStepClear(const vec3_t dir)
@@ -6133,8 +5935,6 @@ static qboolean ST_DekaStepClear(const vec3_t dir)
 	trap->Trace(&tr, tr.endpos, self->r.mins, self->r.maxs, down, self->s.number, self->clipmask, qfalse, 0, 0);
 	return tr.fraction < 1.0f && !tr.allsolid ? qtrue : qfalse;
 }
-
-
 
 // roll toward dest facing the way it rolls (a non-combat move turns the NPCS.NPC to its path, see NPC_MoveToGoal)
 static qboolean ST_DekaRollTo(vec3_t dest)
@@ -6167,8 +5967,6 @@ static qboolean ST_DekaRollTo(vec3_t dest)
 	TIMER_Set(NPCS.NPC, "strafeRight", -1);
 	return qtrue;
 }
-
-
 
 // a new firing spot to the side of the enemy, on the ground, with a clear line to him
 static qboolean ST_DekaFindSpot(vec3_t out)
@@ -6237,7 +6035,6 @@ static qboolean ST_DekaFindSpot(vec3_t out)
 	return qfalse;
 }
 
-
 // this think the droideka rolls: no ST_Move, no facing the enemy, no firing from inside the ball
 static void ST_DekaRolling(void)
 {
@@ -6246,8 +6043,6 @@ static void ST_DekaRolling(void)
 	faceEnemy = qfalse;
 	shoot = qfalse;
 }
-
-
 
 // start a reposition roll to a new firing spot
 static qboolean ST_DekaStartRelocate(void)
@@ -6264,8 +6059,6 @@ static qboolean ST_DekaStartRelocate(void)
 	TIMER_Remove(self, "dekaDeploy");
 	return qtrue;
 }
-
-
 
 static void ST_DekaTactics(void)
 {
@@ -6381,7 +6174,6 @@ static void ST_DekaTactics(void)
 		TIMER_Set(self, "dekaDeploy", Q_irand(2000, 4000)); // nowhere to go: try again later
 	}
 }
-
 
 static void npc_check_speak(gentity_t* speaker_npc)
 {
@@ -6519,4 +6311,3 @@ static void npc_check_speak(gentity_t* speaker_npc)
 		}
 	}
 }
-

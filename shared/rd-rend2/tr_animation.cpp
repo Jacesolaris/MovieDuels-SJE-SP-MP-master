@@ -45,7 +45,7 @@ R_MDRCullModel
 static int R_MDRCullModel(mdrHeader_t* header, trRefEntity_t* ent) {
 	vec3_t		bounds[2];
 #else // !REND2_SP
-static int R_MDRCullModel(mdrHeader_t* header, trRefEntity_t* ent)
+static int R_MDRCullModel(mdrHeader_t * header, trRefEntity_t * ent)
 {
 	vec3_t		bounds[2]{};
 #endif // REND2_SP
@@ -142,9 +142,9 @@ R_MDRComputeFogNum
 */
 
 #ifdef REND2_SP
-int R_MDRComputeFogNum(mdrHeader_t* header, trRefEntity_t* ent) {
+int R_MDRComputeFogNum(mdrHeader_t * header, trRefEntity_t * ent) {
 #else // !REND2_SP
-static int R_MDRComputeFogNum(mdrHeader_t* header, trRefEntity_t* ent)
+static int R_MDRComputeFogNum(mdrHeader_t * header, trRefEntity_t * ent)
 {
 #endif // REND2_SP
 	int				i = 0, j = 0;
@@ -223,7 +223,7 @@ R_MDRAddAnimSurfaces
 
 // much stuff in there is just copied from R_AddMd3Surfaces in tr_mesh.c
 
-void R_MDRAddAnimSurfaces(trRefEntity_t* ent, int entityNum)
+void R_MDRAddAnimSurfaces(trRefEntity_t * ent, int entityNum)
 {
 	mdrHeader_t* header = nullptr;
 	mdrSurface_t* surface = nullptr;
@@ -265,13 +265,13 @@ void R_MDRAddAnimSurfaces(trRefEntity_t* ent, int entityNum)
 		ri.Printf(PRINT_DEVELOPER, "R_MDRAddAnimSurfaces: no such frame %d to %d for '%s'\n",
 			ent->e.oldframe, ent->e.frame, tr.currentModel->name);
 #else // !REND2_SP
-	{
-		ri->Printf(PRINT_DEVELOPER, "R_MDRAddAnimSurfaces: no such frame %d to %d for '%s'\n",
-			ent->e.oldframe, ent->e.frame, tr.currentModel->name);
+		{
+			ri->Printf(PRINT_DEVELOPER, "R_MDRAddAnimSurfaces: no such frame %d to %d for '%s'\n",
+				ent->e.oldframe, ent->e.frame, tr.currentModel->name);
 #endif // REND2_SP
-		ent->e.frame = 0;
-		ent->e.oldframe = 0;
-	}
+			ent->e.frame = 0;
+			ent->e.oldframe = 0;
+		}
 
 	//
 	// cull the entire model if merged bounding box of both frames
@@ -366,14 +366,14 @@ void R_MDRAddAnimSurfaces(trRefEntity_t* ent, int entityNum)
 
 		surface = (mdrSurface_t*)((byte*)surface + surface->ofsEnd);
 	}
-}
+	}
 
 /*
 ==============
 RB_MDRSurfaceAnim
 ==============
 */
-void RB_MDRSurfaceAnim(mdrSurface_t* surface)
+void RB_MDRSurfaceAnim(mdrSurface_t * surface)
 {
 	int				i = 0, j = 0, k = 0;
 	float			frontlerp = 0.0f, backlerp = 0.0f;

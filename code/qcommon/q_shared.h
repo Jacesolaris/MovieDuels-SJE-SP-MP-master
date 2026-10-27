@@ -827,6 +827,8 @@ using forcePowers_t = enum forcePowers_e
 	FP_PROJECTION,
 	FP_BLAST,
 	//Instant
+	FP_DARK_STASIS,
+	//duration
 #endif // !JK2_MODE
 
 	NUM_FORCE_POWERS
@@ -2162,6 +2164,7 @@ public:
 
 	int stasisTime;
 	int stasisJediTime;
+	int darkStasisTime;
 	int stunDamage; // Amount of stun damage to be given
 	int stunTime; // When to apply stun damage
 
@@ -2450,6 +2453,7 @@ public:
 		saved_game.write<int32_t>(stunTime);
 		saved_game.write<int32_t>(stasisTime);
 		saved_game.write<int32_t>(stasisJediTime);
+		saved_game.write<int32_t>(darkStasisTime);
 		saved_game.write<int32_t>(forceSpeedRecoveryTime);
 		saved_game.write<int32_t>(blockPoints);
 		saved_game.write<int32_t>(cloakFuel);
@@ -2744,6 +2748,7 @@ public:
 		saved_game.read<int32_t>(stunTime);
 		saved_game.read<int32_t>(stasisTime);
 		saved_game.read<int32_t>(stasisJediTime);
+		saved_game.read<int32_t>(darkStasisTime);
 		saved_game.read<int32_t>(forceSpeedRecoveryTime);
 		saved_game.read<int32_t>(blockPoints);
 		saved_game.read<int32_t>(cloakFuel);
@@ -2917,6 +2922,7 @@ using genCmds_t = enum
 	GENCMD_FORCE_FEAR,
 	GENCMD_FORCE_DEADLYSIGHT,
 	GENCMD_FORCE_PROJECTION,
+	GENCMD_FORCE_DARK_STASIS,
 };
 
 // usercmd_t is sent to the server each client frame

@@ -761,7 +761,7 @@ static char* Sys_StripAppBundle(char* dir)
 // Release builds only start from the MovieDuels launcher: it sets MD_LAUNCHER_ENV on the game process. Started any
 // other way (the exe directly, a shortcut), the game starts the launcher from its own folder and quits.
 // Debug builds (and the dedicated server) start as normal. Keep MD_LAUNCHER_ENV / MD_LAUNCHER_TOKEN the same as
-// LauncherEnv / LauncherToken in the launcher's MainWindow.xaml.cs.
+// kLauncherEnv / kLauncherToken in the launcher (code/launcher/md_launcher.cpp).
 #include <process.h>
 #include <SDL_messagebox.h>
 

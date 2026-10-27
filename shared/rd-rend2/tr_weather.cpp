@@ -541,7 +541,7 @@ void R_InitWeatherSystem()
 	Com_Printf("Initializing weather system\n");
 	tr.weatherSystem =
 #ifdef REND2_SP
-		(weatherSystem_t*)R_Malloc(sizeof(*tr.weatherSystem), TAG_R_TERRAIN, qtrue);
+	(weatherSystem_t*)R_Malloc(sizeof(*tr.weatherSystem), TAG_R_TERRAIN, qtrue);
 #else // !REND2_SP
 		(weatherSystem_t*)Z_Malloc(sizeof(*tr.weatherSystem), TAG_R_TERRAIN, qtrue);
 #endif // REND2_SP
@@ -573,12 +573,12 @@ void R_ShutdownWeatherSystem()
 		ri.Printf(PRINT_DEVELOPER,
 			"Weather system shutdown requested, but it is already shut down.\n");
 #else // !REND2_SP
-	{
-		ri->Printf(PRINT_DEVELOPER,
-			"Weather system shutdown requested, but it is already shut down.\n");
+		{
+			ri->Printf(PRINT_DEVELOPER,
+				"Weather system shutdown requested, but it is already shut down.\n");
 #endif // REND2_SP
+		}
 	}
-}
 
 /*
 ===============
@@ -626,7 +626,7 @@ static qboolean WE_ParseVector(const char** text, int count, float* v) {
 	return qtrue;
 }
 
-void R_AddWeatherBrush(uint8_t numPlanes, vec4_t* planes)
+void R_AddWeatherBrush(uint8_t numPlanes, vec4_t * planes)
 {
 	if (tr.weatherSystem->numWeatherBrushes >= (MAX_WEATHER_ZONES * 2))
 	{
@@ -1501,23 +1501,23 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 #else // !REND2_SP
 	else if (preset == 3)
 #endif // REND2_SP
-		{
-			if (!tr.weatherSystem->weatherSlots[WEATHER_SNOW].active)
-				tr.weatherSystem->activeWeatherTypes++;
+	{
+		if (!tr.weatherSystem->weatherSlots[WEATHER_SNOW].active)
+			tr.weatherSystem->activeWeatherTypes++;
 
-			tr.weatherSystem->weatherSlots[WEATHER_SNOW].particleCount = R_WeatherStackedCount(WEATHER_SNOW, 1000);
-			tr.weatherSystem->weatherSlots[WEATHER_SNOW].active = true;
-			tr.weatherSystem->weatherSlots[WEATHER_SNOW].gravity = 0.3f;
-			tr.weatherSystem->weatherSlots[WEATHER_SNOW].fadeDistance = 6000.0f;
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].particleCount = R_WeatherStackedCount(WEATHER_SNOW, 1000);
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].active = true;
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].gravity = 0.3f;
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].fadeDistance = 6000.0f;
 
-			tr.weatherSystem->weatherSlots[WEATHER_SNOW].size[0] = 1.5f;
-			tr.weatherSystem->weatherSlots[WEATHER_SNOW].size[1] = 1.5f;
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].size[0] = 1.5f;
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].size[1] = 1.5f;
 
-			tr.weatherSystem->weatherSlots[WEATHER_SNOW].velocityOrientationScale = 0.0f;
+		tr.weatherSystem->weatherSlots[WEATHER_SNOW].velocityOrientationScale = 0.0f;
 
-			VectorSet4(tr.weatherSystem->weatherSlots[WEATHER_SNOW].color, 0.95f, 0.0f, 0.0f, 0.0f);
-			VectorScale(tr.weatherSystem->weatherSlots[WEATHER_SNOW].color, 0.95f, tr.weatherSystem->weatherSlots[WEATHER_SNOW].color);
-		}
+		VectorSet4(tr.weatherSystem->weatherSlots[WEATHER_SNOW].color, 0.95f, 0.0f, 0.0f, 0.0f);
+		VectorScale(tr.weatherSystem->weatherSlots[WEATHER_SNOW].color, 0.95f, tr.weatherSystem->weatherSlots[WEATHER_SNOW].color);
+	}
 #ifndef REND2_SP
 
 	else if (Q_stricmp(token, "outsideshake") == 0)
@@ -1534,17 +1534,17 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		ri->Printf(PRINT_DEVELOPER, "RE_WorldEffectCommand: unknown weather command '%s' ignored\n", token);
 	}
 #endif // !REND2_SP
-		else
-		{
+	else
+	{
 #ifdef REND2_SP
-			ri.Printf(PRINT_ALL, "Weather Effect: Please enter a valid command.\n");
-			ri.Printf(PRINT_ALL, "	die\n");
-			ri.Printf(PRINT_ALL, "	clear\n");
-			ri.Printf(PRINT_ALL, "	freeze\n");
-			ri.Printf(PRINT_ALL, "	zone (mins) (maxs)\n");
-			ri.Printf(PRINT_ALL, "	wind\n");
-			ri.Printf(PRINT_ALL, "	constantwind (velocity)\n");
-			ri.Printf(PRINT_ALL, "	gustingwind\n");
+		ri.Printf(PRINT_ALL, "Weather Effect: Please enter a valid command.\n");
+		ri.Printf(PRINT_ALL, "	die\n");
+		ri.Printf(PRINT_ALL, "	clear\n");
+		ri.Printf(PRINT_ALL, "	freeze\n");
+		ri.Printf(PRINT_ALL, "	zone (mins) (maxs)\n");
+		ri.Printf(PRINT_ALL, "	wind\n");
+		ri.Printf(PRINT_ALL, "	constantwind (velocity)\n");
+		ri.Printf(PRINT_ALL, "	gustingwind\n");
 #else // !REND2_SP
 		ri->Printf(PRINT_ALL, "Weather Effect: Please enter a valid command.\n");
 		ri->Printf(PRINT_ALL, "	die\n");
@@ -1555,22 +1555,22 @@ void RE_WorldEffectCommand(const char* command) // rend2 sp
 		ri->Printf(PRINT_ALL, "	constantwind (velocity)\n");
 		ri->Printf(PRINT_ALL, "	gustingwind\n");
 #endif // REND2_SP
-			//ri.Printf(PRINT_ALL, "	windzone (mins) (maxs) (velocity)\n");
+		//ri.Printf(PRINT_ALL, "	windzone (mins) (maxs) (velocity)\n");
 #ifdef REND2_SP
-			ri.Printf(PRINT_ALL, "	lightrain\n");
-			ri.Printf(PRINT_ALL, "	rain\n");
-			ri.Printf(PRINT_ALL, "	acidrain\n");
-			ri.Printf(PRINT_ALL, "	lava\n");
-			ri.Printf(PRINT_ALL, "	heavyrain\n");
-			ri.Printf(PRINT_ALL, "	snow\n");
-			ri.Printf(PRINT_ALL, "	spacedust (count)\n");
-			ri.Printf(PRINT_ALL, "	sand\n");
-			ri.Printf(PRINT_ALL, "	fog\n");
-			ri.Printf(PRINT_ALL, "	heavyrainfog\n");
-			ri.Printf(PRINT_ALL, "	light_fog\n");
-			ri.Printf(PRINT_ALL, "	outsideshake\n"); // not available in MP
-			ri.Printf(PRINT_ALL, "	outsidepain\n"); // not available in MP
-		}
+		ri.Printf(PRINT_ALL, "	lightrain\n");
+		ri.Printf(PRINT_ALL, "	rain\n");
+		ri.Printf(PRINT_ALL, "	acidrain\n");
+		ri.Printf(PRINT_ALL, "	lava\n");
+		ri.Printf(PRINT_ALL, "	heavyrain\n");
+		ri.Printf(PRINT_ALL, "	snow\n");
+		ri.Printf(PRINT_ALL, "	spacedust (count)\n");
+		ri.Printf(PRINT_ALL, "	sand\n");
+		ri.Printf(PRINT_ALL, "	fog\n");
+		ri.Printf(PRINT_ALL, "	heavyrainfog\n");
+		ri.Printf(PRINT_ALL, "	light_fog\n");
+		ri.Printf(PRINT_ALL, "	outsideshake\n"); // not available in MP
+		ri.Printf(PRINT_ALL, "	outsidepain\n"); // not available in MP
+	}
 #else // !REND2_SP
 		ri->Printf(PRINT_ALL, "	lightrain\n");
 		ri->Printf(PRINT_ALL, "	rain\n");
@@ -1649,7 +1649,7 @@ void R_AddWeatherSurfaces()
 	);
 }
 
-void RB_SurfaceWeather(srfWeather_t* surf)
+void RB_SurfaceWeather(srfWeather_t * surf)
 {
 	assert(tr.weatherSystem);
 
@@ -1797,7 +1797,7 @@ void RB_SurfaceWeather(srfWeather_t* surf)
 	}
 }
 
-static bool IsInsideBrush(const weatherBrushes_t* Brush, const vec3_t pos)
+static bool IsInsideBrush(const weatherBrushes_t * Brush, const vec3_t pos)
 {
 	// RBSP brushes actually store their bounding box in the first 6 planes! Nice
 	const vec3_t mins = {

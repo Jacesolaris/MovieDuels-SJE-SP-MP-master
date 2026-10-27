@@ -225,7 +225,7 @@ Wiggle the normals for wavy environment mapping
 #ifdef REND2_SP
 void RB_CalcDeformNormals(deformStage_t* ds) {
 #else // !REND2_SP
-static void RB_CalcDeformNormals(const deformStage_t* ds)
+static void RB_CalcDeformNormals(const deformStage_t * ds)
 {
 #endif // REND2_SP
 	int i = 0;
@@ -266,9 +266,9 @@ RB_CalcBulgeVertexes
 ========================
 */
 #ifdef REND2_SP
-void RB_CalcBulgeVertexes(deformStage_t* ds) {
+void RB_CalcBulgeVertexes(deformStage_t * ds) {
 #else // !REND2_SP
-static void RB_CalcBulgeVertexes(const deformStage_t* ds)
+static void RB_CalcBulgeVertexes(const deformStage_t * ds)
 {
 #endif // REND2_SP
 	int i = 0;
@@ -304,7 +304,7 @@ A deformation that can move an entire surface along a wave path
 ======================
 */
 #ifdef REND2_SP
-void RB_CalcMoveVertexes(deformStage_t* ds) {
+void RB_CalcMoveVertexes(deformStage_t * ds) {
 	int			i = 0;
 	float* xyz = nullptr;
 	float* table = nullptr;
@@ -318,7 +318,7 @@ void RB_CalcMoveVertexes(deformStage_t* ds) {
 		ds->deformationWave.phase,
 		ds->deformationWave.frequency);
 #else // !REND2_SP
-static void RB_CalcMoveVertexes(const deformStage_t* ds)
+static void RB_CalcMoveVertexes(const deformStage_t * ds)
 {
 	vec3_t		offset;
 
@@ -341,7 +341,7 @@ static void RB_CalcMoveVertexes(const deformStage_t* ds)
 #endif // REND2_SP
 		VectorAdd(xyz, offset, xyz);
 	}
-}
+	}
 
 /*
 =============
@@ -729,7 +729,7 @@ COLORS
 /*
 ** RB_CalcWaveColorSingle
 */
-float RB_CalcWaveColorSingle(const waveForm_t* wf)
+float RB_CalcWaveColorSingle(const waveForm_t * wf)
 {
 	float glow = 0.0f;
 
@@ -753,7 +753,7 @@ float RB_CalcWaveColorSingle(const waveForm_t* wf)
 /*
 ** RB_CalcWaveAlphaSingle
 */
-float RB_CalcWaveAlphaSingle(const waveForm_t* wf)
+float RB_CalcWaveAlphaSingle(const waveForm_t * wf)
 {
 	return EvalWaveFormClamped(wf);
 }
@@ -762,14 +762,14 @@ float RB_CalcWaveAlphaSingle(const waveForm_t* wf)
 ** RB_CalcModulateColorsByFog
 */
 #ifdef REND2_SP
-void RB_CalcModulateColorsByFog(unsigned char* colors) 
+void RB_CalcModulateColorsByFog(unsigned char* colors)
 #else // !REND2_SP
 void RB_CalcModulateColorsByFog(unsigned char* dst_colors)
 #endif // REND2_SP
 {
 #ifdef REND2_SP
 	int		i = 0;
-	 static float	texCoords[SHADER_MAX_VERTEXES][2];
+	static float	texCoords[SHADER_MAX_VERTEXES][2];
 #else // !REND2_SP
 	static float	texCoords[SHADER_MAX_VERTEXES][2]{};
 #endif // REND2_SP
@@ -794,7 +794,7 @@ void RB_CalcModulateColorsByFog(unsigned char* dst_colors)
 		dst_colors[2] *= f;
 #endif // REND2_SP
 	}
-}
+	}
 
 /*
 ====================================================================
@@ -903,7 +903,7 @@ void RB_CalcFogTexCoords(float* st) {
 /*
 ** RB_CalcTurbulentFactors
 */
-void RB_CalcTurbulentFactors(const waveForm_t* wf, float* amplitude, float* now)
+void RB_CalcTurbulentFactors(const waveForm_t * wf, float* amplitude, float* now)
 {
 	*now = wf->phase + tess.shaderTime * wf->frequency;
 	*amplitude = wf->amplitude;
@@ -941,7 +941,7 @@ void RB_CalcScrollTexMatrix(const float scrollSpeed[2], float* matrix)
 /*
 ** RB_CalcTransformTexMatrix
 */
-void RB_CalcTransformTexMatrix(const texModInfo_t* tmi, float* matrix)
+void RB_CalcTransformTexMatrix(const texModInfo_t * tmi, float* matrix)
 {
 	matrix[0] = tmi->matrix[0][0]; matrix[2] = tmi->matrix[1][0]; matrix[4] = tmi->translate[0];
 	matrix[1] = tmi->matrix[0][1]; matrix[3] = tmi->matrix[1][1]; matrix[5] = tmi->translate[1];

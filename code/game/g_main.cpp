@@ -284,6 +284,7 @@ cvar_t* g_allowgunnerbash;
 cvar_t* g_noAutoFollow;
 
 cvar_t* g_AllowLedgeGrab;
+cvar_t* g_ledgeGrabMinAir;
 cvar_t* g_saberscanstickinwall;
 cvar_t* g_saberscanstickinenemy; // 0 = thrown sabers never stick in an enemy's body
 cvar_t* g_candojumpdash;         // 0 = no air (jump) dash
@@ -916,6 +917,7 @@ static void G_InitCvars()
 	g_noAutoFollow = gi.cvar("g_noAutoFollow", "0", CVAR_ARCHIVE);
 
 	g_AllowLedgeGrab = gi.cvar("g_allowledgegrab", "0", CVAR_ARCHIVE);
+	g_ledgeGrabMinAir = gi.cvar("g_ledgeGrabMinAir", "16", CVAR_ARCHIVE); // a ledge is grabbed only with the feet this high off the floor (DH 2026-10-26; 0 = old)
 	// internal move locks (no menu entries): 1 = allowed, 0 = turned off
 	g_saberscanstickinenemy = gi.cvar("g_saberscanstickinenemy", "0", CVAR_ARCHIVE);
 	g_saberscanstickinwall = gi.cvar("g_saberscanstickinwall", "0", CVAR_ARCHIVE);
@@ -1979,7 +1981,7 @@ qboolean G_RagDoll(gentity_t* ent, vec3_t forcedAngles)
 	VectorCopy(ent->client->ps.origin, usedOrg);
 
 	// dying in water (BOTH_DEATH19): the ragdoll starts at its frame 45, not before (DH 2026-10-25)
-	extern float PM_WaterDeathFrame(const gentity_t* gent);
+	extern float PM_WaterDeathFrame(const gentity_t * gent);
 	if (!ent->client->isRagging && ent->waterlevel >= 2 && ent->client->ps.legsAnim == BOTH_DEATH19)
 	{
 		if (PM_WaterDeathFrame(ent) < 45.0f)
@@ -2653,6 +2655,8 @@ void G_RunFrame(const int level_time)
 	NAV::DecayDangerSenses();
 	Rail_Update();
 	Troop_Update();
+	extern void G_RancorPitThink();
+	G_RancorPitThink(); // the rancor that lives on mp/duel7 (NPC_spawn.cpp)
 	Pilot_Update();
 	extern void G_FighterRoute_Frame();
 	G_FighterRoute_Frame(); // ship_wp_show

@@ -3198,6 +3198,12 @@ void UI_SaberDrawBlades(itemDef_t* item, vec3_t origin, vec3_t angles)
 		else if (item->flags & ITF_ISSABER2)
 		{
 			trap->Cvar_VariableStringBuffer("ui_saber2", saber, sizeof saber);
+			if (!saber[0] || !Q_stricmp(saber, "none"))
+			{
+				// MovieDuels: no second saber, draw no blade (as SP); never turn "none" into a saber, that went
+				// into the saber2 userinfo through updatesabercvars (2026-10-27)
+				return;
+			}
 			if (!UI_SaberValidForPlayerInMP(saber))
 			{
 				trap->Cvar_Set("ui_saber2", DEFAULT_SABER);

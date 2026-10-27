@@ -53,6 +53,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 constexpr auto SLOWDOWN_DIST = 128.0f;
 constexpr auto MIN_NPC_SPEED = 16.0f;
 extern void WP_SaberBlasterThink(gentity_t* ent, usercmd_t* ucmd); // SS_BLASTER
+extern void WP_SaberBlasterCinematicThink(gentity_t* ent); // SS_BLASTER: none in cutscenes (2026-10-27)
 
 extern qboolean Q3_TaskIDPending(const gentity_t* ent, taskID_t taskType);
 extern qboolean Manual_NPCKickAbsorbing(const gentity_t* defender);
@@ -8574,6 +8575,7 @@ extern void ForceAbsorb(gentity_t* ent);
 extern void ForceHeal(gentity_t* ent);
 extern void ForceDestruction(gentity_t* ent);
 extern void ForceStasis(gentity_t* ent);
+extern void ForceDarkStasis(gentity_t* ent);
 extern void ForceJediRepulse(gentity_t* ent);
 extern void ForceGrasp(gentity_t* ent);
 extern void ForceLightningStrike(gentity_t* ent);
@@ -8682,6 +8684,9 @@ static void ProcessGenericCmd(gentity_t* ent, const byte cmd)
 		break;
 	case GENCMD_FORCE_PROJECTION:
 		ForceProjection(ent);
+		break;
+	case GENCMD_FORCE_DARK_STASIS:
+		ForceDarkStasis(ent);
 		break;
 	case GENCMD_FORCE_BLAST:
 		ForceBlast(ent);
@@ -9842,6 +9847,8 @@ static void ClientThink_real(gentity_t* ent, usercmd_t* ucmd)
 
 		if (in_camera)
 		{
+			WP_SaberBlasterCinematicThink(ent); // Kyle leaves SS_BLASTER for the cutscene (DH 2026-10-27)
+
 			// watch the code here, you MUST "return" within this IF(), *unless* you're stopping the cinematic skip.
 			//
 			if (ClientCinematicThink(ent->client))

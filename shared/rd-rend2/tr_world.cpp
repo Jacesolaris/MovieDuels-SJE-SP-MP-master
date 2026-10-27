@@ -405,7 +405,7 @@ void R_AddBrushModelSurfaces(trRefEntity_t* ent, int entityNum) {
 		{
 			world->surfacesViewCount[surf] = tr.viewCount;
 #endif // !REND2_SP
-		R_AddWorldSurface(world->surfaces + surf, ent, entityNum, ent->needDlights, 0);
+			R_AddWorldSurface(world->surfaces + surf, ent, entityNum, ent->needDlights, 0);
 #ifndef REND2_SP
 		}
 #endif // !REND2_SP
@@ -751,10 +751,10 @@ static mnode_t* R_PointInLeaf(const vec3_t p) {
 		else {
 			node = node->children[1];
 		}
-	}
+		}
 
 	return node;
-}
+	}
 
 /*
 ==============
@@ -779,10 +779,10 @@ R_inPVS
 =================
 */
 #ifdef REND2_SP
-qboolean R_inPVS(const vec3_t p1, const vec3_t p2, byte* mask) {
+qboolean R_inPVS(const vec3_t p1, const vec3_t p2, byte * mask) {
 	mnode_t* leaf = R_PointInLeaf(p1);
 #else // !REND2_SP
-qboolean R_inPVS(const vec3_t p1, const vec3_t p2, byte* mask)
+qboolean R_inPVS(const vec3_t p1, const vec3_t p2, byte * mask)
 {
 	int leafnum = ri->CM_PointLeafnum(p1);
 	int cluster = ri->CM_LeafCluster(leafnum);
@@ -847,16 +847,16 @@ void R_MarkLeaves(void)
 				ri.Printf(PRINT_ALL, "found cluster:%i  area:%i  index:%i\n",
 					cluster, leaf->area, i);
 #else // !REND2_SP
-			{
-				ri->Printf(PRINT_ALL, "found cluster:%i  area:%i  index:%i\n",
-					cluster, leaf->area, i);
+				{
+					ri->Printf(PRINT_ALL, "found cluster:%i  area:%i  index:%i\n",
+						cluster, leaf->area, i);
 #endif // REND2_SP
-			}
+				}
 
 			tr.visIndex = i;
 			return;
+			}
 		}
-	}
 
 	tr.visIndex = (tr.visIndex + 1) % MAX_VISCOUNTS;
 	tr.visCounts[tr.visIndex]++;
@@ -906,14 +906,14 @@ void R_MarkLeaves(void)
 			parent = parent->parent;
 		} while (parent);
 	}
-}
+	}
 
 /*
 =============
 R_AddWorldSurfaces
 =============
 */
-void R_AddWorldSurfaces(viewParms_t* viewParms, trRefdef_t* refdef) {
+void R_AddWorldSurfaces(viewParms_t * viewParms, trRefdef_t * refdef) {
 	int planeBits = 0, dlightBits = 0, pshadowBits = 0;
 
 	if (!r_drawworld->integer) {
@@ -946,8 +946,9 @@ void R_AddWorldSurfaces(viewParms_t* viewParms, trRefdef_t* refdef) {
 	else
 	{
 		dlightBits = (1 << refdef->num_dlights) - 1;
-		if (r_shadows->integer == 4)
-			pshadowBits = (1 << refdef->num_pshadows) - 1;
+		// cg_shadows 2 and 3 use the character shadow maps too; 32 shadows need all 32 bits (1 << 32 is undefined) (DH 2026-10-26)
+		if (r_shadows->integer >= 2)
+			pshadowBits = refdef->num_pshadows >= 32 ? -1 : (1 << refdef->num_pshadows) - 1;
 		else
 			pshadowBits = 0;
 	}

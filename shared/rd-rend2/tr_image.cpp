@@ -487,25 +487,25 @@ static void RGBAtoNormal(const byte* in, byte* out, int width, int height, qbool
 	// (rows run on the job workers: each row keeps its own max, combined below)
 	std::vector<byte> rowMax(height, 0);
 	R_ImageRows(width, height, [&](const int y0, const int y1)
-	{
-		for (int y = y0; y < y1; y++)
 		{
-			const byte* inbyte = in + y * width * 4;
-			byte* outbyte = out + y * width * 4 + 3;
-			byte m = 0;
-
-			for (int x = 0; x < width; x++)
+			for (int y = y0; y < y1; y++)
 			{
-				byte result = (inbyte[0] >> 2) + (inbyte[1] >> 1) + (inbyte[2] >> 2);
-				result = result * result / 255; // Make linear
-				*outbyte = result;
-				m = MAX(m, result);
-				outbyte += 4;
-				inbyte += 4;
+				const byte* inbyte = in + y * width * 4;
+				byte* outbyte = out + y * width * 4 + 3;
+				byte m = 0;
+
+				for (int x = 0; x < width; x++)
+				{
+					byte result = (inbyte[0] >> 2) + (inbyte[1] >> 1) + (inbyte[2] >> 2);
+					result = result * result / 255; // Make linear
+					*outbyte = result;
+					m = MAX(m, result);
+					outbyte += 4;
+					inbyte += 4;
+				}
+				rowMax[y] = m;
 			}
-			rowMax[y] = m;
-		}
-	});
+		});
 
 	int max = 1;
 	for (int y = 0; y < height; y++)
@@ -518,18 +518,18 @@ static void RGBAtoNormal(const byte* in, byte* out, int width, int height, qbool
 	{
 		const byte add = (byte)(255 - max);
 		R_ImageRows(width, height, [&](const int y0, const int y1)
-		{
-			for (int y = y0; y < y1; y++)
 			{
-				byte* outbyte = out + y * width * 4 + 3;
-
-				for (int x = 0; x < width; x++)
+				for (int y = y0; y < y1; y++)
 				{
-					*outbyte = *outbyte + add;
-					outbyte += 4;
+					byte* outbyte = out + y * width * 4 + 3;
+
+					for (int x = 0; x < width; x++)
+					{
+						*outbyte = *outbyte + add;
+						outbyte += 4;
+					}
 				}
-			}
-		});
+			});
 	}
 
 	// now run sobel filter over height values to generate X and Y
@@ -538,55 +538,55 @@ static void RGBAtoNormal(const byte* in, byte* out, int width, int height, qbool
 	// independent. Neighbour rows/columns wrap or clamp exactly as before, but
 	// are worked out once per row/column instead of per sample.
 	R_ImageRows(width, height, [&](const int y0, const int y1)
-	{
-		for (int y = y0; y < y1; y++)
 		{
-			const int ym = clampToEdge ? MAX(y - 1, 0) : (y - 1 + height) % height;
-			const int yp = clampToEdge ? MIN(y + 1, height - 1) : (y + 1) % height;
-			const byte* r0 = out + ym * width * 4 + 3;	// heights of the row above
-			const byte* r1 = out + y * width * 4 + 3;
-			const byte* r2 = out + yp * width * 4 + 3;	// and below
-			byte* outbyte = out + y * width * 4;
-
-			for (int x = 0; x < width; x++)
+			for (int y = y0; y < y1; y++)
 			{
-				// 0 1 2
-				// 3 4 5
-				// 6 7 8
-				int xm = (x - 1) * 4, xp = (x + 1) * 4;
-				const int xc = x * 4;
-				if (x == 0 || x == width - 1)	// edges only: wrap or clamp the neighbours
+				const int ym = clampToEdge ? MAX(y - 1, 0) : (y - 1 + height) % height;
+				const int yp = clampToEdge ? MIN(y + 1, height - 1) : (y + 1) % height;
+				const byte* r0 = out + ym * width * 4 + 3;	// heights of the row above
+				const byte* r1 = out + y * width * 4 + 3;
+				const byte* r2 = out + yp * width * 4 + 3;	// and below
+				byte* outbyte = out + y * width * 4;
+
+				for (int x = 0; x < width; x++)
 				{
-					xm = (clampToEdge ? MAX(x - 1, 0) : (x - 1 + width) % width) * 4;
-					xp = (clampToEdge ? MIN(x + 1, width - 1) : (x + 1) % width) * 4;
+					// 0 1 2
+					// 3 4 5
+					// 6 7 8
+					int xm = (x - 1) * 4, xp = (x + 1) * 4;
+					const int xc = x * 4;
+					if (x == 0 || x == width - 1)	// edges only: wrap or clamp the neighbours
+					{
+						xm = (clampToEdge ? MAX(x - 1, 0) : (x - 1 + width) % width) * 4;
+						xp = (clampToEdge ? MIN(x + 1, width - 1) : (x + 1) % width) * 4;
+					}
+					const int s0 = r0[xm], s1 = r0[xc], s2 = r0[xp];
+					const int s3 = r1[xm], s4 = r1[xc], s5 = r1[xp];
+					const int s6 = r2[xm], s7 = r2[xc], s8 = r2[xp];
+					vec3_t normal;
+
+					normal[0] = s0 - s2
+						+ 2 * s3 - 2 * s5
+						+ s6 - s8;
+
+					normal[1] = s0 + 2 * s1 + s2
+
+						- s6 - 2 * s7 - s8;
+
+					normal[2] = s4 * 4;
+
+					if (!VectorNormalize2(normal, normal))
+					{
+						VectorSet(normal, 0, 0, 1);
+					}
+
+					*outbyte++ = FloatToOffsetByte(normal[0]);
+					*outbyte++ = FloatToOffsetByte(normal[1]);
+					*outbyte++ = FloatToOffsetByte(normal[2]);
+					outbyte++;
 				}
-				const int s0 = r0[xm], s1 = r0[xc], s2 = r0[xp];
-				const int s3 = r1[xm], s4 = r1[xc], s5 = r1[xp];
-				const int s6 = r2[xm], s7 = r2[xc], s8 = r2[xp];
-				vec3_t normal;
-
-				normal[0] = s0 - s2
-					+ 2 * s3 - 2 * s5
-					+ s6 - s8;
-
-				normal[1] = s0 + 2 * s1 + s2
-
-					- s6 - 2 * s7 - s8;
-
-				normal[2] = s4 * 4;
-
-				if (!VectorNormalize2(normal, normal))
-				{
-					VectorSet(normal, 0, 0, 1);
-				}
-
-				*outbyte++ = FloatToOffsetByte(normal[0]);
-				*outbyte++ = FloatToOffsetByte(normal[1]);
-				*outbyte++ = FloatToOffsetByte(normal[2]);
-				outbyte++;
 			}
-		}
-	});
+		});
 }
 
 #define COPYSAMPLE(a,b) *(unsigned int *)(a) = *(unsigned int *)(b)
@@ -1377,7 +1377,7 @@ Proper linear filter
 #ifdef REND2_SP
 static void R_MipMap2(byte* in, int inWidth, int inHeight) {
 #else // !REND2_SP
-static void R_MipMap2(byte* in, const int inWidth, const int inheight)
+static void R_MipMap2(byte * in, const int inWidth, const int inheight)
 {
 #endif // REND2_SP
 	int			i = 0, j = 0, k = 0;
@@ -1440,7 +1440,7 @@ static void R_MipMap2(byte* in, const int inWidth, const int inheight)
 #endif // REND2_SP
 }
 
-static void R_MipMapsRGB(byte* in, int inWidth, int inHeight)
+static void R_MipMapsRGB(byte * in, int inWidth, int inHeight)
 {
 	int			i = 0, j = 0, k = 0;
 	int			outWidth = 0, outHeight = 0;
@@ -1488,11 +1488,11 @@ R_MipMap
 Operates in place, quartering the size of the texture
 ================
 */
-static void R_MipMap(byte* in, int width, int height) {
+static void R_MipMap(byte * in, int width, int height) {
 	R_MipMap2(in, width, height); // rend2 e802ed03: r_simpleMipMaps is handled by the callers
 }
 
-static void R_MipMapLuminanceAlpha(const byte* in, byte* out, int width, int height)
+static void R_MipMapLuminanceAlpha(const byte * in, byte * out, int width, int height)
 {
 	int  i = 0, j = 0, row = 0;
 
@@ -1525,7 +1525,7 @@ static void R_MipMapLuminanceAlpha(const byte* in, byte* out, int width, int hei
 	}
 }
 
-static void R_MipMapNormalHeight(const byte* in, byte* out, int width, int height, qboolean swizzle)
+static void R_MipMapNormalHeight(const byte * in, byte * out, int width, int height, qboolean swizzle)
 {
 	int		i = 0, j = 0;
 	int		row = 0;
@@ -1583,9 +1583,9 @@ Apply a color blend over a set of pixels
 ==================
 */
 #ifdef REND2_SP
-static void R_BlendOverTexture(byte* data, int pixelCount, byte blend[4]) {
+static void R_BlendOverTexture(byte * data, int pixelCount, byte blend[4]) {
 #else // !REND2_SP
-static void R_BlendOverTexture(byte* data, const int pixelCount, byte blend[4])
+static void R_BlendOverTexture(byte * data, const int pixelCount, byte blend[4])
 {
 #endif // REND2_SP
 	int		i = 0;
@@ -1627,7 +1627,7 @@ byte	mipBlendColors[16][4] = {
 	{ 0,0,255,128 },
 };
 
-static void RawImage_SwizzleRA(byte* data, int width, int height)
+static void RawImage_SwizzleRA(byte * data, int width, int height)
 {
 	int i = 0;
 	byte* ptr = data, swap = 0;
@@ -1647,7 +1647,7 @@ RawImage_ScaleToPower2
 
 ===============
 */
-static void RawImage_ScaleToPower2(byte** data, int* inout_width, int* inout_height, int* inout_scaled_width, int* inout_scaled_height, imgType_t type, int flags, byte** resampledBuffer)
+static void RawImage_ScaleToPower2(byte * *data, int* inout_width, int* inout_height, int* inout_scaled_width, int* inout_scaled_height, imgType_t type, int flags, byte * *resampledBuffer)
 {
 	int width = *inout_width;
 	int height = *inout_height;
@@ -1764,7 +1764,7 @@ static void RawImage_ScaleToPower2(byte** data, int* inout_width, int* inout_hei
 	*inout_scaled_height = scaled_height;
 }
 
-static qboolean RawImage_HasAlpha(const byte* scan, int numPixels)
+static qboolean RawImage_HasAlpha(const byte * scan, int numPixels)
 {
 	int i = 0;
 
@@ -1782,7 +1782,7 @@ static qboolean RawImage_HasAlpha(const byte* scan, int numPixels)
 	return qfalse;
 }
 
-static GLenum RawImage_GetFormat(const byte* data, int numPixels, qboolean lightMap, imgType_t type, int flags)
+static GLenum RawImage_GetFormat(const byte * data, int numPixels, qboolean lightMap, imgType_t type, int flags)
 {
 	int samples = 3;
 	GLenum internalFormat = GL_RGB8;
@@ -1991,7 +1991,7 @@ static qboolean ShouldUseImmutableTextures(int imageFlags, GLenum internalformat
 	return glRefConfig.immutableTextures;
 }
 
-static void RawImage_UploadTexture(byte* data, int x, int y, int width, int height, GLenum internalFormat, imgType_t type, int flags, qboolean subtexture)
+static void RawImage_UploadTexture(byte * data, int x, int y, int width, int height, GLenum internalFormat, imgType_t type, int flags, qboolean subtexture)
 {
 	int dataFormat = 0, dataType = 0;
 
@@ -2140,7 +2140,7 @@ Upload32
 ===============
 */
 extern qboolean charSet;
-static void Upload32(byte* data, int width, int height, imgType_t type, int flags,
+static void Upload32(byte * data, int width, int height, imgType_t type, int flags,
 	qboolean lightMap, GLenum internalFormat, int* pUploadWidth, int* pUploadHeight)
 {
 	byte* scaledBuffer = NULL;
@@ -2378,7 +2378,7 @@ static image_t* R_AllocImage()
 }
 
 #if 0
-static void R_FreeImage(image_t* imageToFree)
+static void R_FreeImage(image_t * imageToFree)
 {
 	if (imageToFree)
 	{
@@ -2421,7 +2421,7 @@ R_CreateImage
 This is the only way any 2d image_t are created
 ================
 */
-image_t* R_CreateImage(const char* name, byte* pic, int width, int height, imgType_t type, int flags, int internalFormat) {
+image_t* R_CreateImage(const char* name, byte * pic, int width, int height, imgType_t type, int flags, int internalFormat) {
 	PROFILE_ZONE("Load: image create (upload + mipmaps)");
 	image_t* image = nullptr;
 	qboolean	isLightmap = qfalse;
@@ -2579,9 +2579,9 @@ This is the only way any 2d array sampler image_t are created
 ================
 */
 #ifdef REND2_SP
-image_t* R_Create2DImageArray(const char* name, byte* pic, int width, int height, int layers, imgType_t type, int flags, int internalFormat)
+image_t* R_Create2DImageArray(const char* name, byte * pic, int width, int height, int layers, imgType_t type, int flags, int internalFormat)
 #else // !REND2_SP
-static image_t* R_Create2DImageArray(const char* name, byte* pic, int width, int height, int layers, imgType_t type, int flags, int internalFormat)
+static image_t* R_Create2DImageArray(const char* name, byte * pic, int width, int height, int layers, imgType_t type, int flags, int internalFormat)
 #endif // REND2_SP
 {
 	image_t* image = nullptr;
@@ -2679,7 +2679,7 @@ static image_t* R_Create2DImageArray(const char* name, byte* pic, int width, int
 	return image;
 }
 
-image_t* R_CreateImage3D(const char* name, byte* data, int width, int height, int depth, int internalFormat)
+image_t* R_CreateImage3D(const char* name, byte * data, int width, int height, int depth, int internalFormat)
 {
 	image_t* image = nullptr;
 	long hash = 0;
@@ -2741,7 +2741,7 @@ image_t* R_CreateImage3D(const char* name, byte* data, int width, int height, in
 	return image;
 }
 
-void R_UpdateSubImage(image_t* image, byte* pic, int x, int y, int width, int height)
+void R_UpdateSubImage(image_t * image, byte * pic, int x, int y, int width, int height)
 {
 	byte* scaledBuffer = NULL;
 	byte* resampledBuffer = NULL;
@@ -2863,7 +2863,7 @@ static image_t* R_GetLoadedImage(const char* name, int flags)
 	return NULL;
 }
 
-void R_LoadPackedMaterialImage(shaderStage_t* stage, const char* packedImageName, int flags)
+void R_LoadPackedMaterialImage(shaderStage_t * stage, const char* packedImageName, int flags)
 {
 	PROFILE_ZONE("Load: packed material image");
 	char	packedName[MAX_QPATH];
@@ -2958,7 +2958,7 @@ void R_LoadPackedMaterialImage(shaderStage_t* stage, const char* packedImageName
 	Z_Free(packedPic);
 }
 
-image_t* R_BuildSDRSpecGlossImage(shaderStage_t* stage, const char* specImageName, int flags)
+image_t* R_BuildSDRSpecGlossImage(shaderStage_t * stage, const char* specImageName, int flags)
 {
 	char	sdrName[MAX_QPATH];
 	int		specWidth = 0, specHeight = 0;
@@ -3012,7 +3012,7 @@ image_t* R_BuildSDRSpecGlossImage(shaderStage_t* stage, const char* specImageNam
 	return outImage;
 }
 
-static void R_CreateNormalMap(const char* name, byte* pic, int width, int height, int flags)
+static void R_CreateNormalMap(const char* name, byte * pic, int width, int height, int flags)
 {
 	char normalName[MAX_QPATH];
 	image_t* normalImage = nullptr;
@@ -3046,20 +3046,20 @@ static void R_CreateNormalMap(const char* name, byte* pic, int width, int height
 		// Brighten up the original image to work with the normal map
 		// (per pixel, so a row at a time on the render job workers - same result as one pass)
 		R_ImageRows(width, height, [&](const int y0, const int y1)
-		{
-			for (int row = y0; row < y1; row++)
 			{
-				byte* picbyte = pic + row * width * 4;
-				const byte* normbyte = normalPic + row * width * 4;
-				RGBAtoYCoCgA(picbyte, picbyte, width, 1);
-				for (int col = 0; col < width; col++)
+				for (int row = y0; row < y1; row++)
 				{
-					int div = MAX(normbyte[col * 4 + 2] - 127, 16);
-					picbyte[col * 4] = CLAMP(picbyte[col * 4] * 128 / div, 0, 255);
+					byte* picbyte = pic + row * width * 4;
+					const byte* normbyte = normalPic + row * width * 4;
+					RGBAtoYCoCgA(picbyte, picbyte, width, 1);
+					for (int col = 0; col < width; col++)
+					{
+						int div = MAX(normbyte[col * 4 + 2] - 127, 16);
+						picbyte[col * 4] = CLAMP(picbyte[col * 4] * 128 / div, 0, 255);
+					}
+					YCoCgAtoRGBA(picbyte, picbyte, width, 1);
 				}
-				YCoCgAtoRGBA(picbyte, picbyte, width, 1);
-			}
-		});
+			});
 #else
 		// Blur original image's luma to work with the normal map
 		{
@@ -3225,7 +3225,7 @@ image_t* R_FindImageFile(const char* name, imgType_t type, int flags)
 	Z_Free(pic);
 
 	return image;
-}
+	}
 
 /*
 ================
@@ -3775,17 +3775,17 @@ static void R_CreateBuiltinImages(void) {
 			"*hdrDepth", NULL, width, height, IMGTYPE_COLORALPHA,
 			IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_R32F);
 #else // !REND2_SP
-	{
-		tr.screenSsaoImage = R_CreateImage(
-			"*screenSsao", NULL, width / 2, height / 2, IMGTYPE_COLORALPHA,
-			IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
-		tr.hdrDepthImage = R_CreateImage(
-			"*hdrDepth", NULL, width, height, IMGTYPE_COLORALPHA,
-			IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_R32F);
+		{
+			tr.screenSsaoImage = R_CreateImage(
+				"*screenSsao", NULL, width / 2, height / 2, IMGTYPE_COLORALPHA,
+				IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+			tr.hdrDepthImage = R_CreateImage(
+				"*hdrDepth", NULL, width, height, IMGTYPE_COLORALPHA,
+				IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_R32F);
 #endif // REND2_SP
-	}
+		}
 
-	if (r_shadows->integer == 4)
+	// always made, so cg_shadows 2/3 character shadows work after switching shadows on in game (DH 2026-10-26)
 	{
 		tr.pshadowArrayImage = R_Create2DImageArray(
 			va("*pshadowmapArray"),
@@ -3844,7 +3844,7 @@ static void R_CreateBuiltinImages(void) {
 		IMGTYPE_COLORALPHA,
 		IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE,
 		GL_DEPTH_COMPONENT16);
-}
+	}
 
 /*
 ===============

@@ -45,6 +45,16 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include <qcommon/q_platform.h>
 #include <qcommon/q_string.h>
 
+// saber-only light (DH 2026-10-27): cg_saberLightRadius / cg_saberLightIntensity scale only lightsaber light, on top of r_dlightRadius / r_dlightIntensity.
+// In rend2 with r_hdr 1 a light colour above 1 is cut back to 1, so cg_saberLightIntensity stops getting
+// brighter at about 1.5 there (the blade colour is already scaled to 0.66)
+static void CG_AddSaberLight(const vec3_t org, const float radius, const vec3_t rgb)
+{
+	const float radiusScale = cg_saberLightRadius.value > 0.0f ? cg_saberLightRadius.value : 1.0f;
+	const float intensity = cg_saberLightIntensity.value > 0.0f ? cg_saberLightIntensity.value : 1.0f;
+	trap->R_AddLightToScene(org, radius * radiusScale, rgb[0] * intensity, rgb[1] * intensity, rgb[2] * intensity);
+}
+
 extern void CheckCameraLocation(vec3_t oldeye_origin);
 extern vmCvar_t cg_thirdPersonAlpha;
 extern int cgSiegeTeam1PlShader;
@@ -1297,6 +1307,7 @@ void CG_LoadCISounds(clientInfo_t* ci, const qboolean modelloaded)
 
 	trap->S_Shutup(qtrue);
 
+	int own_sounds = 0;
 	for (i = 0; i < MAX_CUSTOM_SOUNDS; i++)
 	{
 		s = cg_customSoundNames[i];
@@ -1322,6 +1333,27 @@ void CG_LoadCISounds(clientInfo_t* ci, const qboolean modelloaded)
 				ci->sounds[i] = trap->S_RegisterSound(va("sound/chars/%s/misc/%s", dir, sound_name));
 			}
 		}
+		if (ci->sounds[i])
+		{
+			own_sounds++;
+		}
+	}
+
+	// DH 2026-10-26: a sound the model has no file for stays silent (R2-D2 jumped and took pain with the generic human
+	// voice). Only a humanoid model without a single sound of its own still borrows the generic voice; creatures and
+	// droids never do. cg_missingSoundsSilent 0 = the old fallback for every missing sound.
+	const qboolean generic_voice = !cg_missingSoundsSilent.integer || !own_sounds && !ci->creatureSkel ? qtrue : qfalse;
+
+	for (i = 0; i < MAX_CUSTOM_SOUNDS && generic_voice; i++)
+	{
+		s = cg_customSoundNames[i];
+		if (!s)
+		{
+			break;
+		}
+
+		Com_sprintf(sound_name, sizeof sound_name, "%s", s + 1);
+		COM_StripExtension(sound_name, sound_name, sizeof sound_name);
 
 		if (!ci->sounds[i])
 		{
@@ -1368,7 +1400,7 @@ void CG_LoadCISounds(clientInfo_t* ci, const qboolean modelloaded)
 				}
 			}
 
-			if (!ci->siegeSounds[i])
+			if (!ci->siegeSounds[i] && generic_voice)
 			{
 				//failed the load, try one out of the generic path
 				if (is_female)
@@ -1412,7 +1444,7 @@ void CG_LoadCISounds(clientInfo_t* ci, const qboolean modelloaded)
 				}
 			}
 
-			if (!ci->duelSounds[i])
+			if (!ci->duelSounds[i] && generic_voice)
 			{
 				//failed the load, try one out of the generic path
 				if (is_female)
@@ -3796,7 +3828,17 @@ static void CG_SetLerpFrameAnimation(centity_t* cent, clientInfo_t* ci, lerpFram
 			return;
 		}
 
-		if (torso_only && !cent->noLumbar)
+		if (torso_only && cent->noLumbar && cent->currentState.eType != ET_NPC)
+		{
+			// DH 2026-10-26: a whole-body creature / droid player (wampa, rancor...): only the legs anim moves its bones;
+			// a torso anim on model_root bent the wampa double
+			cent->pe.torso.frame = first_frame;
+			if (ci)
+			{
+				ci->torsoAnim = new_animation;
+			}
+		}
+		else if (torso_only && !cent->noLumbar)
 		{
 			//rww - The guesswork based on the lerp frame figures is usually BS, so I've resorted to a call to get the frame of the bone directly.
 			float gb_ac_frame = 0;
@@ -4517,6 +4559,14 @@ qboolean CG_RagDoll(centity_t* cent, vec3_t forced_angles)
 	// Class explicitly disallowed from ragdoll
 	if (G_RagDollDisallowedClass(cent->currentState.botclass))
 	{
+		return qfalse;
+	}
+
+	// DH 2026-10-26: a body still in a wampa's / rancor's hand or mouth hangs there (BG_AttachToRancor): no ragdoll
+	// until it is let go (it fell to the floor while the server still held it)
+	if (cent->currentState.eFlags2 & EF2_HELD_BY_MONSTER)
+	{
+		cent->isRagging = qfalse;
 		return qfalse;
 	}
 
@@ -6130,6 +6180,47 @@ static void CG_ClothForcePush(const centity_t* cent)
 		org[0], org[1], org[2], fwd[0], fwd[1], fwd[2], strength));
 }
 
+// Grass force waves (2026-10-27): when someone's force push or pull starts (PW_DISINT_4 came on, PW_PULL with it for a
+// pull; not grip) or their repulse blast goes off, tell the renderer (renderer command grass_wave), which sends a wave
+// through the grass in front of them (all round for repulse). r_grassForceWave in the renderer scales it, 0 = off.
+static void CG_GrassForceWave(const centity_t* cent)
+{
+	static qboolean pushWasOn[MAX_GENTITIES];
+	static qboolean repulseWasOn[MAX_GENTITIES];
+	const int num = cent->currentState.number;
+	if (num < 0 || num >= MAX_GENTITIES)
+	{
+		return;
+	}
+	const qboolean push = (cent->currentState.powerups & 1 << PW_DISINT_4) && !(cent->currentState.forcePowersActive & 1 << FP_GRIP) ? qtrue : qfalse;
+	const qboolean repulse = cent->currentState.eFlags & EF_BODYPUSH && (cent->currentState.torsoAnim == BOTH_FORCE_REPULSE
+		|| cent->currentState.torsoAnim == BOTH_FORCE_REPULSE_GALEN) ? qtrue : qfalse;
+	const qboolean pushStarted = push && !pushWasOn[num] ? qtrue : qfalse;
+	const qboolean repulseStarted = repulse && !repulseWasOn[num] ? qtrue : qfalse;
+	pushWasOn[num] = push;
+	repulseWasOn[num] = repulse;
+	if (!pushStarted && !repulseStarted)
+	{
+		return;
+	}
+	vec3_t fwd;
+	AngleVectors(cent->lerpAngles, fwd, NULL, NULL);
+	int type = 0;		// push
+	float range = 640.0f;
+	if (repulseStarted)
+	{
+		type = 2;
+		range = 448.0f;
+	}
+	else if (cent->currentState.powerups & 1 << PW_PULL)
+	{
+		type = 1;
+		range = 512.0f;
+	}
+	trap->SendConsoleCommand(va("grass_wave %d %.0f %.0f %.0f %.3f %.3f %d %.0f\n", cg.time,
+		cent->lerpOrigin[0], cent->lerpOrigin[1], cent->lerpOrigin[2], fwd[0], fwd[1], type, range));
+}
+
 static void CG_ForcePushBlur(vec3_t org, centity_t* cent)
 {
 	if (com_outcast.integer == 2) // NO EFFECT
@@ -7100,7 +7191,7 @@ void CG_DoSaberLight(const saberInfo_t* saber, const int cnum, const int bnum)
 			}
 		}
 
-		trap->R_AddLightToScene(mid, diameter + randoms() * 8.0f, rgb[0], rgb[1], rgb[2]);
+		CG_AddSaberLight(mid, diameter + randoms() * 8.0f, rgb);
 	}
 }
 
@@ -7228,7 +7319,7 @@ static void CG_DoRotJSaber(vec3_t blade_muz, vec3_t blade_tip, vec3_t trail_tip,
 	{
 		CG_RGBForSaberColor(color, rgb, cnum, bnum);
 		VectorScale(rgb, 0.66f, rgb);
-		trap->R_AddLightToScene(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb[0], rgb[1], rgb[2]);
+		CG_AddSaberLight(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb);
 	}
 
 	//Distance Scale
@@ -7701,7 +7792,7 @@ static void CG_DoCloakedSaber(vec3_t origin, vec3_t dir, float length, float len
 	{
 		CG_RGBForSaberColor(color, rgb, cnum, bnum);
 		VectorScale(rgb, 0.66f, rgb);
-		trap->R_AddLightToScene(mid, length * 1.4f + Q_flrand(0.0f, 1.0f) * 3.0f, rgb[0], rgb[1], rgb[2]);
+		CG_AddSaberLight(mid, length * 1.4f + Q_flrand(0.0f, 1.0f) * 3.0f, rgb);
 	}
 
 	memset(&saber, 0, sizeof(refEntity_t));
@@ -7916,7 +8007,7 @@ static void CG_DoSaber(vec3_t origin, vec3_t dir, float length, float length_max
 	{
 		CG_RGBForSaberColor(color, rgb, cnum, bnum);
 		VectorScale(rgb, 0.66f, rgb);
-		trap->R_AddLightToScene(mid, length * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb[0], rgb[1], rgb[2]);
+		CG_AddSaberLight(mid, length * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb);
 	}
 
 	memset(&saber, 0, sizeof(refEntity_t));
@@ -8208,7 +8299,7 @@ static void CG_DoTFASaber(vec3_t blade_muz, vec3_t blade_tip, vec3_t trail_tip, 
 	{
 		CG_RGBForSaberColor(color, rgb, cnum, bnum);
 		VectorScale(rgb, 0.66f, rgb);
-		trap->R_AddLightToScene(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb[0], rgb[1], rgb[2]);
+		CG_AddSaberLight(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb);
 	}
 
 	//Distance Scale
@@ -8680,7 +8771,7 @@ static void CG_DoSaberUnstable(vec3_t origin, vec3_t dir, float length, float le
 	if (do_light)
 	{
 		CG_RGBForSaberColor(color, rgb, cnum, bnum);
-		trap->R_AddLightToScene(mid, length * 1.4f + Q_flrand(0.0f, 1.0f) * 3.0f, rgb[0], rgb[1], rgb[2]);
+		CG_AddSaberLight(mid, length * 1.4f + Q_flrand(0.0f, 1.0f) * 3.0f, rgb);
 	}
 
 	memset(&saber, 0, sizeof(refEntity_t));
@@ -8905,7 +8996,7 @@ static void CG_DoUnstableSaber(vec3_t blade_muz, vec3_t blade_tip, vec3_t trail_
 	{
 		CG_RGBForSaberColor(color, rgb, cnum, bnum);
 		VectorScale(rgb, 0.66f, rgb);
-		trap->R_AddLightToScene(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb[0], rgb[1], rgb[2]);
+		CG_AddSaberLight(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb);
 	}
 
 	//Distance Scale
@@ -9379,7 +9470,7 @@ static void CG_DoRebelsSaber(vec3_t origin, vec3_t dir, float length, float leng
 	{
 		CG_RGBForSaberColor(color, rgb, cnum, bnum);
 		VectorScale(rgb, 0.66f, rgb);
-		trap->R_AddLightToScene(mid, length * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb[0], rgb[1], rgb[2]);
+		CG_AddSaberLight(mid, length * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb);
 	}
 
 	memset(&saber, 0, sizeof(refEntity_t));
@@ -9664,7 +9755,7 @@ static void CG_DoEp1Saber(vec3_t blade_muz, vec3_t blade_tip, vec3_t trail_tip, 
 	{
 		CG_RGBForSaberColor(color, rgb, cnum, bnum);
 		VectorScale(rgb, 0.66f, rgb);
-		trap->R_AddLightToScene(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb[0], rgb[1], rgb[2]);
+		CG_AddSaberLight(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb);
 	}
 
 	//Distance Scale
@@ -10181,7 +10272,7 @@ static void CG_DoEp2Saber(vec3_t blade_muz, vec3_t blade_tip, vec3_t trail_tip, 
 	{
 		CG_RGBForSaberColor(color, rgb, cnum, bnum);
 		VectorScale(rgb, 0.66f, rgb);
-		trap->R_AddLightToScene(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb[0], rgb[1], rgb[2]);
+		CG_AddSaberLight(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb);
 	}
 
 	//Distance Scale
@@ -10699,7 +10790,7 @@ static void CG_DoEp3Saber(vec3_t blade_muz, vec3_t blade_tip, vec3_t trail_tip, 
 	{
 		CG_RGBForSaberColor(color, rgb, cnum, bnum);
 		VectorScale(rgb, 0.66f, rgb);
-		trap->R_AddLightToScene(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb[0], rgb[1], rgb[2]);
+		CG_AddSaberLight(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb);
 	}
 
 	//Distance Scale
@@ -11213,7 +11304,7 @@ static void CG_DoOTSaber(vec3_t blade_muz, vec3_t blade_tip, vec3_t trail_tip, v
 	{
 		CG_RGBForSaberColor(color, rgb, cnum, bnum);
 		VectorScale(rgb, 0.66f, rgb);
-		trap->R_AddLightToScene(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb[0], rgb[1], rgb[2]);
+		CG_AddSaberLight(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb);
 	}
 
 	//Distance Scale
@@ -11748,7 +11839,7 @@ static void CG_DoSFXSaber(vec3_t blade_muz, vec3_t blade_tip, vec3_t trail_tip, 
 	{
 		CG_RGBForSaberColor(color, rgb, cnum, bnum);
 		VectorScale(rgb, 0.66f, rgb);
-		trap->R_AddLightToScene(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb[0], rgb[1], rgb[2]);
+		CG_AddSaberLight(mid, blade_len * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb);
 	}
 
 	//Distance Scale
@@ -12224,7 +12315,7 @@ static void CG_DoCWSaber(vec3_t origin, vec3_t dir, float length, float length_m
 	{
 		CG_RGBForSaberColor(color, rgb, cnum, bnum);
 		VectorScale(rgb, 0.66f, rgb);
-		trap->R_AddLightToScene(mid, length * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb[0], rgb[1], rgb[2]);
+		CG_AddSaberLight(mid, length * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb);
 	}
 
 	memset(&saber, 0, sizeof(refEntity_t));
@@ -12476,7 +12567,7 @@ static void CG_DoMaulSaber(vec3_t origin, vec3_t dir, float length, float length
 	{
 		CG_RGBForSaberColor(color, rgb, cnum, bnum);
 		VectorScale(rgb, 0.66f, rgb);
-		trap->R_AddLightToScene(mid, length * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb[0], rgb[1], rgb[2]);
+		CG_AddSaberLight(mid, length * 2.0f + Q_flrand(0.0f, 1.0f) * 10.0f, rgb);
 	}
 
 	memset(&saber, 0, sizeof(refEntity_t));
@@ -21109,6 +21200,7 @@ SkipTrueView:
 	}
 
 	CG_ClothForcePush(cent);
+	CG_GrassForceWave(cent);
 
 	if (cent->currentState.powerups & 1 << PW_DISINT_4)
 	{
@@ -22511,7 +22603,15 @@ stillDoSaber:
 		refEntity_t shell = legs;
 
 		shell.renderfx &= ~(RF_FORCE_ENT_ALPHA | RF_MINLIGHT | RF_RGB_TINT);
-		if (cent->currentState.weapon == WP_SABER)
+		if (cent->currentState.userInt3 & 1 << FLAG_DARKSTASIS)
+		{
+			// Dark Stasis: red
+			shell.shaderRGBA[0] = 255;
+			shell.shaderRGBA[1] = 20;
+			shell.shaderRGBA[2] = 10;
+			shell.shaderRGBA[3] = 254;
+		}
+		else if (cent->currentState.weapon == WP_SABER)
 		{
 			shell.shaderRGBA[0] = 255;
 			shell.shaderRGBA[1] = 100;

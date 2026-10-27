@@ -364,7 +364,7 @@ qhandle_t RE_RegisterSkin(const char* name) {
 #else // !REND2_SP
 	return(hSkin);
 #endif // REND2_SP
-}
+	}
 
 /*
 ==================
@@ -540,8 +540,8 @@ R_InitSkins
 void	R_InitSkins(void) {
 #else // !REND2_SP
 				len++;
-			}
-		}
+}
+}
 	}
 
 	// parse a regular word

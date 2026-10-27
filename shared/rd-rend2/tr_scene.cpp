@@ -27,6 +27,7 @@ int			r_firstSceneDrawSurf;
 
 int			r_numdlights;
 int			r_firstSceneDlight;
+static int	r_dlightsRadiusScaled;	// dlights up to here already had r_dlightRadius applied (or are menu lights)
 
 int			r_numentities;
 int			r_firstSceneEntity;
@@ -51,6 +52,7 @@ void R_InitNextFrame(void) {
 
 	r_numdlights = 0;
 	r_firstSceneDlight = 0;
+	r_dlightsRadiusScaled = 0;
 
 	r_numentities = 0;
 	r_firstSceneEntity = 0;
@@ -183,7 +185,7 @@ void RE_AddPolyToScene(const qhandle_t hShader, const int numVerts, const polyVe
 		}
 		poly->fogIndex = fogIndex;
 	}
-}
+		}
 
 //=================================================================================
 
@@ -193,7 +195,7 @@ RE_AddRefEntityToScene
 
 =====================
 */
-void RE_AddRefEntityToScene(const refEntity_t* ent) {
+void RE_AddRefEntityToScene(const refEntity_t * ent) {
 	vec3_t cross;
 
 	if (!tr.registered) {
@@ -239,7 +241,7 @@ void RE_AddRefEntityToScene(const refEntity_t* ent) {
 	backEndData->entities[r_numentities].mirrored = (qboolean)(DotProduct(ent->axis[2], cross) < 0.f);
 
 	r_numentities++;
-}
+	}
 /*
 =====================
 RE_AddMiniRefEntityToScene
@@ -247,7 +249,7 @@ RE_AddMiniRefEntityToScene
 1:1 with how vanilla does it --eez
 =====================
 */
-void RE_AddMiniRefEntityToScene(const miniRefEntity_t* miniRefEnt)
+void RE_AddMiniRefEntityToScene(const miniRefEntity_t * miniRefEnt)
 {
 	refEntity_t entity;
 	if (!tr.registered)
@@ -265,6 +267,10 @@ RE_AddDynamicLightToScene
 
 =====================
 */
+// rend2 look (DH 2026-10-26): r_dlightIntensity / r_dlightRadius scale every dynamic light (sabers, shots, explosions),
+// r_baseRoughness = surface roughness for textures without a material map (1 = matte as before)
+extern cvar_t* r_dlightRadius;
+
 static void RE_AddDynamicLightToScene(const vec3_t org, const float intensity, const float r, const float g, const float b, const int additive)
 {
 	if (!tr.registered)
@@ -283,7 +289,7 @@ static void RE_AddDynamicLightToScene(const vec3_t org, const float intensity, c
 	dlight_t* dl = &backEndData->dlights[r_numdlights++];
 
 	VectorCopy(org, dl->origin);
-	dl->radius = intensity;
+	dl->radius = intensity;	// r_dlightRadius is applied in RE_BeginScene, game views only (not menus)
 	dl->color[0] = r;
 	dl->color[1] = g;
 	dl->color[2] = b;
@@ -332,7 +338,7 @@ void RE_AddAdditiveLightToScene(const vec3_t org, const float intensity, const f
 	RE_AddDynamicLightToScene(org, intensity, r, g, b, qtrue);
 }
 
-void RE_BeginScene(const refdef_t* fd)
+void RE_BeginScene(const refdef_t * fd)
 {
 	tr.refdef.x = fd->x;
 	tr.refdef.y = fd->y;
@@ -485,6 +491,18 @@ void RE_BeginScene(const refdef_t* fd)
 	tr.refdef.num_dlights = r_numdlights - r_firstSceneDlight;
 	tr.refdef.dlights = &backEndData->dlights[r_firstSceneDlight];
 
+	// r_dlightRadius only for game views: menu model views (RDF_NOWORLDMODEL) keep the menu's own light, or the
+	// character / saber menus wash out (DH 2026-10-27). Each light is scaled once, even if a skyportal scene
+	// begins twice with the same lights
+	for (int i = MAX(r_firstSceneDlight, r_dlightsRadiusScaled); i < r_numdlights; i++)
+	{
+		if (!(fd->rdflags & RDF_NOWORLDMODEL) && r_dlightRadius->value > 0.0f)
+		{
+			backEndData->dlights[i].radius *= r_dlightRadius->value;
+		}
+	}
+	r_dlightsRadiusScaled = MAX(r_dlightsRadiusScaled, r_numdlights);
+
 	// Add the decals here because decals add polys and we need to ensure
 	// that the polys are added before the the renderer is prepared
 	if (!(fd->rdflags & RDF_NOWORLDMODEL))
@@ -558,7 +576,7 @@ Rendering a scene may require multiple views to be rendered
 to handle mirrors,
 @@@@@@@@@@@@@@@@@@@@@
 */
-void RE_RenderScene(const refdef_t* fd)
+void RE_RenderScene(const refdef_t * fd)
 {
 	PROFILE_ZONE("R front end: RenderScene");
 	int				startTime = 0;

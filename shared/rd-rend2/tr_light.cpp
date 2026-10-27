@@ -41,7 +41,7 @@ the back end (before doing the lighting calculation)
 #ifdef REND2_SP
 void R_TransformDlights(const int count, dlight_t* dl, const orientationr_t* ori) {
 #else // !REND2_SP
-void R_TransformDlights(int count, dlight_t* dl, orientationr_t* ori)
+void R_TransformDlights(int count, dlight_t * dl, orientationr_t * ori)
 {
 #endif // REND2_SP
 	int		i = 0;
@@ -63,9 +63,9 @@ Determine which dynamic lights may effect this bmodel
 =============
 */
 #ifdef REND2_SP
-void R_DlightBmodel(const bmodel_t* bmodel, trRefEntity_t* ent)
+void R_DlightBmodel(const bmodel_t * bmodel, trRefEntity_t * ent)
 #else // !REND2_SP
-void R_DlightBmodel(bmodel_t* bmodel, trRefEntity_t* ent)
+void R_DlightBmodel(bmodel_t * bmodel, trRefEntity_t * ent)
 #endif // REND2_SP
 {
 	int			i = 0, j = 0;
@@ -139,7 +139,7 @@ R_SetupEntityLightingGrid
 
 =================
 */
-static void R_SetupEntityLightingGrid(trRefEntity_t* ent, world_t* world)
+static void R_SetupEntityLightingGrid(trRefEntity_t * ent, world_t * world)
 {
 	vec3_t	lightOrigin;
 	int		pos[3]{};
@@ -323,9 +323,9 @@ LogLight
 ===============
 */
 #ifdef REND2_SP
-static void LogLight(const trRefEntity_t* ent) {
+static void LogLight(const trRefEntity_t * ent) {
 #else // !REND2_SP
-static void LogLight(trRefEntity_t* ent)
+static void LogLight(trRefEntity_t * ent)
 {
 #endif // REND2_SP
 	int	max1 = 0, max2 = 0;
@@ -365,7 +365,7 @@ Calculates all the lighting values that will be used
 by the Calc_* functions
 =================
 */
-void R_SetupEntityLighting(const trRefdef_t* refdef, trRefEntity_t* ent) {
+void R_SetupEntityLighting(const trRefdef_t * refdef, trRefEntity_t * ent) {
 	int				i = 0;
 	float			d = 0.0f;
 	vec3_t			lightDir;
@@ -531,7 +531,7 @@ int R_LightForPoint(vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec
 	return qtrue;
 }
 
-int R_LightDirForPoint(vec3_t point, vec3_t lightDir, vec3_t normal, world_t* world)
+int R_LightDirForPoint(vec3_t point, vec3_t lightDir, vec3_t normal, world_t * world)
 {
 	trRefEntity_t ent;
 

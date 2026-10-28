@@ -67,6 +67,7 @@ extern qboolean WP_SaberBladeUseSecondBladeStyle(const saberInfo_t* saber, int b
 extern void WP_SaberSwingSound(const gentity_t* ent, int saberNum, swingType_t swing_type);
 extern vmCvar_t cg_SaberInnonblockableAttackWarning;
 extern vmCvar_t cg_IsSaberDoingAttackDamage;
+extern vmCvar_t cg_DrawMeditateEffect;
 extern qboolean PM_InLedgeMove(int anim);
 extern void WP_SabersDamageTrace(gentity_t* ent, qboolean no_effects);
 extern void WP_SaberUpdateOldBladeData(gentity_t* ent);
@@ -6414,6 +6415,7 @@ void CG_AddRefEntityWithPowerups(refEntity_t* ent, int powerups, centity_t* cent
 	}
 
 	if (cg_SerenityJediEngineMode.integer == 2
+		&& cg_DrawMeditateEffect.integer > 0
 		&& cent->gent->client->ps.forcePower > 80
 		&& cent->gent->health > 1
 		&& powerups & 1 << PW_MEDITATE && !in_camera)

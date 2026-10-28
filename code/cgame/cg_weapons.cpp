@@ -675,6 +675,8 @@ void CG_RegisterWeapon(const int weapon_num)
 		cgi_S_RegisterSound("sound/weapons/force/drained.mp3");
 		cgi_S_RegisterSound("sound/weapons/force/force_stasis.mp3");
 		cgi_S_RegisterSound("sound/weapons/force/dash.wav");
+		cgi_S_RegisterSound("sound/weapons/force/DarkStasis.mp3");
+		cgi_S_RegisterSound("sound/weapons/force/Darkstasisloop.wav");
 		//force graphics
 		cgs.media.playerShieldDamage = cgi_R_RegisterShader("gfx/misc/personalshield");
 		cgs.media.forceShell_md = cgi_R_RegisterShader("powerups/forceshell");

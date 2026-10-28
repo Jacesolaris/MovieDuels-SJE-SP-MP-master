@@ -131,6 +131,7 @@ int protectLoopSound = 0;
 int absorbLoopSound = 0;
 int seeLoopSound = 0;
 int ysalamiriLoopSound = 0;
+int darkstasisLoopSound = 0;
 
 #define FORCE_VELOCITY_DAMAGE 0
 
@@ -424,6 +425,8 @@ void WP_InitForcePowers(gentity_t* ent)
 		absorbLoopSound = G_SoundIndex("sound/weapons/force/absorbloop.wav");
 	if (!protectLoopSound)
 		protectLoopSound = G_SoundIndex("sound/weapons/force/protectloop.wav");
+	if (!darkstasisLoopSound)
+		darkstasisLoopSound = G_SoundIndex("sound/weapons/force/Darkstasisloop.wav");
 	if (!seeLoopSound)
 		seeLoopSound = G_SoundIndex("sound/weapons/force/seeloop.wav");
 	if (!ysalamiriLoopSound)
@@ -7786,11 +7789,11 @@ void ForceDarkStasis(gentity_t* self)
 	vec3_t mins = { 0 }, maxs = { 0 }, eye, viewFwd, fwd;
 
 	WP_ForcePowerStart(self, FP_DARK_STASIS, 0);
-	SJE_CastAnim(self, BOTH_SUPERPUSH, "sound/weapons/force/rage.mp3", "force/drain_hand");
+	SJE_CastAnim(self, BOTH_SUPERPUSH, "sound/weapons/force/DarkStasis.mp3", "force/drain_hand");
 	G_PlayBoltedEffect(G_EffectIndex("force/drain_hand"), self, "*r_hand");
 	if (!(self->client->ps.fd.forcePowersActive & (1 << FP_RAGE | 1 << FP_ABSORB)))
 	{
-		G_Sound(self, TRACK_CHANNEL_3, rageLoopSound); // WP_ForcePowerStop mutes it
+		G_Sound(self, TRACK_CHANNEL_3, darkstasisLoopSound); // WP_ForcePowerStop mutes it
 	}
 	self->client->ps.saberMove = self->client->ps.saberBounceMove = LS_READY;
 	self->client->ps.saberBlocked = BLOCKED_NONE;

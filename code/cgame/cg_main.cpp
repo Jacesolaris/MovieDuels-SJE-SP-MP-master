@@ -547,6 +547,8 @@ vmCvar_t cg_textprintscale;
 
 vmCvar_t cg_DrawCoolDown;
 
+vmCvar_t cg_DrawMeditateEffect;
+
 using cvarTable_t = struct
 {
 	vmCvar_t* vmCvar;
@@ -803,6 +805,8 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_textprintscale, "cg_textprintscale", "0.66f", CVAR_ARCHIVE },
 
 	{ &cg_DrawCoolDown, "g_drawcooldown", "0", CVAR_ARCHIVE },
+
+	{ &cg_DrawMeditateEffect, "g_drawmeditateeffect", "0", CVAR_ARCHIVE },
 };
 
 static constexpr size_t cvarTableSize = std::size(cvarTable);

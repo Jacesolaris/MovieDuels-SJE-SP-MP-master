@@ -5652,7 +5652,8 @@ static void CG_PlayerPowerups(centity_t* cent)
 		return;
 	}
 	// quad gives a dlight
-	if (powerups & 1 << PW_MEDITATE)
+	if (powerups & 1 << PW_MEDITATE
+		&& g_drawmeditateeffect.integer > 0)
 	{
 		if (cg.snap->ps.fd.forcePower < 50)
 		{
@@ -21634,6 +21635,7 @@ SkipTrueView:
 	}
 
 	if (cent->currentState.powerups & 1 << PW_MEDITATE
+		&& g_drawmeditateeffect.integer > 0
 		&& health > 1)
 	{
 		if (cent->ghoul2)

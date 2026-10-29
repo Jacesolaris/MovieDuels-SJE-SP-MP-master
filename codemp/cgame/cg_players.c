@@ -17384,6 +17384,7 @@ static void CG_SaberBlasterPistolUpdate(centity_t* cent, const clientInfo_t* ci)
 		return;
 	}
 	if (cent->currentState.fireflag == SS_BLASTER
+		&& cent->currentState.saberHolstered != 2 // SS_BLASTER (Jace 2026-10-29): saber off = pistol holstered
 		&& !ci->saber[1].model[0]
 		&& !(cent->currentState.eFlags & EF_DEAD))
 	{
@@ -18447,7 +18448,8 @@ static void CG_VisualWeaponsUpdate(centity_t* cent, clientInfo_t* ci)
 			&& !(ci->saber[0].saberFlags & SFL_TWO_HANDED)
 			&& !(ci->saber[0].stylesForbidden & 1 << SS_BLASTER))
 		{
-			if (!(cent->currentState.weapon == WP_SABER && cent->currentState.fireflag == SS_BLASTER))
+			if (!(cent->currentState.weapon == WP_SABER && cent->currentState.fireflag == SS_BLASTER
+				&& cent->currentState.saberHolstered != 2)) // SS_BLASTER (Jace 2026-10-29): saber off = on the hip
 			{
 				if (ci->holster_blaster2 != -1)
 				{

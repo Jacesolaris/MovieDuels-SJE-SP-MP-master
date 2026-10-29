@@ -236,7 +236,7 @@ extern qboolean IsHoldingReloadableGun(const gentity_t* ent);
 //---------
 #define REBELBLASTER_SPREAD				1.6f//1.2f
 #define REBELBLASTER_VELOCITY			1000
-#define REBELBLASTER_DAMAGE				35
+#define REBELBLASTER_DAMAGE				14
 
 // DC-15 Rifle
 //---------
@@ -253,8 +253,8 @@ extern qboolean IsHoldingReloadableGun(const gentity_t* ent);
 // A280
 //---------
 #define REBELRIFLE_SPREAD				1.6f//1.2f
-#define REBELRIFLE_VELOCITY			    1250
-#define REBELRIFLE_DAMAGE				30
+#define REBELRIFLE_VELOCITY			    2000
+#define REBELRIFLE_DAMAGE				25
 
 // LPA NN-14
 //--------
@@ -272,7 +272,7 @@ extern qboolean IsHoldingReloadableGun(const gentity_t* ent);
 // EE-3
 //---------
 #define BOBA_SPREAD				0.5f//1.2f
-#define BOBA_VELOCITY			2200
+#define BOBA_VELOCITY			2500
 #define BOBA_DAMAGE				30
 
 // DC-17 Hand Pistol

@@ -16914,7 +16914,7 @@ PM_FinishWeaponChange
 */
 static void PM_FinishWeaponChange()
 {
-	qboolean true_switch = qtrue;
+	qboolean trueSwitch = qtrue;
 
 	animFlags_t flags = PM_Animationstyletable(pm);
 
@@ -16942,10 +16942,10 @@ static void PM_FinishWeaponChange()
 
 	if (pm->ps->weapon == weapon)
 	{
-		true_switch = qfalse;
+		trueSwitch = qfalse;
 	}
 
-	if (true_switch && pm->ps->weapon == WP_EMPLACED_GUN && !(pm->ps->eFlags & EF_LOCKED_TO_WEAPON))
+	if (trueSwitch && pm->ps->weapon == WP_EMPLACED_GUN && !(pm->ps->eFlags & EF_LOCKED_TO_WEAPON))
 	{
 		gitem_t* item = FindItemForWeapon(WP_EMPLACED_GUN);
 		gentity_t* dropped = Drop_Item(pm->gent, item, 0, qfalse);
@@ -17015,7 +17015,7 @@ static void PM_FinishWeaponChange()
 		if (!pm->ps->saberInFlight || pm->ps->dualSabers)
 		{
 			//if it's not in flight or lying around, turn it on!
-			if (true_switch)
+			if (trueSwitch)
 			{
 				//actually did switch weapons, turn it on
 				if (PM_RidingVehicle())
@@ -17054,7 +17054,7 @@ static void PM_FinishWeaponChange()
 				gi.cvar_set("cg_thirdperson", "1");
 			}
 		}
-		if (true_switch)
+		if (trueSwitch)
 		{
 			//actually did switch weapons, play anim
 			if (!G_IsRidingVehicle(pm->gent) && !IsSurrendering(pm->gent))
@@ -18943,11 +18943,6 @@ int PM_ReadyPoseForSaberAnimLevel(void)
 	// Serenity Jedi Engine mode 2 overrides JKA stance table
 	if (g_SerenityJediEngineMode->integer == 2)
 	{
-		const qboolean isSithLord =
-			(pm->gent != NULL &&
-				pm->gent->client != NULL &&
-				pm->gent->client->NPC_class == CLASS_SITHLORD) ? qtrue : qfalse;
-
 		if (g_RealisticBlockingMode->integer != 0)
 		{
 			// Cosmetic mode OFF:
@@ -18955,18 +18950,45 @@ int PM_ReadyPoseForSaberAnimLevel(void)
 			//  - Everyone else uses BOTH_STAND1
 			if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
 			{
-				if (flags.isBattleDroid == qtrue)
+				if (pm->gent != NULL &&
+					pm->gent->client != NULL &&
+					pm->gent->client->NPC_class == CLASS_SITHLORD)
 				{
-					anim = (isSithLord == qtrue) ? BOTH_STAND9 : BOTH_STAND1_BDROID;
+					anim = BOTH_STAND9;
+				}
+				else if (pm->gent != NULL &&
+					pm->gent->client != NULL &&
+					pm->gent->client->NPC_class == CLASS_GALEN)
+				{
+					anim = BOTH_STAND2IDLE2;
+				}
+				else if (flags.isBattleDroid == qtrue)
+				{
+					anim = BOTH_STAND1_BDROID;
 				}
 				else
 				{
-					anim = (isSithLord == qtrue) ? BOTH_STAND9 : BOTH_STAND1;
+					anim = BOTH_STAND1;
 				}
 			}
 			else
 			{
-				anim = (isSithLord == qtrue) ? BOTH_STAND9 : BOTH_STAND1;
+				if (pm->gent != NULL &&
+					pm->gent->client != NULL &&
+					pm->gent->client->NPC_class == CLASS_SITHLORD)
+				{
+					anim = BOTH_STAND9;
+				}
+				else if (pm->gent != NULL &&
+					pm->gent->client != NULL &&
+					pm->gent->client->NPC_class == CLASS_GALEN)
+				{
+					anim = BOTH_STAND2IDLE2;
+				}
+				else
+				{
+					anim = BOTH_STAND1;
+				}
 			}
 		}
 		else
@@ -21132,8 +21154,8 @@ int PM_BlockingPoseForSaberAnimLevelStaffAMD(void)
 
 	animFlags_t flags = PM_Animationstyletable(pm);
 
-	// Active blocking: block + attack held
 	const qboolean is_holding_block_button_and_attack = ((pm->ps->ManualBlockingFlags & (1 << MBF_HOLDINGBLOCKANDATTACK)) != 0) ? qtrue : qfalse;
+	const qboolean is_walking_and_blocking = (is_holding_block_button_and_attack && (pm->cmd.buttons & BUTTON_WALKING)) ? qtrue : qfalse;
 
 	const signed char forwardmove = pm->cmd.forwardmove;
 	const signed char rightmove = pm->cmd.rightmove;
@@ -21658,142 +21680,29 @@ int PM_BlockingPoseForSaberAnimLevelStaffAMD(void)
 			else
 			{
 				// Standing still, not moving left or right
-				if (is_holding_block_button_and_attack == qtrue) // pressing block + attack
-				{
+				if (is_holding_block_button_and_attack == qtrue)
+				{ // pressing block + attack
 					if (g_entities[pm->ps->clientNum].client != NULL &&
 						g_entities[pm->ps->clientNum].client->IsBlockingLightning == qtrue)
 					{
 						// Lightning override: top block
-						if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
-						{
-							if (flags.isGalenMarek == qtrue)
-							{
-								anim = BOTH_P7_S7_T__MD_GALEN;
-							}
-							else
-							{
-								anim = BOTH_P7_S7_T__MD;
-							}
+						anim = BOTH_P7_S7_T__MD;
+					}
+					else
+					{
+						if (is_walking_and_blocking == qtrue)
+						{// Walking top block
+							anim = BOTH_P7_S7_T_;
 						}
 						else
 						{
 							anim = BOTH_P7_S7_T__MD;
 						}
 					}
-					else
-					{
-						if (g_RealisticBlockingMode->integer != 0) // Cosmetic mode OFF
-						{
-							if ((pm->cmd.buttons & BUTTON_WALKING) != 0)
-							{
-								anim = BOTH_P7_S7_T_; // JKA top block
-							}
-							else
-							{
-								if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
-								{
-									if (flags.isBenKenobi == qtrue)
-									{
-										anim = BOTH_STAND_BLOCKING_ON_STAFF_BEN; // New front block
-									}
-									else if (flags.isMaul == qtrue)
-									{
-										anim = BOTH_STAND_BLOCKING_ON_STAFF_MAUL; // New front block
-									}
-									else if (flags.isCalKestis == qtrue)
-									{
-										anim = BOTH_STAND_BLOCKING_ON_STAFF_CAL; // New front block
-									}
-									else if (flags.isGrievous == qtrue)
-									{
-										anim = BOTH_STAND_BLOCKING_ON_STAFF_GRIEV; // New front block
-									}
-									else
-									{
-										anim = BOTH_STAND_BLOCKING_ON_STAFF; // New front block
-									}
-								}
-								else
-								{
-									anim = BOTH_STAND_BLOCKING_ON_STAFF; // New front block
-								}
-							}
-						}
-						else
-						{
-							if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
-							{
-								if (flags.isGalenMarek == qtrue)
-								{
-									anim = BOTH_P7_S7_T__MD_GALEN; // JKA top block
-								}
-								else
-								{
-									anim = BOTH_P7_S7_T__MD; // JKA top block
-								}
-							}
-							else
-							{
-								anim = BOTH_P7_S7_T__MD; // JKA top block
-							}
-						}
-					}
 				}
 				else
-				{
-					// Pressing block only
-					if (g_RealisticBlockingMode->integer != 0)
-					{
-						if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
-						{
-							if (flags.isBattleDroid == qtrue)
-							{
-								anim = BOTH_SABERSTAFFCROUCH_BDROID;
-							}
-							else if (flags.isKotor == qtrue)
-							{
-								anim = BOTH_SABERSTAFFCROUCH_KOTOR;
-							}
-							else
-							{
-								anim = BOTH_SABERSTAFFCROUCH;
-							}
-						}
-						else
-						{
-							anim = BOTH_SABERSTAFFCROUCH;
-						}
-					}
-					else
-					{
-						if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
-						{
-							if (flags.isBenKenobi == qtrue)
-							{
-								anim = BOTH_STAND_BLOCKING_ON_STAFF_BEN; // New front block
-							}
-							else if (flags.isMaul == qtrue)
-							{
-								anim = BOTH_STAND_BLOCKING_ON_STAFF_MAUL; // New front block
-							}
-							else if (flags.isCalKestis == qtrue)
-							{
-								anim = BOTH_STAND_BLOCKING_ON_STAFF_CAL; // New front block
-							}
-							else if (flags.isGrievous == qtrue)
-							{
-								anim = BOTH_STAND_BLOCKING_ON_STAFF_GRIEV; // New front block
-							}
-							else
-							{
-								anim = BOTH_STAND_BLOCKING_ON_STAFF; // New front block
-							}
-						}
-						else
-						{
-							anim = BOTH_STAND_BLOCKING_ON_STAFF; // New front block
-						}
-					}
+				{// Pressing block only
+					anim = BOTH_STAND_BLOCKING_ON_STAFF;
 				}
 			}
 		}
@@ -23265,7 +23174,16 @@ void PM_SetSaberMove(saberMoveName_t new_move)
 		{
 			if (g_SerenityJediEngineMode->integer == 2)
 			{
-				anim = BOTH_S1_S7_AMD;
+				if (pm->gent != NULL &&
+					pm->gent->client != NULL &&
+					pm->gent->client->NPC_class == CLASS_GALEN)
+				{
+					anim = BOTH_S1_S7;
+				}
+				else
+				{
+					anim = BOTH_S1_S7_AMD;
+				}
 			}
 			else
 			{
@@ -23302,7 +23220,16 @@ void PM_SetSaberMove(saberMoveName_t new_move)
 		{
 			if (g_SerenityJediEngineMode->integer == 2)
 			{
-				anim = BOTH_S1_S7_AMD;
+				if (pm->gent != NULL &&
+					pm->gent->client != NULL &&
+					pm->gent->client->NPC_class == CLASS_GALEN)
+				{
+					anim = BOTH_S1_S7;
+				}
+				else
+				{
+					anim = BOTH_S1_S7_AMD;
+				}
 			}
 			else
 			{
@@ -23339,7 +23266,16 @@ void PM_SetSaberMove(saberMoveName_t new_move)
 		{
 			if (g_SerenityJediEngineMode->integer == 2)
 			{
-				anim = BOTH_S1_S7_AMD;
+				if (pm->gent != NULL &&
+					pm->gent->client != NULL &&
+					pm->gent->client->NPC_class == CLASS_GALEN)
+				{
+					anim = BOTH_S1_S7;
+				}
+				else
+				{
+					anim = BOTH_S1_S7_AMD;
+				}
 			}
 			else
 			{
@@ -23376,7 +23312,16 @@ void PM_SetSaberMove(saberMoveName_t new_move)
 		{
 			if (g_SerenityJediEngineMode->integer == 2)
 			{
-				anim = BOTH_S1_S7_AMD;
+				if (pm->gent != NULL &&
+					pm->gent->client != NULL &&
+					pm->gent->client->NPC_class == CLASS_GALEN)
+				{
+					anim = BOTH_S1_S7;
+				}
+				else
+				{
+					anim = BOTH_S1_S7_AMD;
+				}
 			}
 			else
 			{

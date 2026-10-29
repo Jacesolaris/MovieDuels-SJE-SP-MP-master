@@ -17638,7 +17638,7 @@ static void PM_Weapon(void)
 				//2-handed PUSH
 				if (pm->ps->groundEntityNum == ENTITYNUM_NONE)
 				{
-					desiredAnim = BOTH_SUPERPUSH;
+					desiredAnim = BOTH_FORCE_REPULSE;
 
 					pm->ps->powerups[PW_INVINCIBLE] = pm->cmd.serverTime + pm->ps->torsoTimer + 2000;
 				}
@@ -17881,7 +17881,7 @@ static void PM_Weapon(void)
 				//2-handed PUSH
 				if (pm->ps->groundEntityNum == ENTITYNUM_NONE)
 				{
-					desiredAnim = BOTH_SUPERPUSH;
+					desiredAnim = BOTH_FORCE_REPULSE;
 				}
 				else
 				{

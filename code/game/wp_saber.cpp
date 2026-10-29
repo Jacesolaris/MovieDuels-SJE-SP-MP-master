@@ -9258,7 +9258,7 @@ static void WP_SaberDamageTrace(gentity_t* ent, int saberNum, int bladeNum)
 
 		if (saberHitFraction < 1.0f)
 		{
-			if (!collision_resolved && base_damage)
+			if (!collision_resolved && base_damage && hit_owner && hit_owner->client) // the hit saber may have no owner (MD team 2026-10-29)
 			{
 				//some other kind of in-hand saber collision
 				//handle my reaction
@@ -10863,7 +10863,7 @@ static void wp_saber_damage_trace_amd(gentity_t* ent, int saberNum, int bladeNum
 				(ent->client->ps.ManualBlockingFlags & 1 << MBF_NPCBLOCKING || ent->client->ps.ManualBlockingFlags & 1
 					<< MBF_HOLDINGBLOCK);
 
-			if (!collision_resolved && base_damage)
+			if (!collision_resolved && base_damage && hit_owner && hit_owner->client) // the hit saber may have no owner (MD team 2026-10-29)
 			{
 				//some other kind of in-hand saber collision
 				//handle my reaction
@@ -12275,7 +12275,7 @@ static void WP_SaberDamageTrace_MD(gentity_t* ent, int saberNum, int bladeNum)
 				(ent->client->ps.ManualBlockingFlags & 1 << MBF_NPCBLOCKING || ent->client->ps.ManualBlockingFlags & 1
 					<< MBF_HOLDINGBLOCK);
 
-			if (!collision_resolved && base_damage)
+			if (!collision_resolved && base_damage && hit_owner && hit_owner->client) // the hit saber may have no owner (MD team 2026-10-29)
 			{
 				//some other kind of in-hand saber collision
 				//handle my reaction
@@ -43294,7 +43294,7 @@ void ForceDarkStasis(gentity_t* self)
 			parts = SETANIM_BOTH;
 		}
 	}
-	NPC_SetAnim(self, parts, BOTH_SUPERPUSH, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART);
+	NPC_SetAnim(self, parts, BOTH_FORCE_REPULSE, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART);
 	self->client->ps.saberMove = self->client->ps.saberBounceMove = LS_READY;
 	//don't finish whatever saber anim you may have been in
 	self->client->ps.saberBlocked = BLOCKED_NONE;
@@ -43316,7 +43316,7 @@ void ForceDarkStasis(gentity_t* self)
 	int cast_time = 1000;
 	if (ValidAnimFileIndex(self->client->clientInfo.animFileIndex))
 	{
-		cast_time = Q_max(cast_time, PM_AnimLength(self->client->clientInfo.animFileIndex, BOTH_SUPERPUSH));
+		cast_time = Q_max(cast_time, PM_AnimLength(self->client->clientInfo.animFileIndex, BOTH_FORCE_REPULSE));
 	}
 	self->client->ps.weaponTime = cast_time;
 	if (self->client->ps.forcePowersActive & 1 << FP_SPEED)
@@ -44645,7 +44645,20 @@ void WP_ForcePowerStart(gentity_t* self, const forcePowers_t force_power, int ov
 		//held as long as its victims are
 		duration = darkStasisTime[DarkStasisLevel(self->client->ps.forcePowerLevel[force_power])];
 		self->client->ps.forcePowersActive |= 1 << force_power;
-		G_SoundOnEnt(self, CHAN_ITEM, "sound/weapons/force/DarkStasis.mp3");
+
+		if (self->client->ps.forcePowerLevel[FP_DARK_STASIS] == FORCE_LEVEL_1) // level 1 devide by 3
+		{
+			G_SoundOnEnt(self, CHAN_ITEM, "sound/weapons/force/DarkStasis1.mp3");
+		}
+		else if (self->client->ps.forcePowerLevel[FP_DARK_STASIS] == FORCE_LEVEL_2) // level 2 devide by 3
+		{
+			G_SoundOnEnt(self, CHAN_ITEM, "sound/weapons/force/DarkStasis2.mp3");
+		}
+		else
+		{
+			G_SoundOnEnt(self, CHAN_ITEM, "sound/weapons/force/DarkStasis3.mp3");
+		}
+
 		self->s.loopSound = G_SoundIndex("sound/weapons/force/Darkstasisloop.wav");
 		if (self->chestBolt != -1)
 		{

@@ -7422,7 +7422,7 @@ static void BG_SetAnimFinal(playerState_t* ps, const animation_t* animations, co
 		}
 
 		// or while the Dark Stasis cast throw plays: it owns the torso until it is over (2026-10-27, DH)
-		if (ps->torsoAnim == BOTH_SUPERPUSH && anim != BOTH_SUPERPUSH && ps->torsoTimer > 0
+		if (ps->torsoAnim == BOTH_FORCE_REPULSE && anim != BOTH_FORCE_REPULSE && ps->torsoTimer > 0
 			&& ps->fd.forcePowersActive & 1 << FP_DARK_STASIS && ps->stats[STAT_HEALTH] > 0)
 		{
 			goto setAnimLegs;

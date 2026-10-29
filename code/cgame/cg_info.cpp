@@ -476,7 +476,7 @@ static int CG_DrawLoadWeaponsPrintRow(const char* itemName, const char* weapons,
 				endIndex = i;
 
 				constexpr int yOffset = 0;
-				CG_DrawPic(holdX, y + yOffset, iconSize, iconSize, weaponInfo->alt_weapon_Icon);
+				CG_DrawPic(holdX, y + yOffset, iconSize, iconSize, weaponInfo->altweaponIcon);
 
 				printedIconCnt++;
 				if (printedIconCnt == MAXLOADICONSPERROW)
@@ -498,7 +498,7 @@ static int CG_DrawLoadWeaponsPrintRow(const char* itemName, const char* weapons,
 					endIndex = i;
 
 					constexpr int yOffset = 0;
-					CG_DrawPic(holdX, y + yOffset, iconSize, iconSize, weaponInfo->alt_weapon_Icon);
+					CG_DrawPic(holdX, y + yOffset, iconSize, iconSize, weaponInfo->altweaponIcon);
 
 					printedIconCnt++;
 					if (printedIconCnt == MAXLOADICONSPERROW)
@@ -518,7 +518,7 @@ static int CG_DrawLoadWeaponsPrintRow(const char* itemName, const char* weapons,
 					endIndex = i;
 
 					constexpr int yOffset = 0;
-					CG_DrawPic(holdX, y + yOffset, iconSize, iconSize, weaponInfo->weapon_Icon);
+					CG_DrawPic(holdX, y + yOffset, iconSize, iconSize, weaponInfo->weaponIcon);
 
 					printedIconCnt++;
 					if (printedIconCnt == MAXLOADICONSPERROW)

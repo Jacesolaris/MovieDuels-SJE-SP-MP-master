@@ -7007,7 +7007,7 @@ void PM_SetAnimFinal(int* torso_anim, int* legs_anim,
 	bool tors_play = gent->client->NPC_class != CLASS_RANCOR && set_anim_parts & SETANIM_TORSO && tors_bone != -1 && (
 		anim_override || !tors_timer_on);
 	// Dark Stasis: the cast throw owns the torso until it is over, nothing cuts it short (2026-10-27, DH)
-	if (tors_play && tors_anim == BOTH_SUPERPUSH && anim != BOTH_SUPERPUSH && *torso_anim_timer > 0
+	if (tors_play && tors_anim == BOTH_FORCE_REPULSE && anim != BOTH_FORCE_REPULSE && *torso_anim_timer > 0
 		&& gent->client->ps.forcePowersActive & 1 << FP_DARK_STASIS && gent->health > 0)
 	{
 		tors_play = false;

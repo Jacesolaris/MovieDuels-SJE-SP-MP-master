@@ -527,6 +527,7 @@ vmCvar_t cg_Weather;
 vmCvar_t cg_jkoeffects;
 
 vmCvar_t cg_hudRatio;
+vmCvar_t g_allowgunhud; // SS_BLASTER clip meter on the HUD (CG_DrawSaberBlasterClip), 0 = off (Jace 2026-10-30)
 
 vmCvar_t cg_saberLockCinematicCamera;
 
@@ -680,8 +681,8 @@ static cvarTable_t cvarTable[] = {
 
 	{ &cg_smoothCamera, "cg_smoothCamera", "1", CVAR_ARCHIVE },
 	{ &cg_speedTrail, "cg_speedTrail", "0", CVAR_ARCHIVE }, // force speed after-image trail, off by default (DH)
-	{ &cg_saberLightRadius, "cg_saberLightRadius", "1.5", CVAR_ARCHIVE }, // saber light reach (1 = as before)
-	{ &cg_saberLightIntensity, "cg_saberLightIntensity", "1.2", CVAR_ARCHIVE }, // saber light strength (1 = as before)
+	{ &cg_saberLightRadius, "cg_saberLightRadius", "0.703125", CVAR_ARCHIVE }, // saber light reach (1 = as before)
+	{ &cg_saberLightIntensity, "cg_saberLightIntensity", "1.070312", CVAR_ARCHIVE }, // saber light strength (1 = as before)
 	{ &cg_fovViewmodel, "cg_fovViewmodel", "0", CVAR_ARCHIVE },
 	{ &cg_fovViewmodelAdjust, "cg_fovViewmodelAdjust", "1", CVAR_ARCHIVE },
 
@@ -783,6 +784,7 @@ static cvarTable_t cvarTable[] = {
 
 	{ &r_ratiofix, "r_ratiofix", "0", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART },
 	{ &cg_hudRatio, "cg_hudRatio", "1", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART },
+	{ &g_allowgunhud, "g_allowgunhud", "0", CVAR_ARCHIVE }, // SS_BLASTER clip meter (Jace 2026-10-30)
 	{ &cg_DebugSaberCombat, "g_DebugSaberCombat", "0", CVAR_ARCHIVE },
 
 	{ &cg_allowcallout, "g_allowattackorder", "1", CVAR_ARCHIVE },

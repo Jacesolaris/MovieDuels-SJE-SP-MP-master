@@ -15330,7 +15330,7 @@ static void PM_SetSPMoveAnim(const int anim, const int setAnimFlags, const qbool
 		PM_ContinueLegsAnim(ires);
 	}
 
-	if (torsoFollows && !pm->ps->weaponTime)
+	if (torsoFollows && !pm->ps->weaponTime && !PM_BotHoldsGunAim()) // a bot keeps his gun up between shots, even moving
 	{
 		PM_SetAnim(SETANIM_TORSO, anim, SETANIM_FLAG_NORMAL);
 	}
@@ -18523,7 +18523,8 @@ static void PM_Weapon(void)
 	{
 		// a bot keeps his gun up after a shot: the attack anim, then the aim pose (not the ready / idle pose)
 		if (PM_CanSetWeaponAnims() && pm->ps->weaponTime <= 0 && pm->ps->torsoTimer <= 0
-			&& BG_UnstyleAnim(pm->ps->torsoAnim) != PM_GetWeaponAimAnim() && PM_CanSetWeaponReadyAnim() == qtrue)
+			&& BG_UnstyleAnim(pm->ps->torsoAnim) != PM_GetWeaponAimAnim()
+			&& pm->ps->pm_type != PM_JETPACK) // also while moving (PM_CanSetWeaponReadyAnim: not while moving), 2026-10-30
 		{
 			PM_StartTorsoAnim(PM_GetWeaponAimAnim());
 		}

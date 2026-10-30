@@ -2861,13 +2861,14 @@ CG_MissileFromMuzzle
 
 The server starts a gun's shot at a point worked out from the eye (calcmuzzlePoint, g_weapon.c): in third person
 that is below / beside the gun the player holds, so the bolt came out under the muzzle (SP starts it at the gun's
-muzzle bolt). Here the shot is drawn from the shooter's gun muzzle (the *flash bolt of his weapon model, as the
-muzzle flash) and blends into its real path over its first MUZZLE_BLEND_MSEC. Visual only: where the shot goes and
+muzzle bolt). Here the shot is first drawn at the shooter's gun muzzle (the *flash bolt of his weapon model, as the
+muzzle flash) and blends into its real path over MUZZLE_BLEND_MSEC from then. Visual only: where the shot goes and
 what it hits are the server's (Jace 2026-10-29).
 ===============
 */
-#define MUZZLE_BLEND_MSEC	150
-#define MUZZLE_MAX_OFS		48.0f
+#define MUZZLE_BLEND_MSEC	120		// from the muzzle into the shot's real path
+#define MUZZLE_MAX_OFS		64.0f	// the gun muzzle is this near the shot's start
+#define MUZZLE_NEW_SHOT_MSEC	400	// older than this when first seen: not a new shot (came into view)
 
 static qboolean CG_MissileGunFlash(centity_t* owner, const int model, vec3_t out)
 {
@@ -2890,13 +2891,16 @@ static void CG_MissileFromMuzzle(centity_t* cent)
 
 	if (cent->muzzleOfsTrTime != s1->pos.trTime)
 	{
-		// a new shot: the offset from its start to the shooter's gun muzzle, taken once
+		// a new shot: the offset from where it is first drawn to the shooter's gun muzzle, taken once. The server
+		// steps a new shot forward (MISSILE_PRESTEP_TIME) and it reaches us a snapshot later, so it is first seen well
+		// in front of the gun: the offset is to that first position, not to the shot's start (2026-10-30)
 		cent->muzzleOfsTrTime = s1->pos.trTime;
+		cent->muzzleSeenTime = 0;
 		VectorClear(cent->muzzleOfs);
 
-		if (age >= MUZZLE_BLEND_MSEC || s1->otherentityNum < 0 || s1->otherentityNum >= ENTITYNUM_WORLD)
+		if (age >= MUZZLE_NEW_SHOT_MSEC || s1->otherentityNum < 0 || s1->otherentityNum >= ENTITYNUM_WORLD)
 		{
-			return;
+			return; // an old shot coming into view: drawn where it is
 		}
 		switch (s1->weapon)
 		{
@@ -2949,13 +2953,23 @@ static void CG_MissileFromMuzzle(centity_t* cent)
 		}
 		if (found)
 		{
-			VectorSubtract(best, s1->pos.trBase, cent->muzzleOfs);
+			VectorSubtract(best, cent->lerpOrigin, cent->muzzleOfs); // muzzle - where the shot is now
+			cent->muzzleSeenTime = cg.time;
 		}
 	}
 
-	if (age < MUZZLE_BLEND_MSEC && !VectorCompare(cent->muzzleOfs, vec3_origin))
+	if (cent->muzzleSeenTime)
 	{
-		const float f = age <= 0 ? 1.0f : 1.0f - (float)age / (float)MUZZLE_BLEND_MSEC;
+		const int since = cg.time - cent->muzzleSeenTime;
+
+		if (since < 0 || since >= MUZZLE_BLEND_MSEC)
+		{
+			cent->muzzleSeenTime = 0;
+			return;
+		}
+		// drawn from the muzzle on its first frame, then the offset shrinks to nothing (eased out)
+		float f = 1.0f - (float)since / (float)MUZZLE_BLEND_MSEC;
+		f *= f;
 		VectorMA(cent->lerpOrigin, f, cent->muzzleOfs, cent->lerpOrigin);
 	}
 }

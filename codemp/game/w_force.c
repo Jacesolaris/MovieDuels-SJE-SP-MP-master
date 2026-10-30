@@ -2411,7 +2411,7 @@ static void WP_ForceArcRelease(const gentity_t* self)
 // the grip / grasp took main: catch the others in the arc
 static void WP_ForceArcGrab(const gentity_t* self, const gentity_t* main, const forcePowers_t power)
 {
-	int list[MAX_GENTITIES];
+	static int list[MAX_GENTITIES]; // static: 16KB is too much stack (C6262); safe: game code only runs on the main thread (the r_threads job workers are renderer only)
 	vec3_t mins = { 0 }, maxs = { 0 }, eye, fwd;
 	int used = 0;
 

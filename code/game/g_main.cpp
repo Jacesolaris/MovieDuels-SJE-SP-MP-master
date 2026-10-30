@@ -1016,7 +1016,7 @@ static void G_InitCvars()
 
 	g_AnimationStyle = gi.cvar("g_animationstyle", "0", CVAR_ARCHIVE | CVAR_SAVEGAME); //Alternate animationstyle
 
-	g_AllowSmashDown = gi.cvar("g_allowsmashdown", "1", CVAR_ARCHIVE);
+	g_AllowSmashDown = gi.cvar("g_allowsmashdown", "0", CVAR_ARCHIVE);
 
 	g_NPCAnimationStyle = gi.cvar("g_npcanimationstyle", "1", CVAR_ROM);
 }

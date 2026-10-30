@@ -145,8 +145,8 @@ inline static void SnapVectorToGrid(CVec3& vec, const int GridSize)
 ////////////////////////////////////////////////////////////////////////////////////////
 struct SVecRange
 {
-	CVec3 mMins;
-	CVec3 mMaxs;
+	CVec3 mMins{ 0.0f }; // C26495 (also SWeatherZone / CWindZone ranges)
+	CVec3 mMaxs{ 0.0f };
 
 	void Clear()
 	{
@@ -268,8 +268,8 @@ public:
 
 	float mAlpha = 1.0f;
 	TFlags mFlags;
-	CVec3 mPosition;
-	CVec3 mVelocity;
+	CVec3 mPosition{ 0.0f }; // C26495
+	CVec3 mVelocity{ 0.0f };
 	float mMass = 1.0f; // A higher number will more greatly resist force and result in greater gravity
 };
 
@@ -287,8 +287,8 @@ public:
 	float mMaxDeltaVelocityPerUpdate = 0.0f;
 	float mChanceOfDeadTime = 0.0f;
 
-	CVec3 mCurrentVelocity;
-	CVec3 mTargetVelocity;
+	CVec3 mCurrentVelocity{ 0.0f }; // C26495
+	CVec3 mTargetVelocity{ 0.0f };
 	int mTargetVelocityTimeRemaining = 0;
 
 public:

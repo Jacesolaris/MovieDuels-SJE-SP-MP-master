@@ -303,5 +303,6 @@ XCVAR_DEF(g_tuskenWeapons, "1", NULL, CVAR_ARCHIVE, qfalse) // tusken raiders ge
 XCVAR_DEF(g_awardStreaks, "1", NULL, CVAR_ARCHIVE, qfalse) // award sounds for kill / death / saber-3 kill streaks of 4 (0: the old awards) (DH 2026-10-25)
 XCVAR_DEF(g_duelWinSound, "1", NULL, CVAR_ARCHIVE, qfalse) // play sound/player/Quin.mp3 to the winner of a private duel (DH 2026-10-25)
 XCVAR_DEF(g_Advancedaitalk, "1", NULL, CVAR_ARCHIVE, qfalse) // NPCs taunt/talk in combat (SP g_Advancedaitalk) (DH 2026-10-24 SP NPC port)
+XCVAR_DEF(g_SaberAttackSpeedMD, "1", NULL, CVAR_ARCHIVE, qtrue)
 
 #undef XCVAR_DEF

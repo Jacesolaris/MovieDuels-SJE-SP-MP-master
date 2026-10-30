@@ -564,7 +564,8 @@ typedef struct centity_s {
 
 	// a gun's shot (CG_MissileFromMuzzle): drawn leaving the shooter's gun muzzle, blending into its real path
 	int				muzzleOfsTrTime;	// the shot (its trajectory start) the offset was taken for
-	vec3_t			muzzleOfs;			// gun muzzle - the server's shot start
+	vec3_t			muzzleOfs;			// gun muzzle - where the shot was first drawn
+	int				muzzleSeenTime;		// cg.time the shot was first drawn (0 = not drawn from a muzzle)
 } centity_t;
 
 //======================================================================

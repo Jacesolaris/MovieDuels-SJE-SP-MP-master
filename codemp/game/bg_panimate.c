@@ -6043,7 +6043,8 @@ int bg_parse_animation_file(const char* filename, animation_t* anim_set, const q
 		// as SP (NPC_stats.cpp G_ParseAnimationFile, AMD mode + MD attack speed, which MD MP always is): realistic
 		// blocking slows the Tavion, dual and staff saber attacks down. The server's bg_realisticBlocking
 		// (systeminfo) reaches the clients, so the server and the clients' prediction load the same speeds.
-		if (realisticBlocking)
+		if (g_SaberAttackSpeedMD.integer &&
+			realisticBlocking)
 		{
 			for (int x = 4; x < LS_MOVE_MAX; x++)
 			{

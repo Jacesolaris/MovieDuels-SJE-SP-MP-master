@@ -760,6 +760,7 @@ extern vmCvar_t cg_setVaderBreath;
 extern vmCvar_t cg_setVaderBreathdamaged;
 
 extern vmCvar_t cg_hudRatio;
+extern vmCvar_t g_allowgunhud;
 extern vmCvar_t cg_saberLockCinematicCamera;
 extern vmCvar_t cg_AimingCinematicCamera;
 extern vmCvar_t cg_aimShoulder;

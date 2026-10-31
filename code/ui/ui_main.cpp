@@ -2052,7 +2052,7 @@ vmCvar_t ui_SerenityJediEngineMode;
 vmCvar_t ui_char_model_angle;
 
 vmCvar_t ui_com_outcast;
-vmCvar_t ui_update7firststartup;
+vmCvar_t ui_update9firststartup;
 vmCvar_t ui_totgfirststartup;
 vmCvar_t ui_cursor;
 
@@ -2206,7 +2206,7 @@ static cvarTable_t cvarTable[] =
 
 	{ &ui_com_outcast, "com_outcast", "0", nullptr, CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART },
 
-	{ &ui_update7firststartup, "g_update8firststartup", "1", nullptr, 0 },
+	{ &ui_update9firststartup, "g_update9firststartup", "1", nullptr, 0 },
 
 	{ &ui_totgfirststartup, "g_totgfirststartup", "1", nullptr, 0 },
 
@@ -2243,7 +2243,7 @@ int Key_GetCatcher();
 
 constexpr auto UI_FPS_FRAMES = 4;
 
-// Update 8 lock for g_ActivateAnimationStyle while no map is loaded (main menu). The game module does
+// Update 9 lock for g_ActivateAnimationStyle while no map is loaded (main menu). The game module does
 // the same check in a map (G_EnforceUpdateSettings), but it doesn't run until a map is loaded.
 // md_update is the default 8 until the main menu's "uiScript mdUpdate" has run, so a check before that
 // (the UI frames of the intro video at startup) would turn an Update 9 player's setting off. So it only
@@ -2980,15 +2980,15 @@ static qboolean UI_RunMenuScript(const char** args)
 
 		if (Q_stricmp(name, "mdUpdate") == 0)
 		{
-			// ui/main.menu tells the code which MovieDuels update its assets are: uiScript mdUpdate 8
+			// ui/main.menu tells the code which MovieDuels update its assets are: uiScript mdUpdate 9
 			// md_update is read-only, so only this script (not the console) can change it.
 			if (String_Parse(args, &name2))
 			{
 				const int update = atoi(name2);
-				if (update >= 8)
+				if (update >= 9)
 				{
 					Cvar_Set("md_update", va("%i", update));
-					if (update < 9)
+					if (update < 10)
 					{
 						Cvar_Set("g_ActivateAnimationStyle", "0"); // the new animation system is Update 9
 					}

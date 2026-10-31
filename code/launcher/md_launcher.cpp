@@ -15,7 +15,7 @@ MULTIPLAYER MODE either side of the emblem. Hovering a mode fades in its glow la
   and closes the launcher. MULTIPLAYER MODE opens the MULTIPLAYER page on the info card: START MULTIPLAYER starts
   MovieDuels-MP.x86_64.exe the same way, START SERVER runs "Start MovieDuels-MP-FFA-Server.bat" from the MD folder in
   its own console (the launcher stays open, so the game can be started next to join it). Multiplayer needs Update 9:
-  on Update 8 assets the button only says it is coming soon.
+  on Update 9 assets the button only says it is coming soon.
 - The gear opens the OPTIONS page on the info card: Renderer, Display, Resolution (read from and written to the game's
   own configs) and Controller (remembered in MovieDuels-Launcher.ini in Documents\My Games\MovieDuels-UD9).
 - The other icons and HELP open web pages in the browser.
@@ -82,7 +82,7 @@ namespace
 
 	const wchar_t* const kIniName = L"MovieDuels-Launcher.ini";
 	const wchar_t* const kHomeFolder = L"MovieDuels-UD9"; // the game's folder in My Games (HOMEPATH_NAME_WIN)
-	const wchar_t* const kOldHomeFolder = L"MovieDuels";  // where the WPF launcher kept its ini (Update 8's folder)
+	const wchar_t* const kOldHomeFolder = L"MovieDuels";  // where the WPF launcher kept its ini (Update 9's folder)
 	const wchar_t* const kSPConfig = L"MovieDuels-SP.cfg";
 	const wchar_t* const kMPConfig = L"MovieDuels-MP.cfg";
 
@@ -98,7 +98,7 @@ namespace
 	constexpr int kMusicVolume = 600; // 0..1000
 
 	// the MovieDuels update of assets without "uiScript mdUpdate" in their main menu
-	constexpr int kDefaultUpdate = 8;
+	constexpr int kDefaultUpdate = 9;
 
 	// colours from the art (the WPF launcher's brushes)
 	const Gdiplus::Color kWhiteText(255, 249, 249, 249);
@@ -403,7 +403,7 @@ namespace
 				path = dir + L"\\" + kIniName;
 
 				// the first time, take over the options from an ini next to the launcher (older launchers), else
-				// from the WPF launcher's (in Update 8's My Games folder)
+				// from the WPF launcher's (in Update 9's My Games folder)
 				const std::wstring launcher_ini = g_launcher.folder + L"\\" + kIniName;
 				if (!PathFileExistsW(path.c_str()))
 				{
@@ -723,7 +723,7 @@ namespace
 	// ------------------------------------------------------------------------------------------
 	// Which MovieDuels update the installed assets are, found the way the game finds it: the singleplayer main menu
 	// (ui/main.menu) says it with "uiScript mdUpdate 9", which sets the game's read-only md_update cvar. A main menu
-	// without that line is Update 8 (the game's default). The menu the game loads is the one in the last pk3 (in name
+	// without that line is Update 9 (the game's default). The menu the game loads is the one in the last pk3 (in name
 	// order) of the MD folder that has it.
 	// ------------------------------------------------------------------------------------------
 

@@ -351,7 +351,7 @@ cvar_t* g_HitTracking;
 cvar_t* g_ActivateAnimationStyle; // the animation style in use for this map (g_animationStyleActive, read-only). 0 = classic, 1 = master
 cvar_t* g_ActivateAnimationStyleSetting; // the player's choice (g_ActivateAnimationStyle, menu/console). Used from the next map load
 cvar_t* g_PlayerAnimationStyle;       // the player's own animation style with the Master set ("default", "anakin"... menu/console)
-cvar_t* md_update;                // which MovieDuels update the assets are (8, 9, ...). Read-only: set by ui/main.menu ("uiScript mdUpdate 8")
+cvar_t* md_update;                // which MovieDuels update the assets are (8, 9, ...). Read-only: set by ui/main.menu ("uiScript mdUpdate 9")
 cvar_t* g_AnimationStyle;         // select between 0 -28 for specific style
 cvar_t* g_NPCAnimationStyle;      // turns npc range based stance on/off
 cvar_t* g_AllowSmashDown;         // allow smashdown attacks for NPCs and players. 0 = off, 1 = on
@@ -1006,7 +1006,7 @@ static void G_InitCvars()
 	g_HitTracking = gi.cvar("g_HitTracking", "0", CVAR_ARCHIVE);
 
 	// CVAR_SAVEGAME: a save remembers both choices and loading it puts them back (before the map and its models
-	// load), so a save made with the Master style still loads with it after a restart or an Update 8 session.
+	// load), so a save made with the Master style still loads with it after a restart or an Update 9 session.
 	g_ActivateAnimationStyleSetting = gi.cvar("g_activateanimationstyle", "0", CVAR_ARCHIVE | CVAR_SAVEGAME);
 	g_ActivateAnimationStyle = gi.cvar(MD_ANIMSTYLE_ACTIVE_CVAR, "0", CVAR_ROM); // set by G_LatchAnimationStyle
 	g_PlayerAnimationStyle = gi.cvar("g_playeranimationstyle", "default", CVAR_ARCHIVE | CVAR_SAVEGAME);
@@ -2414,7 +2414,7 @@ constexpr auto BARRIER_DEFUEL_RATE = 100; //approx. 50 seconds of idle use from 
 constexpr auto BARRIER_REFUEL_RATE = 200; //seems fair;
 constexpr auto DROIDEKA_BARRIER_DEFUEL_RATE = 1000;
 
-// Update 8 assets have no animations for the new animation system (that is Update 9), so keep it off
+// Update 9 assets have no animations for the new animation system (that is Update 9), so keep it off
 // even if it was typed in the console or saved in a config. Runs at every map start and every frame,
 // before the setting is copied into the active style.
 void G_EnforceUpdateSettings()

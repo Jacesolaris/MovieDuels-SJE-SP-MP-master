@@ -2449,6 +2449,7 @@ typedef enum //# animNumber_e
 	//# Run1 backwards
 	BOTH_RUNBACK2,
 	//# Run1 backwards
+	BOTH_WALKBACK1_BLASTER,
 
 	//# #sep BOTH_ JUMPING
 	BOTH_JUMP1,

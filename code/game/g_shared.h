@@ -1596,6 +1596,16 @@ struct gentity_s
 	int npc_roll_direction;
 	int Dash_NPC_Count;
 
+	// Saber slice (Jedi Survivor style cuts at the saber contact point), see G_SaberSlice.
+	// Each cut is a plane tied to an anchor bone; the cgame turns it into refEntity_t::slicePlane.
+	int saberSliceCount = 0;
+	int saberSliceBone[MAX_SABER_SLICES] = {}; // SABERSLICE_BONE_*
+	int saberSliceBolt[MAX_SABER_SLICES] = {}; // bolt at the anchor bone on ghoul2[playerModel]
+	float saberSliceLocal[MAX_SABER_SLICES * 6] = {}; // per cut: plane in the anchor bone's space (nx ny nz d), 2 spare
+	int saberSliceInvert = 0; // bit i set: this entity is the cut-off piece of slice i
+	int saberSliceTime[MAX_SABER_SLICES] = {}; // level.time of each cut (the cut face cools down)
+	int saberSliceFxTime = 0; // cgame: next ember puff from the cut faces (not saved)
+
 	void sg_export(
 		ojk::SavedGameHelper& saved_game) const
 	{
@@ -1822,6 +1832,13 @@ struct gentity_s
 		saved_game.write<int32_t>(npc_roll_start);
 		saved_game.write<int32_t>(npc_roll_direction);
 		saved_game.write<int32_t>(Dash_NPC_Count);
+
+		saved_game.write<int32_t>(saberSliceCount);
+		saved_game.write<int32_t>(saberSliceBone);
+		saved_game.write<int32_t>(saberSliceBolt);
+		saved_game.write<float>(saberSliceLocal);
+		saved_game.write<int32_t>(saberSliceInvert);
+		saved_game.write<int32_t>(saberSliceTime);
 	}
 
 	void sg_import(
@@ -2050,6 +2067,13 @@ struct gentity_s
 		saved_game.read<int32_t>(npc_roll_start);
 		saved_game.read<int32_t>(npc_roll_direction);
 		saved_game.read<int32_t>(Dash_NPC_Count);
+
+		saved_game.read<int32_t>(saberSliceCount);
+		saved_game.read<int32_t>(saberSliceBone);
+		saved_game.read<int32_t>(saberSliceBolt);
+		saved_game.read<float>(saberSliceLocal);
+		saved_game.read<int32_t>(saberSliceInvert);
+		saved_game.read<int32_t>(saberSliceTime);
 	}
 };
 #endif //#ifdef GAME_INCLUDE

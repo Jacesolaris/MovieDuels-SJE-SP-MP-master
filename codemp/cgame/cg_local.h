@@ -566,6 +566,16 @@ typedef struct centity_s {
 	int				muzzleOfsTrTime;	// the shot (its trajectory start) the offset was taken for
 	vec3_t			muzzleOfs;			// gun muzzle - where the shot was first drawn
 	int				muzzleSeenTime;		// cg.time the shot was first drawn (0 = not drawn from a muzzle)
+
+	// saber slice cuts on this body or piece (cg_players.c CG_SaberSliceApply), in the anchor bones' space
+	int				saberSliceCount;
+	int				saberSliceBone[MAX_SABER_SLICES];	// SABERSLICE_BONE_*
+	float			saberSlicePlane[MAX_SABER_SLICES][4];
+	int				saberSliceTime[MAX_SABER_SLICES];	// cg.time of each cut (the cut face cools down)
+	int				saberSliceInvert;					// bit i: this is the cut-off piece of cut i
+	int				saberSliceFxTime;					// next ember puff
+	int				saberSliceSpawnTime;				// piece: cg.time it was first drawn
+	void*			saberSliceGhoul2;					// the ghoul2 instance the cuts belong to
 } centity_t;
 
 //======================================================================
@@ -1700,6 +1710,7 @@ typedef struct cgMedia_s {
 
 	qhandle_t	bdecal_bodyburn1;
 	qhandle_t	bdecal_saberglow;
+	qhandle_t	saberSliceCapShader; // glowing cut face of a saber slice (vanilla renderer)
 	qhandle_t	bdecal_burn1;
 	qhandle_t	mSaberDamageGlow;
 
@@ -1777,6 +1788,7 @@ typedef struct cgMedia_s {
 	qhandle_t weapontype_jango;
 	qhandle_t weapontype_boba;
 	qhandle_t weapontype_clonepistol;
+	qhandle_t weapontype_clonepistol_dual; // dual clone pistols (EF3_DUAL_WEAPONS), 2026-10-30
 } cgMedia_t;
 
 // Stored FX handles
@@ -2266,6 +2278,10 @@ void CG_DestroyNPCClient(clientInfo_t** ci);
 
 void CG_Player(centity_t* cent);
 void CG_ResetPlayerEntity(centity_t* cent);
+qboolean CG_SaberSliceApply(centity_t* cent, refEntity_t* ent);
+qboolean CG_SaberSlicePiece(centity_t* cent);
+void CG_SaberSliceClear(centity_t* cent);
+void CG_SaberSliceTransfer(centity_t* body, centity_t* from);
 void CG_AddRefEntityWithPowerups(const refEntity_t* ent, const entityState_t* state);
 void CG_NewClientInfo(int clientNum, qboolean entities_initialized);
 sfxHandle_t	CG_CustomSound(int clientNum, const char* sound_name);

@@ -192,7 +192,7 @@ void G_PlayEffect(const int fx_id, const int entNum, const vec3_t fwd)
 
 	gentity_t* tent = G_TempEntity(g_entities[entNum].currentOrigin, EV_PLAY_EFFECT);
 	tent->s.eventParm = fx_id;
-	tent->s.otherentityNum = entNum;
+	tent->s.otherEntityNum = entNum;
 	VectorSet(tent->maxs, FX_ENT_RADIUS, FX_ENT_RADIUS, FX_ENT_RADIUS);
 	VectorScale(tent->maxs, -1, tent->mins);
 	VectorCopy(fwd, tent->pos3);
@@ -207,7 +207,7 @@ void G_PlayEffect(const char* name, const int clientNum)
 {
 	gentity_t* tent = G_TempEntity(g_entities[clientNum].currentOrigin, EV_PLAY_MUZZLE_EFFECT);
 	tent->s.eventParm = G_EffectIndex(name);
-	tent->s.otherentityNum = clientNum;
+	tent->s.otherEntityNum = clientNum;
 	VectorSet(tent->maxs, FX_ENT_RADIUS, FX_ENT_RADIUS, FX_ENT_RADIUS);
 	VectorScale(tent->maxs, -1, tent->mins);
 }
@@ -1462,7 +1462,7 @@ void G_AddEvent(gentity_t* ent, int event, int event_parm)
 
 		temp = G_Spawn();
 		temp->s.eType = ET_EVENT_ONLY;
-		temp->s.otherentityNum = ent->s.number;
+		temp->s.otherEntityNum = ent->s.number;
 		G_SetOrigin(temp, ent->s.origin);
 		G_AddEvent(temp, event, eventParm);
 		temp->freeAfterEvent = qtrue;

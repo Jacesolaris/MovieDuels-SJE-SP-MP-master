@@ -1883,12 +1883,17 @@ static void ClientEvents(gentity_t* ent, int old_event_sequence)
 		case EV_SABERBLASTER: // SS_BLASTER: the left hand pistol shot (anim / clip predicted in bg)
 			if (Client->ps.eventParms[index] == SBE_FIRE)
 			{
-				G_SaberBlasterFire(ent, qfalse, NULL);
+				G_SaberBlasterFire(ent, 0, NULL);
+			}
+			else if (Client->ps.eventParms[index] >= SBE_CHARGED1 && Client->ps.eventParms[index] <= SBE_CHARGED3)
+			{
+				// the charged shot (2026-10-31): walk + dash held, then let go
+				G_SaberBlasterFire(ent, Client->ps.eventParms[index] - SBE_CHARGED1 + 1, NULL);
 			}
 			else if (Client->ps.eventParms[index] == SBE_LOCKSHOT)
 			{
 				const int lock_enemy = Client->saberBlasterLockEnemy;
-				G_SaberBlasterFire(ent, qtrue, lock_enemy >= 0 && lock_enemy < ENTITYNUM_WORLD ? &g_entities[lock_enemy] : NULL);
+				G_SaberBlasterFire(ent, SABERBLASTER_CHARGE_LEVELS, lock_enemy >= 0 && lock_enemy < ENTITYNUM_WORLD ? &g_entities[lock_enemy] : NULL);
 			}
 			break;
 
@@ -2055,7 +2060,7 @@ static void SendPendingPredictableEvents(playerState_t* ps)
 		t->s.number = number;
 		t->s.eType = ET_EVENTS + event;
 		t->s.eFlags |= EF_PLAYER_EVENT;
-		t->s.otherentityNum = ps->clientNum;
+		t->s.otherEntityNum = ps->clientNum;
 		// send to everyone except the client who generated the event
 		t->r.svFlags |= SVF_NOTSINGLECLIENT;
 		t->r.singleClient = ps->clientNum;
@@ -5779,9 +5784,9 @@ static void ClientThink_real(gentity_t* ent)
 						te->owner = ent;
 
 						// networked index for cgame
-						te->s.otherentityNum = ent->s.number;
+						te->s.otherEntityNum = ent->s.number;
 
-						// ensure the updated entityState is linked so clients get the time/time2 and otherentityNum
+						// ensure the updated entityState is linked so clients get the time/time2 and otherEntityNum
 						trap->LinkEntity((sharedEntity_t*)te);
 					}
 
@@ -5857,9 +5862,9 @@ static void ClientThink_real(gentity_t* ent)
 						te->owner = ent;
 
 						// networked index for cgame
-						te->s.otherentityNum = ent->s.number;
+						te->s.otherEntityNum = ent->s.number;
 
-						// ensure the updated entityState is linked so clients get the time/time2 and otherentityNum
+						// ensure the updated entityState is linked so clients get the time/time2 and otherEntityNum
 						trap->LinkEntity((sharedEntity_t*)te);
 					}
 

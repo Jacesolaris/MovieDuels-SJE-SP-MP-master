@@ -927,7 +927,7 @@ void WP_FireVehicleWeapon(gentity_t* ent, vec3_t start, vec3_t dir, const vehWea
 		{
 			missile->owner = ent;
 		}
-		missile->s.otherentityNum = ent->s.number;
+		missile->s.otherEntityNum = ent->s.number;
 		missile->s.otherentityNum2 = veh_weapon - &g_vehWeaponInfo[0];
 
 		if (veh_weapon->iLifeTime)

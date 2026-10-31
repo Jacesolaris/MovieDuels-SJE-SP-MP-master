@@ -147,7 +147,7 @@ animFlags_t BG_AnimStyleFlags(int animStyle);
 #define DEFAULT_REDTEAM_NAME	"Empire"
 #define DEFAULT_BLUETEAM_NAME	"Rebellion"
 
-#define CURRENT_MD_CLIENTVERSION		"Day-30,Month-10,Year-26,BuildNum-10" // build date
+#define CURRENT_MD_CLIENTVERSION		"Day-31,Month-10,Year-26,BuildNum-11" // build date
 
 #define	STEPSIZE		18
 
@@ -290,7 +290,8 @@ typedef enum {
 	G2_MODELPART_RARM,
 	G2_MODELPART_RHAND,
 	G2_MODELPART_LLEG,
-	G2_MODELPART_RLEG
+	G2_MODELPART_RLEG,
+	G2_MODELPART_SLICE = 20 // saber slice piece (g_combat.c G_SaberSlice): generic1 = bone, origin2 + angles2[0] = cut plane in that bone's space
 } g2ModelParts_t;
 
 #define G2_MODEL_PART	50
@@ -1266,11 +1267,11 @@ typedef enum {
 } entity_event_t;			// There is a maximum of 256 events (8 bits transmission, 2 high bits for uniqueness)
 
 // EV_SABER_BLOCK eventParm for a saber-vs-saber block (0 = projectile deflect). Old cgames only test
-// eventParm != 0, so the extra bits are compatible. otherentityNum carries the blocker (WP_SaberDoClash).
+// eventParm != 0, so the extra bits are compatible. otherEntityNum carries the blocker (WP_SaberDoClash).
 #define SABERBLOCK_EVPARM_BLOCK			1	// a saber block
 #define SABERBLOCK_EVPARM_GOODPARRY_BP	2	// blocker had blockPoints > BLOCKPOINTS_HALF (MD SP mode 1 good parry)
 #define SABERBLOCK_EVPARM_GOODPARRY_FP	4	// blocker had forcePower > BLOCKPOINTS_HALF (MD SP mode 2 good parry)
-#define SABERBLOCK_EVPARM_HAS_BLOCKER	8	// otherentityNum is the blocker (old servers leave it 0 = client 0)
+#define SABERBLOCK_EVPARM_HAS_BLOCKER	8	// otherEntityNum is the blocker (old servers leave it 0 = client 0)
 
 typedef enum {
 	GTS_RED_CAPTURE,
@@ -2004,6 +2005,13 @@ typedef enum saber_styles_e {
 #define SABERBLASTER_RELOAD_TIME	1000		// ms, alt attack + attack
 #define SABERBLASTER_LOCK_CHARGE	1500		// ms of charging in a saberlock before the shot
 #define SABERBLASTER_CLIP_SLOT		AMMO_MAX	// unused ps.ammo[] slot (networked): shots used from the clip (0 = full)
+// the charged shot (Jace 2026-10-31): walk + dash fire on release; held past CHARGE_START the shot charges, a level
+// more every (CHARGE_FULL - CHARGE_START) / (CHARGE_LEVELS - 1) ms, full at CHARGE_FULL (= the saberlock shot).
+// A charged shot costs 1 + its level from the clip
+#define SABERBLASTER_CHARGE_START	300			// ms held before the charge starts (shorter = a tap, a normal shot)
+#define SABERBLASTER_CHARGE_FULL	1500		// ms held to full charge
+#define SABERBLASTER_CHARGE_LEVELS	3
+int BG_SaberBlasterChargeLevel(int held, int clip_used);
 
 typedef enum
 {
@@ -2011,7 +2019,10 @@ typedef enum
 	SBE_EMPTY,
 	SBE_RELOAD,
 	SBE_LOCKSHOT,
-	SBE_CHARGE
+	SBE_CHARGE,
+	SBE_CHARGED1,	// the charged shot (2026-10-31), level 1 .. SABERBLASTER_CHARGE_LEVELS
+	SBE_CHARGED2,
+	SBE_CHARGED3
 } saberBlasterEvent_t;
 
 int BG_NextSaberStyleInCycle(int style);

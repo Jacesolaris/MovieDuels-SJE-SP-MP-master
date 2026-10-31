@@ -12329,7 +12329,7 @@ static qboolean kothos_heal_rosh()
 			//BEG HACK LINE
 			gentity_t* tent = G_TempEntity(NPC->currentOrigin, EV_KOTHOS_BEAM);
 			tent->svFlags |= SVF_BROADCAST;
-			tent->s.otherentityNum = NPC->s.number;
+			tent->s.otherEntityNum = NPC->s.number;
 			tent->s.otherentityNum2 = NPC->client->leader->s.number;
 			//END HACK LINE
 

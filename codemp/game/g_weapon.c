@@ -2055,7 +2055,7 @@ static void WP_DisruptorAltFire(gentity_t* ent)
 		{
 			if (traceEnt->takedamage && traceEnt->client)
 			{
-				tent->s.otherentityNum = traceEnt->s.number;
+				tent->s.otherEntityNum = traceEnt->s.number;
 
 				// simple impact mark
 				tent = G_TempEntity(tr.endpos, EV_MISSILE_MISS);
@@ -5973,7 +5973,7 @@ gentity_t* WP_FireVehicleWeapon(gentity_t* ent, vec3_t start, vec3_t dir, const 
 						if (missile->enemy->s.NPC_class == CLASS_VEHICLE)
 						{
 							//let vehicle know we've locked on to them
-							missile->s.otherentityNum = missile->enemy->s.number;
+							missile->s.otherEntityNum = missile->enemy->s.number;
 						}
 					}
 				}
@@ -7762,8 +7762,12 @@ static gentity_t* G_SaberBlasterFindTarget(const gentity_t* ent, const vec3_t ey
 	return best;
 }
 
-void G_SaberBlasterFire(gentity_t* ent, const qboolean charged, gentity_t* target)
+// charge: 0 = a normal shot, 1 .. SABERBLASTER_CHARGE_LEVELS = a charged one (2026-10-31: walk + dash held, then let
+// go; the saberlock shot is the full charge). The bolt grows with it and hits harder: CONC_DAMAGE x (2 + charge) / 2
+void G_SaberBlasterFire(gentity_t* ent, const int charge, gentity_t* target)
 {
+	const qboolean charged = charge > 0 ? qtrue : qfalse;
+
 	vec3_t eye, fwd, right, start, dir;
 
 	if (!ent || !ent->client || ent->health <= 0)
@@ -7813,10 +7817,12 @@ void G_SaberBlasterFire(gentity_t* ent, const qboolean charged, gentity_t* targe
 
 	if (charged)
 	{
-		const float box_size = BRYAR_ALT_SIZE * (BRYAR_MAX_CHARGE * 0.5f);
+		const int level = charge > SABERBLASTER_CHARGE_LEVELS ? SABERBLASTER_CHARGE_LEVELS : charge;
+		const int count = BRYAR_MAX_CHARGE * level / SABERBLASTER_CHARGE_LEVELS; // full charge = BRYAR_MAX_CHARGE
+		const float box_size = BRYAR_ALT_SIZE * (count * 0.5f);
 
-		missile->s.generic1 = BRYAR_MAX_CHARGE; // fully charged
-		missile->damage = CONC_DAMAGE;
+		missile->s.generic1 = count;
+		missile->damage = CONC_DAMAGE * (2 + level) / 2;
 		missile->methodOfDeath = MOD_BRYAR_PISTOL_ALT;
 		VectorSet(missile->r.maxs, box_size, box_size, box_size);
 		VectorSet(missile->r.mins, -box_size, -box_size, -box_size);

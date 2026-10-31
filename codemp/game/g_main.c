@@ -3936,7 +3936,7 @@ static void CheckTournament(void)
 				gentity_t* te = G_TempEntity(vec3_origin, EV_GLOBAL_DUEL);
 				te->r.svFlags |= SVF_BROADCAST;
 				//this is really pretty nasty, but..
-				te->s.otherentityNum = level.sortedClients[0];
+				te->s.otherEntityNum = level.sortedClients[0];
 				te->s.otherentityNum2 = level.sortedClients[1];
 				te->s.groundEntityNum = level.sortedClients[2];
 
@@ -3977,7 +3977,7 @@ static void CheckTournament(void)
 					gentity_t* te = G_TempEntity(vec3_origin, EV_GLOBAL_DUEL);
 					te->r.svFlags |= SVF_BROADCAST;
 					//this is really pretty nasty, but..
-					te->s.otherentityNum = level.sortedClients[0];
+					te->s.otherEntityNum = level.sortedClients[0];
 					te->s.otherentityNum2 = level.sortedClients[1];
 					te->s.groundEntityNum = level.sortedClients[2];
 

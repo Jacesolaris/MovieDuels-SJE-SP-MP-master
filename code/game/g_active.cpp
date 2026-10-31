@@ -10795,9 +10795,9 @@ static void ClientThink_real(gentity_t* ent, usercmd_t* ucmd)
 						te->owner = ent;
 
 						// networked index for cgame
-						te->s.otherentityNum = ent->s.number;
+						te->s.otherEntityNum = ent->s.number;
 
-						// ensure the updated entityState is linked so clients get the time/time2 and otherentityNum
+						// ensure the updated entityState is linked so clients get the time/time2 and otherEntityNum
 						gi.linkentity(te);
 					}
 
@@ -10857,9 +10857,9 @@ static void ClientThink_real(gentity_t* ent, usercmd_t* ucmd)
 						te->owner = ent;
 
 						// networked index for cgame
-						te->s.otherentityNum = ent->s.number;
+						te->s.otherEntityNum = ent->s.number;
 
-						// ensure the updated entityState is linked so clients get the time/time2 and otherentityNum
+						// ensure the updated entityState is linked so clients get the time/time2 and otherEntityNum
 						gi.linkentity(te);
 					}
 

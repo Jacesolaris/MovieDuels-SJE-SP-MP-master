@@ -35,6 +35,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "bg_local.h"
 #include "w_saber.h"
 #include "ai_main.h"
+extern void G_SaberSliceSetHit(const gentity_t* victim, const vec3_t point, const vec3_t swing_dir, const vec3_t blade_dir);
 #include <string.h>
 #include <qcommon\q_platform.h>
 #include <qcommon\q_shared.h>
@@ -4342,7 +4343,7 @@ static void wp_saber_specific_do_hit(const gentity_t* self, const int saberNum, 
 
 	if (te)
 	{
-		te->s.otherentityNum = victim->s.number;
+		te->s.otherEntityNum = victim->s.number;
 		te->s.otherentityNum2 = self->s.number;
 		te->s.weapon = saberNum;
 		te->s.legsAnim = bladeNum;
@@ -4409,7 +4410,7 @@ static vec3_t saberClashPos = { 0 };
 static vec3_t saberClashNorm = { 0 };
 static int saberClashEventParm = 1;
 static int saberClashOther = -1; //the clientNum for the other player involved in the saber clash.
-static int saberClashBlocker = ENTITYNUM_NONE; //the blocker, sent in otherentityNum for the cgame's perfect-block effect
+static int saberClashBlocker = ENTITYNUM_NONE; //the blocker, sent in otherEntityNum for the cgame's perfect-block effect
 static QINLINE void G_SetViewLock(const gentity_t* self, vec3_t impact_pos, vec3_t impact_normal);
 static QINLINE void G_SetViewLockDebounce(const gentity_t* self);
 
@@ -4421,7 +4422,7 @@ static void WP_SaberDoClash(const gentity_t* self, const int saberNum, const int
 		VectorCopy(saberClashPos, te->s.origin);
 		VectorCopy(saberClashNorm, te->s.angles);
 		te->s.eventParm = saberClashEventParm;
-		te->s.otherentityNum = saberClashBlocker; // unused by old cgames for this event
+		te->s.otherEntityNum = saberClashBlocker; // unused by old cgames for this event
 		te->s.otherentityNum2 = self->s.number;
 		te->s.weapon = saberNum;
 		te->s.legsAnim = bladeNum;
@@ -6459,7 +6460,7 @@ static void G_PlayerSaberSmash(gentity_t* owner)
 			VectorCopy(trace.plane.normal, te->s.angles);
 
 			// owner and saber info (for future use if needed)
-			te->s.otherentityNum = owner->s.number;
+			te->s.otherEntityNum = owner->s.number;
 			te->s.otherentityNum2 = owner->s.number;
 			te->s.weapon = owner->client->ps.weapon;
 			te->s.legsAnim = 0;
@@ -7404,6 +7405,20 @@ static QINLINE qboolean CheckSaberDamage(gentity_t* self, const int rSaberNum, c
 		// --------------------------------------------------------
 		const qboolean vic_was_alive = victim->health > 0 ? qtrue : qfalse;
 		const int vic_health_before = victim->health;
+		{
+			// the blade and its swing, so a killing hit can cut the body where the blade touched (g_combat.c G_SaberSlice)
+			const bladeInfo_t* blade = &self->client->saber[rSaberNum].blade[rBladeNum];
+			const float len = blade->lengthMax > 0.0f ? blade->lengthMax : 40.0f;
+			vec3_t tip, tip_old, swing;
+			VectorMA(blade->muzzlePoint, len, blade->muzzleDir, tip);
+			VectorMA(blade->muzzlePointOld, len, blade->muzzleDirOld, tip_old);
+			VectorSubtract(tip, tip_old, swing);
+			if (VectorLengthSquared(swing) < 1.0f && self->client->olderIsValid)
+			{
+				VectorSubtract(self->client->lastSaberBase_Always, self->client->olderSaberBase, swing);
+			}
+			G_SaberSliceSetHit(victim, tr.endpos, swing, dir);
+		}
 		G_Damage(victim, self, self, dir, tr.endpos, dmg, dflags, MOD_SABER);
 
 		if (vic_was_alive && rSaberNum == 0 && self->client->ps.saberInFlight && self->client->ps.saberEntityNum
@@ -8224,7 +8239,7 @@ static QINLINE qboolean WP_CheckThrownSaberDamaged(gentity_t* saberent,
 					te->s.legsAnim = 0; // bladeNum
 					// the thrower's saber (custom effects, no-clash-flare flags); was left 0 = client 0.
 					// No blocker: SP plays no perfect-block / good-parry effect on a thrown-saber knockaway.
-					te->s.otherentityNum = ENTITYNUM_NONE;
+					te->s.otherEntityNum = ENTITYNUM_NONE;
 					te->s.otherentityNum2 = saber_owner->s.number;
 
 					if (WP_saberCheckKnockdown_Thrown(saberent, saber_owner, &g_entities[tr.entityNum]))
@@ -8273,7 +8288,7 @@ static QINLINE qboolean WP_CheckThrownSaberDamaged(gentity_t* saberent,
 						? WP_SaberTryStickInBodyDmg(saber_owner, ent, dmg) : qfalse;
 
 					te = G_TempEntity(tr.endpos, EV_SABER_HIT);
-					te->s.otherentityNum = ent->s.number;
+					te->s.otherEntityNum = ent->s.number;
 					te->s.otherentityNum2 = saber_owner->s.number;
 					te->s.weapon = 0; // saberNum
 					te->s.legsAnim = 0; // bladeNum
@@ -8364,7 +8379,7 @@ static QINLINE qboolean WP_CheckThrownSaberDamaged(gentity_t* saberent,
 				G_Damage(ent, saber_owner, saber_owner, dir, tr.endpos, dmg, dflags, MOD_SABER);
 
 				te = G_TempEntity(tr.endpos, EV_SABER_HIT);
-				te->s.otherentityNum = ENTITYNUM_NONE; // no throw damage link
+				te->s.otherEntityNum = ENTITYNUM_NONE; // no throw damage link
 				te->s.otherentityNum2 = saber_owner->s.number;
 				te->s.weapon = 0; // saberNum
 				te->s.legsAnim = 0; // bladeNum
@@ -19238,4 +19253,4 @@ void G_Beskar_Attack_Bounce(const gentity_t* self, gentity_t* other)
 			}
 		}
 	}
-}
+}

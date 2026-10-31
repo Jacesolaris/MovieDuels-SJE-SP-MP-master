@@ -549,6 +549,10 @@ struct gentity_s
 	qboolean saberPower;
 	int saberPowerTime;
 	int next_kick_time;
+	// saber slice (g_combat.c G_SaberSlice): cuts made on this body since it last spawned
+	int saberSliceCount;
+	int saberSliceBones; // bit per SABERSLICE_BONE_* already cut
+	int saberSliceSpawn; // ps.persistant[PERS_SPAWN_COUNT] when the cuts were made
 };
 
 #define DAMAGEREDIRECT_HEAD		1
@@ -1823,7 +1827,7 @@ void G_RunClient(gentity_t* ent);
 // g_team.c
 //
 qboolean OnSameTeam(const gentity_t* ent1, const gentity_t* ent2);
-void G_SaberBlasterFire(gentity_t* ent, qboolean charged, gentity_t* target); // SS_BLASTER
+void G_SaberBlasterFire(gentity_t* ent, int charge, gentity_t* target); // SS_BLASTER; charge 0 = normal, 1 .. SABERBLASTER_CHARGE_LEVELS (2026-10-31)
 void Team_CheckDroppedItem(const gentity_t* dropped);
 
 // Holocron table Externs.

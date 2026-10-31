@@ -545,8 +545,8 @@ static void CG_Special(const centity_t* cent)
 	{
 		// The portable shield should go through a different rendering function.
 		if (!cg.snap->ps.duelInProgress ||
-			s1->otherentityNum == cg.snap->ps.clientNum ||
-			s1->otherentityNum == cg.snap->ps.duelIndex)
+			s1->otherEntityNum == cg.snap->ps.clientNum ||
+			s1->otherEntityNum == cg.snap->ps.duelIndex)
 		{
 			FX_DrawPortableShield(cent);
 		}
@@ -898,7 +898,7 @@ static void CG_General(centity_t* cent)
 			VectorMA(end, lerped.origin[i], cent->currentState.angles, end);
 		}
 
-		parent = &cg_entities[cent->currentState.otherentityNum];
+		parent = &cg_entities[cent->currentState.otherEntityNum];
 		trap->G2API_GetBoltMatrix(parent->ghoul2, 0, 0, &mat, parent->turAngles, parent->lerpOrigin, cg.time,
 			cgs.game_models, parent->modelScale);
 
@@ -933,7 +933,7 @@ static void CG_General(centity_t* cent)
 			VectorMA(end, lerped.origin[i], cent->currentState.angles, end);
 		}
 
-		parent = &cg_entities[cent->currentState.otherentityNum];
+		parent = &cg_entities[cent->currentState.otherEntityNum];
 		trap->G2API_GetBoltMatrix(parent->ghoul2, 0, 0, &mat, parent->turAngles, parent->lerpOrigin, cg.time,
 			cgs.game_models, parent->modelScale);
 		BG_GiveMeVectorFromMatrix(&mat, ORIGIN, start);
@@ -948,8 +948,8 @@ static void CG_General(centity_t* cent)
 
 	if (cg.snap->ps.duelInProgress &&
 		((cent->currentState.weapon == WP_SABER &&
-			cent->currentState.otherentityNum != cg.snap->ps.clientNum &&
-			cent->currentState.otherentityNum != cg.snap->ps.duelIndex) ||
+			cent->currentState.otherEntityNum != cg.snap->ps.clientNum &&
+			cent->currentState.otherEntityNum != cg.snap->ps.duelIndex) ||
 			cent->currentState.eType & ET_BODY ||
 			cent->currentState.weapon == G2_MODEL_PART))
 	{ // don't render flying sabers owned by others, bodies or body parts
@@ -1081,7 +1081,18 @@ static void CG_General(centity_t* cent)
 	ent.shaderRGBA[2] = cent->currentState.customRGBA[2];
 	ent.shaderRGBA[3] = cent->currentState.customRGBA[3];
 
-	if (cent->currentState.modelGhoul2 >= G2_MODELPART_HEAD &&
+	if (cent->currentState.modelGhoul2 == G2_MODELPART_SLICE && cent->currentState.weapon == G2_MODEL_PART)
+	{
+		// saber slice piece (cg_players.c)
+		if (!CG_SaberSlicePiece(cent))
+		{
+			return;
+		}
+		do_not_set_model = qtrue;
+		ent.radius = cent->currentState.g2radius;
+		ent.hModel = 0;
+	}
+	else if (cent->currentState.modelGhoul2 >= G2_MODELPART_HEAD &&
 		cent->currentState.modelGhoul2 <= G2_MODELPART_RLEG &&
 		/*cent->currentState.modelIndex < MAX_CLIENTS &&*/
 		cent->currentState.weapon == G2_MODEL_PART)
@@ -1570,6 +1581,12 @@ static void CG_General(centity_t* cent)
 		VectorClear(cent->modelScale);
 	}
 
+	// saber cuts on a body or a cut-off piece
+	if (cent->saberSliceCount > 0 && ent.ghoul2 && !CG_SaberSliceApply(cent, &ent))
+	{
+		return;
+	}
+
 	if (cent->currentState.time > cg.time && cent->currentState.weapon == WP_EMPLACED_GUN)
 	{
 		float val = 0.0f;
@@ -1750,8 +1767,8 @@ static void CG_General(centity_t* cent)
 		cent->currentState.bolt1)  // lmo using same bolt1 hack to recognise sentry! (see above and SP_PAS in g_items.c)
 	{ // if entity is a trip mine, detpack, sentry gun consider duel NoX
 		if (!cg.snap->ps.duelInProgress ||
-			cent->currentState.otherentityNum == cg.snap->ps.clientNum ||
-			cent->currentState.otherentityNum == cg.snap->ps.duelIndex)
+			cent->currentState.otherEntityNum == cg.snap->ps.clientNum ||
+			cent->currentState.otherEntityNum == cg.snap->ps.duelIndex)
 		{
 			trap->R_AddRefEntityToScene(&ent);
 		}
@@ -1920,8 +1937,8 @@ static void CG_General(centity_t* cent)
 		int beam_id = 0;
 		//if force sight is active, render the laser multiple times up to the force sight level to increase visibility
 		if (!cg.snap->ps.duelInProgress ||
-			cent->currentState.otherentityNum == cg.snap->ps.clientNum ||
-			cent->currentState.otherentityNum == cg.snap->ps.duelIndex)
+			cent->currentState.otherEntityNum == cg.snap->ps.clientNum ||
+			cent->currentState.otherEntityNum == cg.snap->ps.duelIndex)
 		{ // dont render if neither you nor opponent are owner
 			if (cent->currentState.bolt2 == 1)
 			{
@@ -2898,7 +2915,7 @@ static void CG_MissileFromMuzzle(centity_t* cent)
 		cent->muzzleSeenTime = 0;
 		VectorClear(cent->muzzleOfs);
 
-		if (age >= MUZZLE_NEW_SHOT_MSEC || s1->otherentityNum < 0 || s1->otherentityNum >= ENTITYNUM_WORLD)
+		if (age >= MUZZLE_NEW_SHOT_MSEC || s1->otherEntityNum < 0 || s1->otherEntityNum >= ENTITYNUM_WORLD)
 		{
 			return; // an old shot coming into view: drawn where it is
 		}
@@ -2922,7 +2939,7 @@ static void CG_MissileFromMuzzle(centity_t* cent)
 		{
 			return;
 		}
-		centity_t* owner = &cg_entities[s1->otherentityNum];
+		centity_t* owner = &cg_entities[s1->otherEntityNum];
 		if (!owner->currentValid || !owner->ghoul2
 			|| owner->currentState.eType != ET_PLAYER && owner->currentState.eType != ET_NPC
 			|| owner->currentState.weapon != s1->weapon || owner->currentState.m_iVehicleNum)
@@ -2930,7 +2947,7 @@ static void CG_MissileFromMuzzle(centity_t* cent)
 			return;
 		}
 		// the local player in first person: the shot already starts by the view weapon
-		if (s1->otherentityNum == cg.snap->ps.clientNum && !cg.renderingThirdPerson)
+		if (s1->otherEntityNum == cg.snap->ps.clientNum && !cg.renderingThirdPerson)
 		{
 			return;
 		}
@@ -2982,8 +2999,8 @@ static void CG_Missile(centity_t* cent)
 
 	if (cg.snap->ps.duelInProgress &&
 		cent->currentState.eType == ET_MISSILE &&
-		cent->currentState.otherentityNum != cg.snap->ps.clientNum &&
-		cent->currentState.otherentityNum != cg.snap->ps.duelIndex)
+		cent->currentState.otherEntityNum != cg.snap->ps.clientNum &&
+		cent->currentState.otherEntityNum != cg.snap->ps.duelIndex)
 	{ //dont render missiles (includes dead sabers) if duel nox
 		return;
 	}
@@ -3117,7 +3134,7 @@ static void CG_Missile(centity_t* cent)
 			VectorMA(end, lerped.origin[i], s1->angles, end);
 		}
 
-		parent = &cg_entities[s1->otherentityNum];
+		parent = &cg_entities[s1->otherEntityNum];
 		trap->G2API_GetBoltMatrix(parent->ghoul2, 1, 0, &mat, parent->turAngles, parent->lerpOrigin, cg.time,
 			cgs.game_models, parent->modelScale);
 
@@ -3155,7 +3172,7 @@ static void CG_Missile(centity_t* cent)
 			VectorMA(end, lerped.origin[i], s1->angles, end);
 		}
 
-		parent = &cg_entities[s1->otherentityNum];
+		parent = &cg_entities[s1->otherEntityNum];
 		trap->G2API_GetBoltMatrix(parent->ghoul2, 1, 0, &mat, parent->turAngles, parent->lerpOrigin, cg.time,
 			cgs.game_models, parent->modelScale);
 		BG_GiveMeVectorFromMatrix(&mat, ORIGIN, start);
@@ -4724,4 +4741,4 @@ void CG_CubeOutline(vec3_t mins, vec3_t maxs, const int time, const unsigned int
 		CG_TestLine(point1, point4, time, color, 1);
 		CG_TestLine(point4, point1, time, color, 1);
 	}
-}
+}

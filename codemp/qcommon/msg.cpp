@@ -1023,7 +1023,7 @@ netField_t entityStateFields[] =
 	{ NETF(shouldtarget), 1 },
 	// widely used, does not appear that they have to be 16 bits
 	{ NETF(trickedentindex), 16 }, //See note in PSF
-	{ NETF(otherentityNum), GENTITYNUM_BITS },
+	{ NETF(otherEntityNum), GENTITYNUM_BITS },
 	{ NETF(origin2[1]), 0 },
 	{ NETF(time2), 32 },
 	{ NETF(legsFlip), 1 },

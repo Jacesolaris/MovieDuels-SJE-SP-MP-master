@@ -98,6 +98,8 @@ XCVAR_DEF(cg_debugPosition, "0", NULL, CVAR_CHEAT)
 XCVAR_DEF(cg_debugEvents, "0", NULL, CVAR_CHEAT)
 XCVAR_DEF(cg_duelHeadAngles, "0", NULL, CVAR_NONE)
 XCVAR_DEF(cg_dismember, "2", NULL, CVAR_ARCHIVE)
+XCVAR_DEF(cg_saberSliceCaps, "0", NULL, CVAR_ARCHIVE) // old saber slice cut face discs: 0 off (the renderers draw the inside of the model), 1 vanilla renderer only, 2 always
+XCVAR_DEF(cg_saberSliceCoolTime, "6000", NULL, CVAR_ARCHIVE) // ms for a saber cut face to cool from orange to dark red
 XCVAR_DEF(cg_deferPlayers, "1", NULL, CVAR_ARCHIVE)
 XCVAR_DEF(cg_errorDecay, "100", NULL, CVAR_NONE)
 XCVAR_DEF(cg_fallingBob, "1", NULL, CVAR_ARCHIVE)

@@ -3201,6 +3201,7 @@ void CG_Init(const int serverMessageNum, const int serverCommandSequence, const 
 	cgs.media.bdecal_saberglow = trap->R_RegisterShader("gfx/damage/saberglowmark");
 	cgs.media.bdecal_burn1 = trap->R_RegisterShader("gfx/damage/bodybigburnmark1");
 	cgs.media.mSaberDamageGlow = trap->R_RegisterShader("gfx/effects/saberDamageGlow");
+	cgs.media.saberSliceCapShader = trap->R_RegisterShader("gfx/effects/saberslice_cap");
 
 	//jk2 hud
 	cgs.media.JK2HUDLeftFrame = trap->R_RegisterShaderNoMip("gfx/hud/JK2static_test");
@@ -3269,6 +3270,7 @@ void CG_Init(const int serverMessageNum, const int serverCommandSequence, const 
 	cgs.media.weapontype_jango = trap->R_RegisterShaderNoMip("gfx/hud/w_icon_westar.tga");
 	cgs.media.weapontype_boba = trap->R_RegisterShaderNoMip("gfx/hud/w_icon_ee-3.tga");
 	cgs.media.weapontype_clonepistol = trap->R_RegisterShaderNoMip("gfx/hud/w_icon_clonepistol.tga");
+	cgs.media.weapontype_clonepistol_dual = trap->R_RegisterShaderNoMip("gfx/hud/w_icon_clonepistol_dual.tga");
 
 	// Load tics
 	for (i = 0; i < MAX_TICS; i++)
@@ -3903,4 +3905,4 @@ Q_EXPORT intptr_t vmMain(const int command, const intptr_t arg0, const intptr_t 
 		break;
 	}
 	return -1;
-}
+}

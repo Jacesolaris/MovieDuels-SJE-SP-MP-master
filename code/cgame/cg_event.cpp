@@ -857,7 +857,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position)
 
 	case EV_LIGHTNING_STRIKE:
 		DEBUGNAME("EV_LIGHTNING_STRIKE");
-		CG_StrikeBolt(cent, cg_entities[cent->currentState.otherentityNum].gent->client->renderInfo.handLPoint);
+		CG_StrikeBolt(cent, cg_entities[cent->currentState.otherEntityNum].gent->client->renderInfo.handLPoint);
 		break;
 
 	case EV_JEDISPAWN:
@@ -894,12 +894,12 @@ void CG_EntityEvent(centity_t* cent, vec3_t position)
 		DEBUGNAME("EV_KOTHOS_BEAM");
 		if (Q_irand(0, 1))
 		{
-			FX_KothosBeam(cg_entities[cent->currentState.otherentityNum].gent->client->renderInfo.handRPoint,
+			FX_KothosBeam(cg_entities[cent->currentState.otherEntityNum].gent->client->renderInfo.handRPoint,
 				cg_entities[cent->currentState.otherentityNum2].lerpOrigin);
 		}
 		else
 		{
-			FX_KothosBeam(cg_entities[cent->currentState.otherentityNum].gent->client->renderInfo.handLPoint,
+			FX_KothosBeam(cg_entities[cent->currentState.otherEntityNum].gent->client->renderInfo.handLPoint,
 				cg_entities[cent->currentState.otherentityNum2].lerpOrigin);
 		}
 		break;
@@ -1087,7 +1087,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position)
 	case EV_SHIELD_HIT:
 		DEBUGNAME("EV_SHIELD_HIT");
 		ByteToDir(es->eventParm, dir);
-		CG_PlayerShieldHit(es->otherentityNum, dir, es->time2);
+		CG_PlayerShieldHit(es->otherEntityNum, dir, es->time2);
 		break;
 
 	case EV_PAIN:
@@ -1168,9 +1168,9 @@ void CG_EntityEvent(centity_t* cent, vec3_t position)
 				CrossProduct(axis[0], axis[1], axis[2]);
 
 				// the entNum the effect may be attached to
-				if (es->otherentityNum)
+				if (es->otherEntityNum)
 				{
-					theFxScheduler.PlayEffect(s, cent->lerpOrigin, axis, -1, es->otherentityNum, portal_ent);
+					theFxScheduler.PlayEffect(s, cent->lerpOrigin, axis, -1, es->otherEntityNum, portal_ent);
 				}
 				else
 				{
@@ -1186,7 +1186,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position)
 		DEBUGNAME("EV_PLAY_MUZZLE_EFFECT");
 		s = CG_ConfigString(CS_EFFECTS + es->eventParm);
 
-		theFxScheduler.PlayEffect(s, es->otherentityNum);
+		theFxScheduler.PlayEffect(s, es->otherEntityNum);
 		break;
 
 	case EV_STOP_EFFECT:
@@ -1492,8 +1492,8 @@ void CG_EntityEvent(centity_t* cent, vec3_t position)
 		{
 			CG_LocalTimingBar(es->time, es->time2);
 		}
-		// Fallback: the server may have set otherentityNum
-		else if (es->otherentityNum == cg.snap->ps.clientNum)
+		// Fallback: the server may have set otherEntityNum
+		else if (es->otherEntityNum == cg.snap->ps.clientNum)
 		{
 			CG_LocalTimingBar(es->time, es->time2);
 		}
@@ -1506,8 +1506,8 @@ void CG_EntityEvent(centity_t* cent, vec3_t position)
 		{
 			CG_SlamTimingBar(es->time, es->time2);
 		}
-		// Fallback: the server may have set otherentityNum
-		else if (es->otherentityNum == cg.snap->ps.clientNum)
+		// Fallback: the server may have set otherEntityNum
+		else if (es->otherEntityNum == cg.snap->ps.clientNum)
 		{
 			CG_SlamTimingBar(es->time, es->time2);
 		}
@@ -1520,8 +1520,8 @@ void CG_EntityEvent(centity_t* cent, vec3_t position)
 		{
 			CG_DashTimingBar(es->time, es->time2);
 		}
-		// Fallback: the server may have set otherentityNum
-		else if (es->otherentityNum == cg.snap->ps.clientNum)
+		// Fallback: the server may have set otherEntityNum
+		else if (es->otherEntityNum == cg.snap->ps.clientNum)
 		{
 			CG_DashTimingBar(es->time, es->time2);
 		}

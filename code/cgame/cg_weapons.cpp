@@ -72,9 +72,9 @@ void CG_GrappleTrail(centity_t* ent)
 	ent->trailTime = cg.time;
 
 	//FIXME adjust for muzzle position
-	VectorCopy(cg_entities[ent->currentState.otherentityNum].lerpOrigin, from);
+	VectorCopy(cg_entities[ent->currentState.otherEntityNum].lerpOrigin, from);
 	from[2] += 26;
-	AngleVectors(cg_entities[ent->currentState.otherentityNum].lerpAngles, forward, nullptr, up);
+	AngleVectors(cg_entities[ent->currentState.otherEntityNum].lerpAngles, forward, nullptr, up);
 	VectorMA(from, -6, up, from);
 	FX_AddLine(from, to, 0.5f, 0.5f, 0.0f, BLUER, BLUER, 15, cgi_R_RegisterShader("gfx/misc/bolt1"), FX_SIZE_LINEAR);
 }
@@ -93,10 +93,10 @@ static void CG_StunTrail(centity_t* ent, const weaponInfo_t* wi)
 	memset(&beam, 0, sizeof beam);
 
 	//FIXME adjust for muzzle position
-	VectorCopy(cg_entities[ent->currentState.otherentityNum].lerpOrigin, beam.origin);
+	VectorCopy(cg_entities[ent->currentState.otherEntityNum].lerpOrigin, beam.origin);
 	beam.origin[2] += 26;
 
-	AngleVectors(cg_entities[ent->currentState.otherentityNum].lerpAngles, forward, nullptr, up);
+	AngleVectors(cg_entities[ent->currentState.otherEntityNum].lerpAngles, forward, nullptr, up);
 	VectorMA(beam.origin, -6, up, beam.origin);
 	VectorCopy(origin, beam.oldorigin);
 
@@ -6087,7 +6087,7 @@ void CG_MissileHitPlayer(const centity_t* cent, const int weapon, vec3_t origin,
 
 	if (cent->gent)
 	{
-		other = &g_entities[cent->gent->s.otherentityNum];
+		other = &g_entities[cent->gent->s.otherEntityNum];
 		if (other->client)
 		{
 			const class_t npc_class = other->client->NPC_class;

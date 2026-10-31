@@ -57,6 +57,9 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include <qcommon/q_platform.h>
 #include <qcommon/q_color.h>
 
+// SS_BLASTER saber attack / transition anim speed (SS_FAST is 1.1): Jace 2026-10-30
+#define SABERBLASTER_SABER_ANIM_SPEED	1.3f
+
 qboolean PM_SaberInTransition(int move);
 qboolean PM_SaberInDeflect(int move);
 extern qboolean PM_SaberInBounce(int move);
@@ -7347,8 +7350,10 @@ void PM_SaberStartTransAnim(const int clientNum, const int saberAnimLevel, const
 				break;
 
 			case SS_FAST:
-			case SS_BLASTER: // SS_BLASTER
 				*animSpeed *= 1.1f;
+				break;
+			case SS_BLASTER: // SS_BLASTER: faster saber attacks than SS_FAST (Jace 2026-10-30)
+				*animSpeed *= SABERBLASTER_SABER_ANIM_SPEED;
 				break;
 			case SS_MEDIUM:
 				*animSpeed *= saberanimscale;

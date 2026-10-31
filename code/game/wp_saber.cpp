@@ -2456,7 +2456,7 @@ int WP_SaberInitBladeData(gentity_t* ent)
 			saberent->svFlags = SVF_USE_CURRENT_ORIGIN;
 			saberent->s.weapon = WP_SABER;
 			saberent->owner = ent;
-			saberent->s.otherentityNum = ent->s.number;
+			saberent->s.otherEntityNum = ent->s.number;
 			//clear the enemy
 			saberent->enemy = nullptr;
 
@@ -2860,6 +2860,8 @@ extern cvar_t* g_dismemberProbabilities;
 static void WP_SaberTryStickInBody(gentity_t* owner, gentity_t* victim, const vec3_t hit_dir, int damage);
 static qboolean WP_SaberThrowerIsYoda(const gentity_t* owner);
 
+extern void G_SaberSliceSetHit(const gentity_t* victim, const vec3_t point, const vec3_t swing_dir, const vec3_t blade_dir);
+
 static qboolean WP_SaberApplyDamageJKA(gentity_t* ent, const float base_damage, const int base_d_flags,
 	const qboolean broken_parry, const int saberNum, const int bladeNum,
 	const qboolean thrown_saber)
@@ -3217,6 +3219,7 @@ static qboolean WP_SaberApplyDamageJKA(gentity_t* ent, const float base_damage, 
 						damage = ceil(totalDmg[i]);
 					}
 					const int vic_health_before = victim->health;
+					G_SaberSliceSetHit(victim, dmgSpot[i], dmgDir[i], dmgBladeVec[i]); // saber slice: cut along this blade
 					G_Damage(victim, inflictor, ent, dmgDir[i], dmgSpot[i], damage, dflags, MOD_SABER,
 						hitDismemberLoc[i]);
 					if (thrown_saber && g_DebugSaberCombat->integer)
@@ -4277,6 +4280,7 @@ static qboolean WP_SaberApplyDamageMD(gentity_t* ent, const float base_damage, c
 						}
 					}
 					const int vic_health_before = victim->health;
+					G_SaberSliceSetHit(victim, dmgSpot[i], dmgDir[i], dmgBladeVec[i]); // saber slice: cut along this blade
 					G_Damage(victim, inflictor, ent, dmgDir[i], dmgSpot[i], damage, dflags, MOD_SABER,
 						hitDismemberLoc[i]);
 					if (thrown_saber && g_DebugSaberCombat->integer)
@@ -23637,6 +23641,34 @@ static int saberBlasterChargeStart[MAX_GENTITIES];
 // not as the anim starts; saberBlasterFireTime = when the pending shot goes (0 = none)
 constexpr int SABERBLASTER_FIRE_FRAME = 5;
 static int saberBlasterFireTime[MAX_GENTITIES];
+// the charged shot (Jace 2026-10-31, replaces the 2026-10-30 arm delay): walk + dash fire on release - a tap a normal
+// shot; held past SABERBLASTER_CHARGE_START the left arm holds out (BOTH_FORCEGRIP_HOLD) and the shot charges
+// (bryar glow + charge sound), full at SABERBLASTER_CHARGE_FULL; attack while they are held reloads and drops the shot.
+// saberBlasterComboStart = when walk + dash went down (0 = not held, -1 = dropped until they go up),
+// saberBlasterChargeSound = the charge sound has played for this hold
+static int saberBlasterComboStart[MAX_GENTITIES];
+static qboolean saberBlasterChargeSound[MAX_GENTITIES];
+
+// the level of a shot held this long (0 = a normal shot), no more than the clip has left to pay for it
+static int WP_SaberBlasterChargeLevel(const int held, const int clip_used)
+{
+	if (held < SABERBLASTER_CHARGE_START)
+	{
+		return 0;
+	}
+	int level = 1 + (held - SABERBLASTER_CHARGE_START) * (SABERBLASTER_CHARGE_LEVELS - 1)
+		/ (SABERBLASTER_CHARGE_FULL - SABERBLASTER_CHARGE_START);
+	if (level > SABERBLASTER_CHARGE_LEVELS)
+	{
+		level = SABERBLASTER_CHARGE_LEVELS;
+	}
+	const int left = SABERBLASTER_CLIP_SIZE - clip_used;
+	if (level > left - 1)
+	{
+		level = left - 1; // the shot itself + 1 a level
+	}
+	return level > 0 ? level : 0;
+}
 extern qboolean G_ValidEnemy(const gentity_t* self, const gentity_t* enemy);
 extern gentity_t* CreateMissile(vec3_t org, vec3_t dir, float vel, int life, gentity_t* owner, qboolean alt_fire);
 extern void WP_TraceSetStart(const gentity_t* ent, vec3_t start);
@@ -23754,8 +23786,11 @@ static gentity_t* WP_SaberBlasterFindTarget(const gentity_t* ent, const vec3_t e
 	return best;
 }
 
-static void WP_SaberBlasterFire(gentity_t* ent, const qboolean charged, gentity_t* target)
+// charge: 0 = a normal shot, 1 .. SABERBLASTER_CHARGE_LEVELS = a charged one (2026-10-31; the saberlock shot is the
+// full charge): base damage x (1 + charge) ... x 5 at full, as before for the lock shot
+static void WP_SaberBlasterFire(gentity_t* ent, const int charge, gentity_t* target)
 {
+	const qboolean charged = charge > 0 ? qtrue : qfalse;
 	vec3_t eye, fwd, start, dir;
 
 	VectorCopy(ent->client->renderInfo.eyePoint, eye);
@@ -23796,7 +23831,7 @@ static void WP_SaberBlasterFire(gentity_t* ent, const qboolean charged, gentity_
 	missile->s.weapon = WP_BRYAR_PISTOL;
 	if (charged)
 	{
-		constexpr int count = 5; // fully charged
+		const int count = 2 + (charge > SABERBLASTER_CHARGE_LEVELS ? SABERBLASTER_CHARGE_LEVELS : charge); // full = 5
 		missile->count = count;
 		missile->damage = weaponData[WP_CONCUSSION].damage * count;
 		missile->methodOfDeath = MOD_BRYAR_ALT;
@@ -23941,7 +23976,7 @@ void WP_SaberBlasterThink(gentity_t* ent, usercmd_t* ucmd)
 			&& ent->client->ps.torsoAnim == BOTH_FORCELIGHTNING
 			&& !PM_InKnockDown(&ent->client->ps))
 		{
-			WP_SaberBlasterFire(ent, qfalse, nullptr);
+			WP_SaberBlasterFire(ent, 0, nullptr);
 		}
 	}
 
@@ -23951,20 +23986,16 @@ void WP_SaberBlasterThink(gentity_t* ent, usercmd_t* ucmd)
 	}
 	if (!WP_SaberBlasterActive(ent))
 	{
+		saberBlasterComboStart[ent_num] = 0;
+		saberBlasterChargeSound[ent_num] = qfalse;
 		return;
 	}
 
+	playerState_t* ps = &ent->client->ps;
 	// the fire button: Walk + Dash
 	const qboolean alt = ent->client->buttons & BUTTON_WALKING && ent->client->buttons & BUTTON_DASH ? qtrue : qfalse;
 	const qboolean reload = alt && ucmd->buttons & BUTTON_ATTACK ? qtrue : qfalse;
-
-	if (reload)
-	{
-		ucmd->buttons &= ~BUTTON_ATTACK;
-	}
-	saberBlasterAltHeld[ent_num] = alt && !reload ? qtrue : qfalse;
-
-	playerState_t* ps = &ent->client->ps;
+	int release = -1; // walk + dash went up this frame: the shot's charge level (0 = normal), -1 = none
 
 	if (ps->ammo[SABERBLASTER_CLIP_SLOT] < 0 || ps->ammo[SABERBLASTER_CLIP_SLOT] > SABERBLASTER_CLIP_SIZE)
 	{
@@ -23972,8 +24003,39 @@ void WP_SaberBlasterThink(gentity_t* ent, usercmd_t* ucmd)
 		ps->ammo[SABERBLASTER_CLIP_SLOT] = SABERBLASTER_CLIP_SIZE;
 	}
 
-	if (!alt
-		|| ent->health <= 0
+	if (reload)
+	{
+		ucmd->buttons &= ~BUTTON_ATTACK;
+	}
+	saberBlasterAltHeld[ent_num] = alt && !reload ? qtrue : qfalse;
+
+	if (ps->saberLockTime >= level.time)
+	{
+		saberBlasterComboStart[ent_num] = alt ? -1 : 0; // no shot on release after a saberlock (it has its own)
+	}
+	else if (!alt)
+	{
+		if (saberBlasterComboStart[ent_num] > 0)
+		{
+			// walk + dash went up: the shot goes, charged if they were held long enough
+			release = WP_SaberBlasterChargeLevel(level.time - saberBlasterComboStart[ent_num], ps->ammo[SABERBLASTER_CLIP_SLOT]);
+		}
+		saberBlasterComboStart[ent_num] = 0;
+	}
+	else if (reload)
+	{
+		saberBlasterComboStart[ent_num] = -1; // the shot is dropped until walk + dash go up
+	}
+	else if (!saberBlasterComboStart[ent_num] && ps->weaponTime <= 0)
+	{
+		saberBlasterComboStart[ent_num] = level.time; // walk + dash just went down (once he is free)
+	}
+	if (saberBlasterComboStart[ent_num] <= 0)
+	{
+		saberBlasterChargeSound[ent_num] = qfalse;
+	}
+
+	if (ent->health <= 0
 		|| ps->weaponTime > 0
 		|| ps->saberLockTime >= level.time //the lock is handled in PM_SaberLocked
 		|| ps->saberInFlight
@@ -23996,6 +24058,29 @@ void WP_SaberBlasterThink(gentity_t* ent, usercmd_t* ucmd)
 		return;
 	}
 
+	if (alt)
+	{
+		// held: once it is a charged shot the arm holds out, aiming the pistol, while it charges
+		if (saberBlasterComboStart[ent_num] > 0
+			&& WP_SaberBlasterChargeLevel(level.time - saberBlasterComboStart[ent_num], ps->ammo[SABERBLASTER_CLIP_SLOT]) > 0
+			&& ps->saberBlocked == BLOCKED_NONE)
+		{
+			if (!saberBlasterChargeSound[ent_num])
+			{
+				saberBlasterChargeSound[ent_num] = qtrue;
+				G_SoundOnEnt(ent, CHAN_WEAPON, "sound/weapons/bryar/altcharge.wav"); // the charge starts
+			}
+			NPC_SetAnim(ent, SETANIM_TORSO, BOTH_FORCEGRIP_HOLD, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
+			ps->torsoAnimTimer = 150;
+		}
+		return;
+	}
+
+	if (release < 0)
+	{
+		return;
+	}
+
 	if (ps->ammo[SABERBLASTER_CLIP_SLOT] >= SABERBLASTER_CLIP_SIZE)
 	{
 		// empty clip: click
@@ -24004,8 +24089,24 @@ void WP_SaberBlasterThink(gentity_t* ent, usercmd_t* ucmd)
 		return;
 	}
 
-	ps->ammo[SABERBLASTER_CLIP_SLOT]++;
 	ps->saberBlocked = BLOCKED_NONE;
+	if (release > 0)
+	{
+		// a charged shot: the arm is already out, it goes at once and costs 1 + its level
+		ps->ammo[SABERBLASTER_CLIP_SLOT] += 1 + release;
+		if (ps->ammo[SABERBLASTER_CLIP_SLOT] > SABERBLASTER_CLIP_SIZE)
+		{
+			ps->ammo[SABERBLASTER_CLIP_SLOT] = SABERBLASTER_CLIP_SIZE;
+		}
+		NPC_SetAnim(ent, SETANIM_TORSO, BOTH_FORCELIGHTNING_RELEASE, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART);
+		ps->weaponTime = weaponData[WP_BRYAR_PISTOL].fireTime;
+		ps->torsoAnimTimer = ps->weaponTime;
+		saberBlasterFireTime[ent_num] = 0;
+		WP_SaberBlasterFire(ent, release, nullptr);
+		return;
+	}
+
+	ps->ammo[SABERBLASTER_CLIP_SLOT]++;
 	NPC_SetAnim(ent, SETANIM_TORSO, BOTH_FORCELIGHTNING, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART);
 	ps->weaponTime = weaponData[WP_BRYAR_PISTOL].fireTime;
 	ps->torsoAnimTimer = ps->weaponTime;
@@ -24024,12 +24125,58 @@ void WP_SaberBlasterThink(gentity_t* ent, usercmd_t* ucmd)
 	if (fire_delay <= 0)
 	{
 		saberBlasterFireTime[ent_num] = 0;
-		WP_SaberBlasterFire(ent, qfalse, nullptr);
+		WP_SaberBlasterFire(ent, 0, nullptr);
 	}
 	else
 	{
 		saberBlasterFireTime[ent_num] = level.time + fire_delay;
 	}
+}
+
+// for the cgame (2026-10-31): while the charged shot charges, qtrue with the pistol's muzzle and how far it has
+// charged (0 .. 1) - the bryar charge glow (cg_players.cpp) and the HUD meter (cg_draw.cpp, cost = the clip shots it
+// will take, 1 + its level)
+qboolean WP_SaberBlasterChargeState(gentity_t* ent, vec3_t muzzle, float* frac, int* cost)
+{
+	if (!WP_SaberBlasterActive(ent) || ent->health <= 0)
+	{
+		return qfalse;
+	}
+	const int start = saberBlasterComboStart[ent->s.number];
+	if (start <= 0 || ent->client->ps.saberLockTime >= level.time)
+	{
+		return qfalse;
+	}
+	const int held = level.time - start;
+	const int charge = WP_SaberBlasterChargeLevel(held, ent->client->ps.ammo[SABERBLASTER_CLIP_SLOT]);
+	if (charge <= 0)
+	{
+		return qfalse;
+	}
+	float f = static_cast<float>(held - SABERBLASTER_CHARGE_START) / static_cast<float>(SABERBLASTER_CHARGE_FULL - SABERBLASTER_CHARGE_START);
+	if (f > 1.0f)
+	{
+		f = 1.0f;
+	}
+	if (frac)
+	{
+		*frac = f < 0.0f ? 0.0f : f;
+	}
+	if (cost)
+	{
+		*cost = 1 + charge;
+	}
+	if (muzzle)
+	{
+		WP_SaberBlasterMuzzle(ent, muzzle);
+	}
+	return qtrue;
+}
+
+// for the cgame crosshair (2026-10-31): walk + dash held for a shot (a tap about to go, or a charge)
+qboolean WP_SaberBlasterAiming(const gentity_t* ent)
+{
+	return WP_SaberBlasterActive(ent) && saberBlasterComboStart[ent->s.number] > 0 ? qtrue : qfalse;
 }
 
 // called from PM_SaberLocked: Walk + Dash starts a charge, after g_saberBlasterLockCharge ms a charged shot is fired
@@ -24056,7 +24203,7 @@ qboolean WP_SaberBlasterLockCharge(gentity_t* ent, gentity_t* enemy)
 		return qfalse;
 	}
 	saberBlasterChargeStart[ent_num] = 0;
-	WP_SaberBlasterFire(ent, qtrue, enemy);
+	WP_SaberBlasterFire(ent, SABERBLASTER_CHARGE_LEVELS, enemy);
 	return qtrue;
 }
 
@@ -36188,10 +36335,10 @@ static void ForceShootstrike(gentity_t* self)
 	// always render a shot beam
 
 	G_PlayEffect("env/yellow_lightning", self->client->renderInfo.handLPoint, forward);
-	// The client draws the bolt from otherentityNum's hand in the event's direction (CG_StrikeBolt).
+	// The client draws the bolt from otherEntityNum's hand in the event's direction (CG_StrikeBolt).
 	// This used the uninitialised tr.endpos and left the caster at 0, i.e. the player, even for NPCs.
 	gentity_t* tent = G_TempEntity(self->client->renderInfo.handLPoint, EV_LIGHTNING_STRIKE);
-	tent->s.otherentityNum = self->s.number;
+	tent->s.otherEntityNum = self->s.number;
 	VectorCopy(self->client->ps.viewangles, tent->s.angles);
 	VectorCopy(self->client->ps.viewangles, tent->s.apos.trBase);
 	tent->svFlags |= SVF_BROADCAST;
@@ -49240,4 +49387,4 @@ qboolean wp_saber_Off_Dash_Evasion(gentity_t* self, vec3_t hitloc)
 	self->client->ps.communicatingflags |= (1 << CF_DASHING);
 
 	return qtrue;
-}
+}

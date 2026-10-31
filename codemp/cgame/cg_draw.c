@@ -2667,25 +2667,31 @@ static void CG_DrawWeaponBoba(const int x, const int y)
 }
 static void CG_DrawWeaponClonePistol(const int x, const int y)
 {
+	// dual clone pistols: their own icon (2026-10-30)
+	const qhandle_t icon = cg.predictedPlayerState.eFlags & EF3_DUAL_WEAPONS && cgs.media.weapontype_clonepistol_dual
+		? cgs.media.weapontype_clonepistol_dual
+		: cgs.media.weapontype_clonepistol;
+
+
 	if (g_SerenityJediEngineHudMode.integer == 0) //movie duels right
 	{
-		CG_DrawPic(x + 30, y + 35, 20, 20, cgs.media.weapontype_clonepistol);
+		CG_DrawPic(x + 30, y + 35, 20, 20, icon);
 	}
 	else if (g_SerenityJediEngineHudMode.integer == 1) //movie duels right
 	{
-		CG_DrawPic(x + 30, y + 35, 20, 20, cgs.media.weapontype_clonepistol);
+		CG_DrawPic(x + 30, y + 35, 20, 20, icon);
 	}
 	else if (g_SerenityJediEngineHudMode.integer == 2) //movie duels right vert
 	{
-		CG_DrawPic(x + 36, y + 20, 20, 20, cgs.media.weapontype_clonepistol);
+		CG_DrawPic(x + 36, y + 20, 20, 20, icon);
 	}
 	else if (g_SerenityJediEngineHudMode.integer == 3) //movie duels right hoz
 	{
-		CG_DrawPic(x + 21, y + 38, 20, 20, cgs.media.weapontype_clonepistol);
+		CG_DrawPic(x + 21, y + 38, 20, 20, icon);
 	}
 	else
 	{
-		CG_DrawPic(x + 30, y + 35, 20, 20, cgs.media.weapontype_clonepistol);
+		CG_DrawPic(x + 30, y + 35, 20, 20, icon);
 	}
 }
 
@@ -5170,7 +5176,15 @@ static void CG_DrawCusweapontype(const centity_t* cent, const menuDef_t* menu_hu
 	}
 	else if (cent->currentState.weapon == WP_CLONEPISTOL)
 	{
-		focus_item = Menu_FindItemByName(menu_hud, "weapontype_clonepistol");
+		focus_item = NULL;
+		if (cg.predictedPlayerState.eFlags & EF3_DUAL_WEAPONS)
+		{
+			focus_item = Menu_FindItemByName(menu_hud, "weapontype_clonepistoldual"); // dual clone pistols (2026-10-30)
+		}
+		if (!focus_item)
+		{
+			focus_item = Menu_FindItemByName(menu_hud, "weapontype_clonepistol");
+		}
 
 		if (focus_item)
 		{
@@ -6943,6 +6957,24 @@ static void CG_DrawSaberBlasterClip(const centity_t* cent)
 	static vec4_t lit = { 0.25f, 0.65f, 1.0f, 1.0f };
 	static vec4_t half = { 0.25f, 0.65f, 1.0f, 0.45f };
 	static vec4_t spent = { 0.35f, 0.35f, 0.38f, 0.55f };
+	vec4_t chargeColor = { 1.0f, 0.55f, 0.15f, 1.0f };
+	// the charged shot (2026-10-31): while it charges, the shots it will cost (1 + its level) glow orange at the top
+	int keep = left;
+	const int hold = cg.predictedPlayerState.weaponChargeTime;
+
+	if (hold > 0 && cg.predictedPlayerState.saberLockTime < cg.time)
+	{
+		const int level = BG_SaberBlasterChargeLevel(cg.time - hold, cg.predictedPlayerState.ammo[SABERBLASTER_CLIP_SLOT]);
+		if (level > 0)
+		{
+			keep = left - (1 + level);
+			chargeColor[3] = 0.6f + 0.4f * sinf((float)(cg.time) * 0.02f);
+			if (level >= SABERBLASTER_CHARGE_LEVELS)
+			{
+				chargeColor[3] = 1.0f; // full
+			}
+		}
+	}
 
 	if (left <= 0)
 	{
@@ -6965,6 +6997,10 @@ static void CG_DrawSaberBlasterClip(const centity_t* cent)
 		// cell 0 at the bottom: the shots left are the lit cells from the bottom up
 		const int shots = left - 2 * i;
 		const float* color = shots >= 2 ? lit : shots == 1 ? half : spent;
+		if (shots >= 1 && 2 * i + 2 > keep)
+		{
+			color = chargeColor; // a shot of this cell goes into the charged shot
+		}
 		const float cy = cellsBottom - (float)(i + 1) * cellH + 1.0f;
 		if (cell)
 		{
@@ -10149,8 +10185,8 @@ static float cg_draw_radar(float y)
 				{
 					//I'm in a vehicle
 					//if it's targetting me, then play an alarm sound if I'm in a vehicle
-					if (cent->currentState.otherentityNum == cg.predictedPlayerState.clientNum || cent->currentState.
-						otherentityNum == cg.predictedPlayerState.m_iVehicleNum)
+					if (cent->currentState.otherEntityNum == cg.predictedPlayerState.clientNum || cent->currentState.
+						otherEntityNum == cg.predictedPlayerState.m_iVehicleNum)
 					{
 						if (radarLockSoundDebounceTime < cg.time)
 						{
@@ -11815,6 +11851,24 @@ static void CG_LerpCrosshairPos(float* x, float* y)
 vec3_t cg_crosshairPos = { 0, 0, 0 };
 extern qboolean in_camera;
 
+// SS_BLASTER (Jace 2026-10-31): the adaptive crosshair shows while the left hand pistol is aimed - walk + dash held
+// (a shot about to go, or charging) or a shot's arm still out
+static qboolean CG_SaberBlasterAiming(void)
+{
+	const playerState_t* ps = &cg.predictedPlayerState;
+
+	if (ps->weapon != WP_SABER || ps->fd.saberAnimLevel != SS_BLASTER || ps->saberHolstered == 2)
+	{
+		return qfalse;
+	}
+	if (ps->weaponChargeTime > 0 && ps->saberLockTime < cg.time)
+	{
+		return qtrue;
+	}
+	return (ps->torsoAnim == BOTH_FORCELIGHTNING || ps->torsoAnim == BOTH_FORCEGRIP_HOLD
+		|| ps->torsoAnim == BOTH_FORCELIGHTNING_RELEASE) && ps->torsoTimer > 0 ? qtrue : qfalse;
+}
+
 static void CG_DrawCrosshair(vec3_t world_point, const int ch_ent_valid)
 {
 	float w = 0.0f, h = 0.0f;
@@ -11841,7 +11895,7 @@ static void CG_DrawCrosshair(vec3_t world_point, const int ch_ent_valid)
 		&& (cg.predictedPlayerState.eFlags & EF_NODRAW)) ? qtrue : qfalse;
 
 	if (cg_adaptiveCrosshair.integer == 1 && !in_ship &&
-		(cg.snap->ps.weapon == WP_SABER))
+		(cg.snap->ps.weapon == WP_SABER) && !CG_SaberBlasterAiming()) // SS_BLASTER: shown while the pistol is aimed
 	{
 		if ((holding_block == qfalse &&
 			holding_block_and_attack == qfalse) ||

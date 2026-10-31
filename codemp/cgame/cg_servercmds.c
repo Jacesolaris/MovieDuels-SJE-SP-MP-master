@@ -1543,6 +1543,11 @@ static void CG_RestoreClientGhoul_f(void) {
 			body->teamPowerType = 0; //dark side
 
 		CG_BodyQueueCopy(body, clent->currentState.number, weaponIndex);
+		CG_SaberSliceTransfer(body, clent); // the body keeps the saber cuts
+	}
+	else
+	{
+		CG_SaberSliceClear(clent);
 	}
 
 	//reattach any missing limbs
@@ -1786,4 +1791,4 @@ void CG_ExecuteNewServerCommands(int latestSequence) {
 			CG_ServerCommand();
 		}
 	}
-}
+}

@@ -67,7 +67,10 @@ void* Allocator::Alloc(size_t allocSize)
 	const size_t remaining = (size_t)((char*)end - (char*)mark);
 #endif // REND2_SP
 
-	if (remaining < allocSize)
+	// 2026-11-01: check the PADDED size, and a mark already past the end. The old check compared the
+	// unpadded size, so the mark could end up to alignment-1 bytes past the end; 'remaining' then wrapped
+	// to a huge value and every later allocation that frame went outside the buffer (memory corruption).
+	if ((char*)mark > (char*)end || remaining < PAD(allocSize, alignment))
 	{
 		return nullptr;
 	}

@@ -752,6 +752,11 @@ void DrawItemSetVertexAttributes(
 {
 	drawItem.numAttributes = count;
 	drawItem.attributes = ojkAllocArray<vertexAttribute_t>(allocator, count);
+	if (!drawItem.attributes)
+	{
+		drawItem.numAttributes = 0; // per-frame memory full (2026-11-01)
+		return;
+	}
 	memcpy(
 		drawItem.attributes, attributes, sizeof(*drawItem.attributes) * count);
 }
@@ -764,6 +769,11 @@ void DrawItemSetSamplerBindings(
 {
 	drawItem.numSamplerBindings = count;
 	drawItem.samplerBindings = ojkAllocArray<SamplerBinding>(allocator, count);
+	if (!drawItem.samplerBindings)
+	{
+		drawItem.numSamplerBindings = 0; // per-frame memory full (2026-11-01)
+		return;
+	}
 	memcpy(
 		drawItem.samplerBindings,
 		bindings,
@@ -779,6 +789,11 @@ void DrawItemSetUniformBlockBindings(
 	drawItem.numUniformBlockBindings = count;
 	drawItem.uniformBlockBindings = ojkAllocArray<UniformBlockBinding>(
 		allocator, count);
+	if (!drawItem.uniformBlockBindings)
+	{
+		drawItem.numUniformBlockBindings = 0; // per-frame memory full (2026-11-01)
+		return;
+	}
 	memcpy(
 		drawItem.uniformBlockBindings,
 		bindings,
@@ -966,6 +981,9 @@ UniformData* UniformDataWriter::Finish(Allocator & destHeap)
 	UniformData* endSentinel = ojkAlloc<UniformData>(scratch);
 	if (failed || !endSentinel)
 	{
+		scratch.Reset(); // 2026-11-01: was left full, so the next item started on a full scratch buffer
+		failed = false;
+		shaderProgram = nullptr;
 		return nullptr;
 	}
 
@@ -975,6 +993,26 @@ UniformData* UniformDataWriter::Finish(Allocator & destHeap)
 
 	// Copy scratch buffer to per-frame heap
 	void* finalMemory = destHeap.Alloc(uniformDataSize);
+	if (!finalMemory)
+	{
+		// per-frame memory full: no uniforms for this item instead of a write through a null pointer (2026-11-01)
+		scratch.Reset();
+		failed = false;
+		shaderProgram = nullptr;
+		return nullptr;
+	}
+	if (backEndData && backEndData->currentPass
+		&& (char*)backEndData->currentPass >= (char*)finalMemory
+		&& (char*)backEndData->currentPass < (char*)finalMemory + uniformDataSize)
+	{
+		// should never happen: this memory still holds the current draw list (2026-11-01 crash hunt)
+		static unsigned lastWarn = 0;
+		if (!lastWarn || backEndData->realFrameNumber - lastWarn > 300)
+		{
+			lastWarn = backEndData->realFrameNumber | 1;
+			Com_Printf(S_COLOR_RED "UniformDataWriter: per-frame memory %p handed out over the current draw list %p - please report\n", finalMemory, (void*)backEndData->currentPass);
+		}
+	}
 	UniformData* result = static_cast<UniformData*>(finalMemory);
 	memcpy(finalMemory, scratch.Base(), uniformDataSize);
 	scratch.Reset();
@@ -1075,6 +1113,17 @@ SamplerBinding* SamplerBindingsWriter::Finish(Allocator & destHeap, uint32_t * n
 	}
 
 	SamplerBinding* result = ojkAllocArray<SamplerBinding>(destHeap, count);
+	if (!result)
+	{
+		// per-frame memory full (2026-11-01)
+		if (numBindings)
+		{
+			*numBindings = 0;
+		}
+		failed = false;
+		count = 0;
+		return nullptr;
+	}
 
 	if (numBindings)
 	{
@@ -1087,8 +1136,10 @@ SamplerBinding* SamplerBindingsWriter::Finish(Allocator & destHeap, uint32_t * n
 	return result;
 }
 
+#define RB_PASS_MAGIC 0x50415353u // 'PASS': lets RB_AddDrawItem / RB_SubmitRenderPass spot an overwritten draw list (2026-11-01)
 struct Pass
 {
+	uint32_t magic;
 	int maxDrawItems;
 	int numDrawItems;
 	DrawItem* drawItems;
@@ -1377,6 +1428,35 @@ static void RB_DrawItems(
 
 /*
 =====================
+RB_PassValid
+
+2026-11-01 (SJE MP crash in RB_AddDrawItem while drawing a lightning bolt): the draw list had been
+overwritten by uniform data. Check it before use, report once in a while, and skip instead of crashing.
+=====================
+*/
+static bool RB_PassValid(const Pass* pass, const char* where)
+{
+	if (pass->magic == RB_PASS_MAGIC
+		&& pass->numDrawItems >= 0
+		&& pass->numDrawItems <= pass->maxDrawItems
+		&& pass->drawItems != nullptr
+		&& pass->sortKeys != nullptr)
+	{
+		return true;
+	}
+
+	static unsigned lastWarn = 0;
+	if (!lastWarn || backEndData->realFrameNumber - lastWarn > 300)
+	{
+		lastWarn = backEndData->realFrameNumber | 1;
+		Com_Printf(S_COLOR_RED "%s: draw list %p was overwritten (magic %08x max %d num %d, memory mark %p) - please report\n",
+			where, (const void*)pass, pass->magic, pass->maxDrawItems, pass->numDrawItems, backEndData->perFrameMemory->Mark());
+	}
+	return false;
+}
+
+/*
+=====================
 RB_AddDrawItem
 
 Adds a draw item to a pass, or draws immediately if no pass is provided.
@@ -1388,6 +1468,10 @@ void RB_AddDrawItem(Pass * pass, uint32_t sortKey, const DrawItem & drawItem)
 	// There will be no pass if we are drawing a 2D object.
 	if (pass)
 	{
+		if (!RB_PassValid(pass, "RB_AddDrawItem"))
+		{
+			return; // the draw list memory was overwritten: drop the item instead of writing through garbage pointers
+		}
 		if (pass->numDrawItems >= pass->maxDrawItems)
 		{
 			// The pass is sized from the number of draw surfaces (x 4 stages), but one surface can add more items
@@ -1425,10 +1509,19 @@ void RB_AddDrawItem(Pass * pass, uint32_t sortKey, const DrawItem & drawItem)
 static Pass* RB_CreatePass(Allocator & allocator, int capacity)
 {
 	Pass* pass = ojkAlloc<Pass>(*backEndData->perFrameMemory);
+	if (!pass)
+	{
+		return nullptr; // per-frame memory full: items are drawn straight away instead (2026-11-01)
+	}
 	*pass = {};
 	pass->maxDrawItems = capacity;
 	pass->drawItems = ojkAllocArray<DrawItem>(allocator, pass->maxDrawItems);
 	pass->sortKeys = ojkAllocArray<uint32_t>(allocator, pass->maxDrawItems);
+	if (!pass->drawItems || !pass->sortKeys)
+	{
+		return nullptr;
+	}
+	pass->magic = RB_PASS_MAGIC;
 	return pass;
 }
 
@@ -1651,8 +1744,17 @@ static void RB_SubmitRenderPass(
 	Pass & renderPass,
 	Allocator & allocator)
 {
+	if (!RB_PassValid(&renderPass, "RB_SubmitRenderPass"))
+	{
+		return;
+	}
+
 	uint32_t* drawOrder = ojkAllocArray<uint32_t>(
 		allocator, renderPass.numDrawItems);
+	if (!drawOrder)
+	{
+		return; // per-frame memory full (2026-11-01)
+	}
 
 	uint32_t numDrawItems = renderPass.numDrawItems;
 	for (uint32_t i = 0; i < numDrawItems; ++i)
@@ -1707,7 +1809,12 @@ static void RB_RenderDrawSurfList(drawSurf_t * drawSurfs, int numDrawSurfs)
 
 	// Prepare memory for the current render pass
 	void* allocMark = backEndData->perFrameMemory->Mark();
-	assert(backEndData->currentPass == nullptr);
+	if (backEndData->currentPass != nullptr)
+	{
+		// left over from a pass that never finished (an error part way through): never reuse it (2026-11-01)
+		Com_Printf(S_COLOR_YELLOW "RB_RenderDrawSurfList: stale draw list cleared\n");
+		backEndData->currentPass = nullptr;
+	}
 	backEndData->currentPass = RB_CreatePass(
 		*backEndData->perFrameMemory, numDrawSurfs * estimatedNumShaderStages + 64);	// + room for the weather surface's items
 
@@ -1769,9 +1876,12 @@ static void RB_RenderDrawSurfList(drawSurf_t * drawSurfs, int numDrawSurfs)
 	}
 
 	// Do the drawing and release memory
-	RB_SubmitRenderPass(
-		*backEndData->currentPass,
-		*backEndData->perFrameMemory);
+	if (backEndData->currentPass)
+	{
+		RB_SubmitRenderPass(
+			*backEndData->currentPass,
+			*backEndData->perFrameMemory);
+	}
 
 	backEndData->perFrameMemory->ResetTo(allocMark);
 	backEndData->currentPass = nullptr;

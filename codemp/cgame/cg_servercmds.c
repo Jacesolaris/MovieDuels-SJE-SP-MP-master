@@ -1243,6 +1243,8 @@ static void CG_BodyQueueCopy(centity_t* cent, int client_num, int knownWeapon)
 
 	cent->isRagging = qfalse; //reset in case it's still set from another body that was in this cent slot.
 	cent->ownerRagging = source->isRagging; //if the owner was in ragdoll state, then we want to go into it too right away.
+	cent->saberStuckNoRag = source->saberStuckNoRag; // a saber was stuck in it: the corpse gets no ragdoll either (DH 2026-11-01)
+	source->saberStuckNoRag = qfalse;
 
 #if 0
 	VectorCopy(source->lerpOriginOffset, cent->lerpOriginOffset);

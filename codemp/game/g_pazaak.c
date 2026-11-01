@@ -848,7 +848,7 @@ static vmCvar_t g_shop, g_shopStartCredits, g_shopKillCredits, g_shopStreakTime,
 g_shopAmmoPrice, g_shopBactaPrice, g_npcTalk;
 static int shopTalkNPC[MAX_CLIENTS];    // entity number + 1 of the NPC of the open talk question
 static int shopIsOpen[MAX_CLIENTS];     // the shop menu is open (it closes when he is attacked)
-static int shopOpenHealth[MAX_CLIENTS];
+static int shopOpenDamage[MAX_CLIENTS]; // ps.damageEvent when the shop opened (health was used, but MP health above max ticks down every second)
 static int shopNextCheck[MAX_CLIENTS];
 
 static void G_Shop_Init(void)
@@ -864,7 +864,7 @@ static void G_Shop_Init(void)
 	trap->Cvar_Register(&g_npcTalk, "g_npcTalk", "1", CVAR_ARCHIVE);
 	memset(shopTalkNPC, 0, sizeof(shopTalkNPC));
 	memset(shopIsOpen, 0, sizeof(shopIsOpen));
-	memset(shopOpenHealth, 0, sizeof(shopOpenHealth));
+	memset(shopOpenDamage, 0, sizeof(shopOpenDamage));
 	memset(shopNextCheck, 0, sizeof(shopNextCheck));
 	shopNumItems = -1; // read again on this map (the file may have changed)
 }
@@ -1128,13 +1128,13 @@ void G_Shop_PlayerThink(gentity_t* ent)
 	if (shopIsOpen[n] && level.time >= shopNextCheck[n])
 	{
 		shopNextCheck[n] = level.time + 500;
-		if (ent->health <= 0 || ent->health < shopOpenHealth[n] || Pzk_EnemyNear(ent))
+		if (ent->health <= 0 || ent->client->ps.damageEvent != shopOpenDamage[n] || Pzk_EnemyNear(ent))
 		{
 			shopIsOpen[n] = 0;
 			trap->SendServerCommand(n, "pzk shop close");
 			trap->SendServerCommand(n, "cp \"The shop closed: you are under attack.\"");
 		}
-		shopOpenHealth[n] = ent->health;
+		shopOpenDamage[n] = ent->client->ps.damageEvent;
 	}
 }
 
@@ -1286,7 +1286,7 @@ static void Shop_Open(gentity_t* ent, const char* message)
 	}
 	Shop_Send(ent, "open", message);
 	shopIsOpen[ent->s.number] = 1;
-	shopOpenHealth[ent->s.number] = ent->health;
+	shopOpenDamage[ent->s.number] = ent->client->ps.damageEvent;
 	shopNextCheck[ent->s.number] = level.time + 500;
 }
 

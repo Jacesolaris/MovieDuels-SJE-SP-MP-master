@@ -3141,6 +3141,8 @@ static void G_AwardStreaks(gentity_t* self, gentity_t* attacker)
 	}
 }
 
+extern void G_Shop_Died(gentity_t* victim, gentity_t* attacker);
+
 void player_die(gentity_t* self, const gentity_t* inflictor, gentity_t* attacker, const int damage, const int means_of_death)
 {
 	const int gun_shot = s_die_gun_shot;
@@ -3192,6 +3194,8 @@ void player_die(gentity_t* self, const gentity_t* inflictor, gentity_t* attacker
 
 	if (!attacker)
 		return;
+
+	G_Shop_Died(self, attacker); // the shop (2026-11-01, g_pazaak.c): credits for a player's kills, the loss when a player dies
 
 	//check player stuff
 	g_dontFrickinCheck = qfalse;

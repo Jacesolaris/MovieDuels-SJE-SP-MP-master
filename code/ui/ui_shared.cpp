@@ -5409,6 +5409,7 @@ void Menus_Activate(menuDef_t* menu)
 static const char* g_bindCommands[] =
 {
 	"pazaak",
+	"shop", // the shop menu (2026-11-01, g_pazaak.cpp)
 	"+altattack",
 	"+attack",
 	"+back",

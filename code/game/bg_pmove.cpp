@@ -17650,9 +17650,9 @@ static int PM_ReadyPoseForSaberAnimLevelNPC(void)
 		return PM_ReadyPoseForSaberAnimLevelDucked();
 	}
 
-	if (pm->ps->saberAnimLevel == SS_BLASTER) // SS_BLASTER: NPCs use the staff stance (as SJE)
+	if (pm->ps->saberAnimLevel == SS_BLASTER) // SS_BLASTER: NPCs use the BOTH_STAND2 stance (as SJE)
 	{
-		return BOTH_SABERSTAFF_STANCE;
+		return BOTH_STAND2;
 	}
 
 	// SJE Mode 2 overrides JKA stance logic
@@ -19321,6 +19321,7 @@ int PM_ReadyPoseForSaberAnimLevel(void)
 		break;
 
 	case SS_MEDIUM:
+	case SS_BLASTER: // SS_BLASTER (2026-10-14)
 		if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
 		{
 			anim = BOTH_STAND2;
@@ -19374,32 +19375,24 @@ int PM_ReadyPoseForSaberAnimLevelAMD(void)
 	case SS_DUAL:
 		anim = BOTH_SABERDUAL_STANCE;
 		break;
-
 	case SS_STAFF:
 		anim = BOTH_SABERSTAFF_STANCE;
 		break;
-
-	case SS_FAST:
-		anim = BOTH_SABERFAST_STANCE;
-		break;
-
 	case SS_TAVION:
 		anim = BOTH_SABERTAVION_STANCE;
 		break;
-
+	case SS_FAST:
+		anim = BOTH_SABERFAST_STANCE;
+		break;
 	case SS_STRONG:
 		anim = BOTH_SABERSLOW_STANCE;
 		break;
-
 	case SS_DESANN:
 		anim = BOTH_SABERDESANN_STANCE;
 		break;
-
-	case SS_MEDIUM:
-		anim = BOTH_STAND2;
-		break;
-
 	case SS_NONE:
+	case SS_MEDIUM:
+	case SS_BLASTER: // SS_BLASTER (2026-10-14)
 	default:
 		anim = BOTH_STAND2;
 		break;
@@ -20239,6 +20232,7 @@ int PM_BlockingPoseForSaberAnimLevelSingleAMD(void)
 						case SS_DESANN:
 							anim = (g_RealisticBlockingMode->integer != 0) ? BOTH_STAND_BLOCKING_ON : BOTH_SABERDESANN_STANCE;
 							break;
+						case SS_BLASTER: // SS_BLASTER (2026-10-14)
 						case SS_MEDIUM:
 							anim = (g_RealisticBlockingMode->integer != 0) ? BOTH_STAND_BLOCKING_ON : BOTH_STAND2;
 							break;
@@ -20264,6 +20258,7 @@ int PM_BlockingPoseForSaberAnimLevelSingleAMD(void)
 						case SS_DESANN:
 							anim = (g_RealisticBlockingMode->integer != 0) ? BOTH_SABERSINGLECROUCH : BOTH_SABERDESANN_STANCE;
 							break;
+						case SS_BLASTER: // SS_BLASTER (2026-10-14)
 						case SS_MEDIUM:
 							anim = (g_RealisticBlockingMode->integer != 0) ? BOTH_SABERSINGLECROUCH : BOTH_STAND2;
 							break;
@@ -20296,6 +20291,7 @@ int PM_BlockingPoseForSaberAnimLevelSingleAMD(void)
 					case SS_DESANN:
 						anim = (g_RealisticBlockingMode->integer != 0) ? BOTH_STAND_BLOCKING_ON : BOTH_SABERDESANN_STANCE;
 						break;
+					case SS_BLASTER: // SS_BLASTER (2026-10-14)
 					case SS_MEDIUM:
 						anim = (g_RealisticBlockingMode->integer != 0) ? BOTH_STAND_BLOCKING_ON : BOTH_STAND2;
 						break;
@@ -20321,6 +20317,7 @@ int PM_BlockingPoseForSaberAnimLevelSingleAMD(void)
 					case SS_DESANN:
 						anim = (g_RealisticBlockingMode->integer != 0) ? BOTH_SABERSINGLECROUCH : BOTH_SABERDESANN_STANCE;
 						break;
+					case SS_BLASTER: // SS_BLASTER (2026-10-14)
 					case SS_MEDIUM:
 						anim = (g_RealisticBlockingMode->integer != 0) ? BOTH_SABERSINGLECROUCH : BOTH_STAND2;
 						break;
@@ -20425,6 +20422,7 @@ int PM_BlockingPoseForSaberAnimLevelSingleAMD(void)
 						case SS_DESANN:
 							anim = (g_RealisticBlockingMode->integer != 0) ? BOTH_STAND_BLOCKING_ON : BOTH_SABERDESANN_STANCE;
 							break;
+						case SS_BLASTER: // SS_BLASTER (2026-10-14)
 						case SS_MEDIUM:
 							anim = (g_RealisticBlockingMode->integer != 0) ? BOTH_STAND_BLOCKING_ON : BOTH_STAND2;
 							break;
@@ -20461,6 +20459,7 @@ int PM_BlockingPoseForSaberAnimLevelSingleAMD(void)
 					case SS_DESANN:
 						anim = (g_RealisticBlockingMode->integer != 0) ? BOTH_STAND_BLOCKING_ON : BOTH_SABERDESANN_STANCE;
 						break;
+					case SS_BLASTER: // SS_BLASTER (2026-10-14)
 					case SS_MEDIUM:
 						anim = (g_RealisticBlockingMode->integer != 0) ? BOTH_STAND_BLOCKING_ON : BOTH_STAND2;
 						break;

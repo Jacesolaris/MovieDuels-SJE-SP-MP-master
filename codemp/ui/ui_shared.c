@@ -5556,6 +5556,7 @@ static const char* g_bindCommands[] = {
 	"use_barrier",
 	"use_decca",
 	"pazaak",
+	"shop", // the shop menu (2026-11-01, g_pazaak.c)
 	"recorddemo",	// controls menu "Record Demo" (the engine command is recorddemo, there is no "record")
 	"stoprecord"	// controls menu "Stop Recording"
 };

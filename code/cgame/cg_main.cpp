@@ -364,6 +364,8 @@ vmCvar_t cg_autoswitch;
 vmCvar_t cg_simpleItems;
 vmCvar_t cg_fov;
 vmCvar_t cg_fovAspectAdjust;
+vmCvar_t cg_sprintFov; // sprint camera (2026-11-01, from SJE): degrees the view widens while sprinting (0 = off)
+vmCvar_t cg_sprintFovTime; // sprint camera: ms to ease in / out
 vmCvar_t cg_endcredits;
 vmCvar_t cg_updatedDataPadForcePower1;
 vmCvar_t cg_updatedDataPadForcePower2;
@@ -566,6 +568,8 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_drawGun, "cg_drawGun", "1", CVAR_ARCHIVE },
 	{ &cg_fov, "cg_fov", "80", CVAR_ARCHIVE },
 	{ &cg_fovAspectAdjust, "cg_fovAspectAdjust", "1", CVAR_ARCHIVE },
+	{ &cg_sprintFov, "cg_sprintFov", "15", CVAR_ARCHIVE },
+	{ &cg_sprintFovTime, "cg_sprintFovTime", "300", CVAR_ARCHIVE },
 	{ &cg_stereoSeparation, "cg_stereoSeparation", "0.4", CVAR_ARCHIVE },
 	{ &cg_shadows, "cg_shadows", "1", CVAR_ARCHIVE },
 	{ &cg_renderToTextureFX, "cg_renderToTextureFX", "1", CVAR_ARCHIVE },

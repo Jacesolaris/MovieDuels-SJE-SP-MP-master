@@ -7542,6 +7542,8 @@ A fast client will have multiple ClientThink for each ClientEdFrame,
 while a slow client may have multiple ClientEndFrame between ClientThink.
 ==============
 */
+extern void G_Shop_PlayerThink(gentity_t* ent);
+
 void ClientEndFrame(gentity_t* ent)
 {
 	qboolean isNPC = qfalse;
@@ -7549,6 +7551,11 @@ void ClientEndFrame(gentity_t* ent)
 	if (ent->s.eType == ET_NPC)
 	{
 		isNPC = qtrue;
+	}
+
+	if (!isNPC && !(ent->r.svFlags & SVF_BOT) && ent->s.number < MAX_CLIENTS)
+	{
+		G_Shop_PlayerThink(ent); // the shop (2026-11-01, g_pazaak.c): the starting credits, the open menu
 	}
 
 	if (ent->client->sess.sessionTeam == TEAM_SPECTATOR)

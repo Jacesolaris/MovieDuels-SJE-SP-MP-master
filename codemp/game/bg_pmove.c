@@ -954,7 +954,7 @@ static animNumber_t QINLINE PM_GetWeaponReadyAnim(void)
 
 int PM_ReadyPoseForsaber_anim_levelBOT(void);
 
-int PM_ReadyPoseForsaber_anim_level(void)
+int PM_ReadyPoseForSaberAnimLevel(void)
 {
 	int anim = BOTH_STAND2;
 	const saberInfo_t* saber1 = BG_MySaber(pm->ps->clientNum, 0);
@@ -1003,14 +1003,13 @@ int PM_ReadyPoseForsaber_anim_level(void)
 			anim = BOTH_SABERDUAL_STANCE;
 			break;
 		case SS_STAFF:
-		case SS_BLASTER: // SS_BLASTER
 			anim = BOTH_SABERSTAFF_STANCE;
-			break;
-		case SS_FAST:
-			anim = BOTH_SABERFAST_STANCE;
 			break;
 		case SS_TAVION:
 			anim = BOTH_SABERTAVION_STANCE;
+			break;
+		case SS_FAST:
+			anim = BOTH_SABERFAST_STANCE;
 			break;
 		case SS_STRONG:
 			anim = BOTH_SABERSLOW_STANCE;
@@ -1018,10 +1017,9 @@ int PM_ReadyPoseForsaber_anim_level(void)
 		case SS_DESANN:
 			anim = BOTH_SABERDESANN_STANCE;
 			break;
-		case SS_MEDIUM:
-			anim = BOTH_STAND2;
-			break;
 		case SS_NONE:
+		case SS_MEDIUM:
+		case SS_BLASTER: // SS_BLASTER (2026-10-14)
 		default:
 			anim = BOTH_STAND2;
 			break;
@@ -2203,7 +2201,7 @@ static int PM_KeepStyleAnim(const int anim)
 static int PM_SPBlockingPoseSingleAMD(void)
 {
 	// Start with the normal ready pose
-	int anim = PM_ReadyPoseForsaber_anim_level();
+	int anim = PM_ReadyPoseForSaberAnimLevel();
 
 	const animFlags_t flags = PM_Animationstyletable();
 	const qboolean realisticBlocking = PM_RealisticBlocking();
@@ -3016,6 +3014,7 @@ static int PM_SPBlockingPoseSingleAMD(void)
 					case SS_DESANN:
 						anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_SABERDESANN_STANCE;
 						break;
+					case SS_BLASTER: // SS_BLASTER (2026-10-14)
 					case SS_MEDIUM:
 						anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_STAND2;
 						break;
@@ -3041,6 +3040,7 @@ static int PM_SPBlockingPoseSingleAMD(void)
 					case SS_DESANN:
 						anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_SABERDESANN_STANCE;
 						break;
+					case SS_BLASTER: // SS_BLASTER (2026-10-14)
 					case SS_MEDIUM:
 						anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_STAND2;
 						break;
@@ -3072,6 +3072,7 @@ static int PM_SPBlockingPoseSingleAMD(void)
 				case SS_DESANN:
 					anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_SABERDESANN_STANCE;
 					break;
+				case SS_BLASTER: // SS_BLASTER (2026-10-14)
 				case SS_MEDIUM:
 					anim = realisticBlocking ? BOTH_STAND_BLOCKING_ON : BOTH_STAND2;
 					break;
@@ -3097,6 +3098,7 @@ static int PM_SPBlockingPoseSingleAMD(void)
 				case SS_DESANN:
 					anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_SABERDESANN_STANCE;
 					break;
+				case SS_BLASTER: // SS_BLASTER (2026-10-14)
 				case SS_MEDIUM:
 					anim = realisticBlocking ? BOTH_SABERSINGLECROUCH : BOTH_STAND2;
 					break;
@@ -3117,7 +3119,7 @@ static int PM_SPBlockingPoseSingleAMD(void)
 static int PM_SPBlockingPoseDualAMD(void)
 {
 	// Start from the base ready pose
-	int anim = PM_ReadyPoseForsaber_anim_level();
+	int anim = PM_ReadyPoseForSaberAnimLevel();
 
 	const animFlags_t flags = PM_Animationstyletable();
 	const qboolean realisticBlocking = PM_RealisticBlocking();
@@ -3782,7 +3784,7 @@ static int PM_SPBlockingPoseDualAMD(void)
 
 static int PM_SPBlockingPoseStaffAMD(void)
 {
-	int anim = PM_ReadyPoseForsaber_anim_level();
+	int anim = PM_ReadyPoseForSaberAnimLevel();
 
 	const animFlags_t flags = PM_Animationstyletable();
 	const qboolean realisticBlocking = PM_RealisticBlocking();
@@ -4458,7 +4460,7 @@ static int PM_SPBlockingPoseStaffAMD(void)
 
 int PM_BlockingPoseForsaber_anim_levelSingle(void)
 {
-	int anim = PM_ReadyPoseForsaber_anim_level();
+	int anim = PM_ReadyPoseForSaberAnimLevel();
 
 	if (pm->ps->fd.blockPoints < BLOCKPOINTS_DANGER)
 	{// too tired to block: the ready pose (this returned 0 = BOTH_1CRUFTFORGIL, a real anim in the MD set)
@@ -4495,7 +4497,7 @@ int PM_BlockingPoseForsaber_anim_levelSingle(void)
 int PM_BlockingPoseForsaber_anim_levelDual(void)
 {
 	//Sets your saber block position based on your current movement commands.
-	int anim = PM_ReadyPoseForsaber_anim_level();
+	int anim = PM_ReadyPoseForSaberAnimLevel();
 
 	if (pm->ps->fd.blockPoints < BLOCKPOINTS_DANGER)
 	{// too tired to block: the ready pose (this returned 0 = BOTH_1CRUFTFORGIL, a real anim in the MD set)
@@ -4536,7 +4538,7 @@ int PM_BlockingPoseForsaber_anim_levelDual(void)
 int PM_BlockingPoseForsaber_anim_levelStaff(void)
 {
 	//Sets your saber block position based on your current movement commands.
-	int anim = PM_ReadyPoseForsaber_anim_level();
+	int anim = PM_ReadyPoseForSaberAnimLevel();
 
 	if (pm->ps->fd.blockPoints < BLOCKPOINTS_DANGER)
 	{// too tired to block: the ready pose (this returned 0 = BOTH_1CRUFTFORGIL, a real anim in the MD set)

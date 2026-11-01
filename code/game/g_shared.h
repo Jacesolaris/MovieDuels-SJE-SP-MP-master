@@ -654,6 +654,11 @@ public:
 
 	usercmd_t cmd; // we would lose angles if not persistant
 
+	// the shop (2026-11-01, g_pazaak.cpp shop code): saved with the game
+	int shopInit; // the starting credits were given
+	int shopStreak; // kills in a row (each within g_shopStreakTime of the last)
+	int shopStreakTime; // level.time of the last kill
+
 	void sg_export(
 		ojk::SavedGameHelper& saved_game) const
 	{
@@ -666,6 +671,9 @@ public:
 		saved_game.write<int16_t>(cmd_angles);
 		saved_game.skip(2);
 		saved_game.write<>(teamState);
+		saved_game.write<int32_t>(shopInit);
+		saved_game.write<int32_t>(shopStreak);
+		saved_game.write<int32_t>(shopStreakTime);
 	}
 
 	void sg_import(
@@ -680,6 +688,9 @@ public:
 		saved_game.read<int16_t>(cmd_angles);
 		saved_game.skip(2);
 		saved_game.read<>(teamState);
+		saved_game.read<int32_t>(shopInit);
+		saved_game.read<int32_t>(shopStreak);
+		saved_game.read<int32_t>(shopStreakTime);
 	}
 }; // clientPersistant_t
 

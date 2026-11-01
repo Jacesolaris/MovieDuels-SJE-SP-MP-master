@@ -1091,6 +1091,11 @@ namespace
 		{
 			return nullptr;
 		}
+		if (!data.Scan0)
+		{
+			shape.UnlockBits(&data);
+			return nullptr;
+		}
 		for (int y = 0; y < h; y++)
 		{
 			const BYTE* row = static_cast<const BYTE*>(data.Scan0) + static_cast<ptrdiff_t>(y) * data.Stride;
@@ -1110,8 +1115,13 @@ namespace
 		}
 
 		std::unique_ptr<Gdiplus::Bitmap> glow = NewSurface(w, h);
-		if (glow->LockBits(&rect, Gdiplus::ImageLockModeWrite, PixelFormat32bppPARGB, &data) != Gdiplus::Ok)
+		if (!glow || glow->LockBits(&rect, Gdiplus::ImageLockModeWrite, PixelFormat32bppPARGB, &data) != Gdiplus::Ok)
 		{
+			return nullptr;
+		}
+		if (!data.Scan0)
+		{
+			glow->UnlockBits(&data);
 			return nullptr;
 		}
 		for (int y = 0; y < h; y++)

@@ -52,6 +52,11 @@ static int pzkBotGame[MAX_CLIENTS];         // per client: game index + 1 of the
 static int pzkBotSitAt[MAX_CLIENTS];        // per game: the bot accepted in the air (bots hop about), he sits once he lands (0 = sits)
 static const char pzkNoGround[] = "You need solid ground to sit down.";
 
+// the shop (2026-11-01, at the end of the file)
+static void G_Shop_Init(void);
+static void Shop_ClientGone(int clientNum);
+static qboolean Shop_ClientCommand(gentity_t* ent, const char* cmd);
+
 void G_Pazaak_Init(void)
 {
 	memset(pzkGames, 0, sizeof(pzkGames));
@@ -64,6 +69,7 @@ void G_Pazaak_Init(void)
 	memset(pzkGameBot, 0, sizeof(pzkGameBot));
 	memset(pzkBotGame, 0, sizeof(pzkBotGame));
 	memset(pzkBotSitAt, 0, sizeof(pzkBotSitAt));
+	G_Shop_Init();
 }
 
 // Sits at a Pazaak match: a player at his board, or a bot who sits in for the AI
@@ -580,6 +586,10 @@ static void Pzk_Answer(gentity_t* ent, const qboolean accept)
 // Returns qtrue if the command was ours
 qboolean G_Pazaak_ClientCommand(gentity_t* ent, const char* cmd)
 {
+	if (Shop_ClientCommand(ent, cmd))
+	{
+		return qtrue; // shop, shopbuy, shoptalk, shopclosed, shopcredits
+	}
 	if (!Q_stricmp(cmd, "pazaak"))
 	{
 		char arg[MAX_TOKEN_CHARS];
@@ -632,6 +642,7 @@ void G_Pazaak_ClientDisconnect(const int clientNum)
 	{
 		return;
 	}
+	Shop_ClientGone(clientNum); // the shop: his open menu and talk question are forgotten
 	pzkChallenger[clientNum] = 0;
 	for (i = 0; i < MAX_CLIENTS; i++)
 	{
@@ -789,4 +800,786 @@ void G_Pazaak_Shutdown(void)
 			Pzk_Abort(&pzkGames[i]);
 		}
 	}
+}
+
+/*
+===========================================================================
+The shop (2026-11-01, DH: the SJE shop, credits and talk menu with MovieDuels' own weapons; MD 9 SP + MP, SP twin in
+code/game/g_pazaak.cpp)
+
+Per player and per map (pers, ClientConnect clears it): credits (start g_shopStartCredits). Kills of enemies
+(players, bots, NPCs; not team mates or allied NPCs) give g_shopKillCredits times the kills in a row (each within
+g_shopStreakTime ms, up to g_shopStreakMax), double for a saber user; dying costs g_shopDeathLoss percent. Bots don't
+shop.
+
+What is sold: MovieDuels' own weapons, listed in ext_data/md_shop.dat (the UI reads the same file; the item number is
+the block's place in the file). A weapon comes with half its ammo; explosives are a pack of 3; an ammo refill; a medpac.
+
+The menu runs in the UI (ui_pazaak.c shop code). The server talks to it through the "pzk" server command that the
+cgame passes on as "uipzk": "pzk shop <open|state> <credits> <owned bits> <in hand bits> <ammo price> <medpac price>
+"<message>"" and "pzk talk "<question>" <pazaak allowed>". The UI answers with the client commands shopbuy / shoptalk.
+Talking: using a friendly NPC asks "Challenge to pazaak" / "Buy items" / "Leave" (g_npcTalk 0 = the old use).
+===========================================================================
+*/
+
+#define SHOP_MAX_CREDITS	9999999
+#define SHOP_PACK			3		// explosives in a pack
+#define SHOP_FILE			"ext_data/md_shop.dat"
+#define SHOP_FILE_MAX		32768
+#define SHOP_MAX_ITEMS		255		// the UI gets owned / in hand as 256 bits
+#define SHOP_ITEM_AMMO		1000
+#define SHOP_ITEM_BACTA		1001
+#define SHOP_CAT_EXPLOSIVES	3
+
+// What ext_data/md_shop.dat sells (item number = place in the file, from 1)
+typedef struct
+{
+	int weapon; // WP_NONE: not sold in MP (an SP-only weapon, or an unknown name)
+	int price;
+	int cat;
+	char name[64];
+} shopItem_t;
+
+static shopItem_t shopItems[SHOP_MAX_ITEMS + 1];
+static int shopNumItems = -1; // -1 = the file was not read yet
+static char shopFileBuf[SHOP_FILE_MAX + 1];
+
+static vmCvar_t g_shop, g_shopStartCredits, g_shopKillCredits, g_shopStreakTime, g_shopStreakMax, g_shopDeathLoss,
+g_shopAmmoPrice, g_shopBactaPrice, g_npcTalk;
+static int shopTalkNPC[MAX_CLIENTS];    // entity number + 1 of the NPC of the open talk question
+static int shopIsOpen[MAX_CLIENTS];     // the shop menu is open (it closes when he is attacked)
+static int shopOpenHealth[MAX_CLIENTS];
+static int shopNextCheck[MAX_CLIENTS];
+
+static void G_Shop_Init(void)
+{
+	trap->Cvar_Register(&g_shop, "g_shop", "1", CVAR_ARCHIVE);
+	trap->Cvar_Register(&g_shopStartCredits, "g_shopStartCredits", "1000", CVAR_ARCHIVE);
+	trap->Cvar_Register(&g_shopKillCredits, "g_shopKillCredits", "25", CVAR_ARCHIVE);
+	trap->Cvar_Register(&g_shopStreakTime, "g_shopStreakTime", "5000", CVAR_ARCHIVE);
+	trap->Cvar_Register(&g_shopStreakMax, "g_shopStreakMax", "5", CVAR_ARCHIVE);
+	trap->Cvar_Register(&g_shopDeathLoss, "g_shopDeathLoss", "10", CVAR_ARCHIVE);
+	trap->Cvar_Register(&g_shopAmmoPrice, "g_shopAmmoPrice", "150", CVAR_ARCHIVE);
+	trap->Cvar_Register(&g_shopBactaPrice, "g_shopBactaPrice", "200", CVAR_ARCHIVE);
+	trap->Cvar_Register(&g_npcTalk, "g_npcTalk", "1", CVAR_ARCHIVE);
+	memset(shopTalkNPC, 0, sizeof(shopTalkNPC));
+	memset(shopIsOpen, 0, sizeof(shopIsOpen));
+	memset(shopOpenHealth, 0, sizeof(shopOpenHealth));
+	memset(shopNextCheck, 0, sizeof(shopNextCheck));
+	shopNumItems = -1; // read again on this map (the file may have changed)
+}
+
+// A client left: his open menu and talk question are forgotten (a bot may get this slot)
+static void Shop_ClientGone(const int clientNum)
+{
+	if (clientNum < 0 || clientNum >= MAX_CLIENTS)
+	{
+		return;
+	}
+	shopIsOpen[clientNum] = 0;
+	shopTalkNPC[clientNum] = 0;
+}
+
+static int Shop_Cvar(vmCvar_t* cv)
+{
+	trap->Cvar_Update(cv);
+	return cv->integer;
+}
+
+static qboolean Shop_IsHuman(const gentity_t* ent)
+{
+	return ent && ent->client && ent->s.number < MAX_CLIENTS && !(ent->r.svFlags & SVF_BOT) ? qtrue : qfalse;
+}
+
+// The MP weapon of a md_shop.dat weapon name (WP_NONE: not in MP). The SP blaster pistol is MP's WP_BRYAR_PISTOL.
+static int Shop_WeaponByName(const char* name)
+{
+	static const struct
+	{
+		const char* name;
+		int weapon;
+	} table[] = {
+		{ "WP_BLASTER_PISTOL", WP_BRYAR_PISTOL },
+		{ "WP_CLONEPISTOL", WP_CLONEPISTOL }, { "WP_REY", WP_REY }, { "WP_JANGO", WP_JANGO },
+		{ "WP_BLASTER", WP_BLASTER }, { "WP_BATTLEDROID", WP_BATTLEDROID }, { "WP_REBELBLASTER", WP_REBELBLASTER },
+		{ "WP_CLONECARBINE", WP_CLONECARBINE }, { "WP_CLONERIFLE", WP_CLONERIFLE }, { "WP_REBELRIFLE", WP_REBELRIFLE },
+		{ "WP_THEFIRSTORDER", WP_THEFIRSTORDER }, { "WP_BOBA", WP_BOBA }, { "WP_CLONECOMMANDO", WP_CLONECOMMANDO },
+		{ "WP_BOWCASTER", WP_BOWCASTER }, { "WP_DISRUPTOR", WP_DISRUPTOR }, { "WP_TUSKEN_RIFLE", WP_TUSKEN_RIFLE },
+		{ "WP_REPEATER", WP_REPEATER }, { "WP_Z6_ROTARY_CANNON", WP_Z6_ROTARY_CANNON }, { "WP_DEMP2", WP_DEMP2 },
+		{ "WP_FLECHETTE", WP_FLECHETTE }, { "WP_CONCUSSION", WP_CONCUSSION }, { "WP_ROCKET_LAUNCHER", WP_ROCKET_LAUNCHER },
+		{ "WP_THERMAL", WP_THERMAL }, { "WP_TRIP_MINE", WP_TRIP_MINE }, { "WP_DET_PACK", WP_DET_PACK },
+		{ "WP_STUN_BATON", WP_STUN_BATON }, { "WP_NOGHRI_STICK", WP_NOGHRI_STICK }, { "WP_TUSKEN_STAFF", WP_TUSKEN_STAFF },
+	};
+	int i;
+	for (i = 0; i < (int)ARRAY_LEN(table); i++)
+	{
+		if (!Q_stricmp(name, table[i].name))
+		{
+			return table[i].weapon;
+		}
+	}
+	return WP_NONE;
+}
+
+// The tab of a md_shop.dat "cat" (the UI has the same list)
+static int Shop_CatByName(const char* name)
+{
+	static const char* cats[] = { "pistols", "rifles", "heavy", "explosives", "melee" };
+	int i;
+	for (i = 0; i < (int)ARRAY_LEN(cats); i++)
+	{
+		if (!Q_stricmp(name, cats[i]))
+		{
+			return i;
+		}
+	}
+	return 1;
+}
+
+// A small tokenizer for md_shop.dat: words, "quoted strings", { }, // and /* */ comments (as the UI's)
+static const char* Shop_Token(const char** p, char* out, const int size)
+{
+	const char* s = *p;
+	int n = 0;
+
+	out[0] = 0;
+	for (;;)
+	{
+		while (*s && (unsigned char)*s <= ' ')
+		{
+			s++;
+		}
+		if (s[0] == '/' && s[1] == '/')
+		{
+			while (*s && *s != '\n')
+			{
+				s++;
+			}
+			continue;
+		}
+		if (s[0] == '/' && s[1] == '*')
+		{
+			s += 2;
+			while (*s && !(s[0] == '*' && s[1] == '/'))
+			{
+				s++;
+			}
+			if (*s)
+			{
+				s += 2;
+			}
+			continue;
+		}
+		break;
+	}
+	if (!*s)
+	{
+		*p = s;
+		return NULL;
+	}
+	if (*s == '"')
+	{
+		s++;
+		while (*s && *s != '"')
+		{
+			if (n < size - 1)
+			{
+				out[n++] = *s;
+			}
+			s++;
+		}
+		if (*s)
+		{
+			s++;
+		}
+	}
+	else
+	{
+		while (*s && (unsigned char)*s > ' ')
+		{
+			if (n < size - 1)
+			{
+				out[n++] = *s;
+			}
+			s++;
+		}
+	}
+	out[n] = 0;
+	*p = s;
+	return out;
+}
+
+static void Shop_LoadItems(void)
+{
+	fileHandle_t f = 0;
+	int len;
+	const char* p;
+	char tok[MAX_QPATH], key[64];
+
+	if (shopNumItems >= 0)
+	{
+		return;
+	}
+	shopNumItems = 0;
+	memset(shopItems, 0, sizeof(shopItems));
+	len = trap->FS_Open(SHOP_FILE, &f, FS_READ);
+	if (len <= 0 || !f)
+	{
+		if (f)
+		{
+			trap->FS_Close(f);
+		}
+		trap->Print(S_COLOR_YELLOW "Shop: %s not found, the shop only sells supplies\n", SHOP_FILE);
+		return;
+	}
+	if (len > SHOP_FILE_MAX)
+	{
+		len = SHOP_FILE_MAX;
+	}
+	trap->FS_Read(shopFileBuf, len, f);
+	trap->FS_Close(f);
+	shopFileBuf[len] = 0;
+
+	p = shopFileBuf;
+	while (Shop_Token(&p, tok, sizeof(tok)) && shopNumItems < SHOP_MAX_ITEMS)
+	{
+		shopItem_t* it;
+		qboolean spOnly = qfalse;
+
+		// <anything> { key value ... }: every block is an item, numbered from 1 in file order (as the UI does)
+		if (!Shop_Token(&p, tok, sizeof(tok)) || Q_stricmp(tok, "{"))
+		{
+			break;
+		}
+		it = &shopItems[++shopNumItems];
+		it->price = 300;
+		it->cat = 1;
+		Q_strncpyz(it->name, "?", sizeof(it->name));
+		while (Shop_Token(&p, key, sizeof(key)) && Q_stricmp(key, "}"))
+		{
+			if (!Shop_Token(&p, tok, sizeof(tok)))
+			{
+				break;
+			}
+			if (!Q_stricmp(key, "name"))
+			{
+				Q_strncpyz(it->name, tok, sizeof(it->name));
+			}
+			else if (!Q_stricmp(key, "weapon"))
+			{
+				it->weapon = Shop_WeaponByName(tok);
+			}
+			else if (!Q_stricmp(key, "cat"))
+			{
+				it->cat = Shop_CatByName(tok);
+			}
+			else if (!Q_stricmp(key, "price"))
+			{
+				const int v = atoi(tok);
+				it->price = v < 0 ? 0 : v > 100000 ? 100000 : v;
+			}
+			else if (!Q_stricmp(key, "only"))
+			{
+				spOnly = !Q_stricmp(tok, "sp") ? qtrue : qfalse;
+			}
+		}
+		if (spOnly || it->weapon <= WP_NONE || it->weapon >= WP_NUM_WEAPONS || it->weapon == WP_SABER)
+		{
+			it->weapon = WP_NONE; // keeps its number, never sold here
+		}
+	}
+}
+
+static void Shop_AddCredits(gentity_t* ent, const int n)
+{
+	int* c = &ent->client->pers.shopCredits;
+	*c += n;
+	if (*c < 0)
+	{
+		*c = 0;
+	}
+	else if (*c > SHOP_MAX_CREDITS)
+	{
+		*c = SHOP_MAX_CREDITS;
+	}
+}
+
+// g_active.c ClientEndFrame, every frame of a human player: the starting credits, the open menu's attack check
+void G_Shop_PlayerThink(gentity_t* ent)
+{
+	gclient_t* cl;
+	int n;
+
+	if (!ent || !ent->client || ent->s.number >= MAX_CLIENTS)
+	{
+		return;
+	}
+	cl = ent->client;
+	n = ent->s.number;
+	if (!cl->pers.shopInit)
+	{
+		cl->pers.shopInit = 1;
+		cl->pers.shopCredits = Shop_Cvar(&g_shopStartCredits) > 0 ? g_shopStartCredits.integer : 0;
+		cl->pers.shopStreak = 0;
+		cl->pers.shopStreakTime = 0;
+	}
+
+	// the shop menu is open: it closes when he gets hurt or an enemy NPC comes for him
+	if (shopIsOpen[n] && level.time >= shopNextCheck[n])
+	{
+		shopNextCheck[n] = level.time + 500;
+		if (ent->health <= 0 || ent->health < shopOpenHealth[n] || Pzk_EnemyNear(ent))
+		{
+			shopIsOpen[n] = 0;
+			trap->SendServerCommand(n, "pzk shop close");
+			trap->SendServerCommand(n, "cp \"The shop closed: you are under attack.\"");
+		}
+		shopOpenHealth[n] = ent->health;
+	}
+}
+
+// g_combat.c player_die: credits for a player's kills, the loss when a player dies
+void G_Shop_Died(gentity_t* victim, gentity_t* attacker)
+{
+	gclient_t* cl;
+	int max, streak, reward;
+
+	if (!Shop_Cvar(&g_shop) || !victim || !victim->client)
+	{
+		return;
+	}
+	if (Shop_IsHuman(victim))
+	{
+		const int loss = victim->client->pers.shopCredits * (Shop_Cvar(&g_shopDeathLoss) > 0 ? g_shopDeathLoss.integer : 0) / 100;
+		victim->client->pers.shopStreak = 0;
+		if (loss > 0)
+		{
+			Shop_AddCredits(victim, -loss);
+			Pzk_Print(victim->s.number, va("^1-%i credits^7 (killed)", loss));
+		}
+	}
+	if (!Shop_IsHuman(attacker) || attacker == victim || victim->s.NPC_class == CLASS_VEHICLE
+		|| Shop_Cvar(&g_shopKillCredits) <= 0)
+	{
+		return;
+	}
+	if (OnSameTeam(attacker, victim))
+	{
+		return; // team mates earn nothing
+	}
+	if (victim->s.eType == ET_NPC && (victim->client->playerTeam == attacker->client->playerTeam
+		|| victim->client->playerTeam == NPCTEAM_NEUTRAL) && victim->enemy != attacker)
+	{
+		return; // allied NPCs and bystanders neither
+	}
+
+	cl = attacker->client;
+	max = Shop_Cvar(&g_shopStreakMax) > 1 ? g_shopStreakMax.integer : 1;
+	if (cl->pers.shopStreak > 0 && level.time - cl->pers.shopStreakTime <= Shop_Cvar(&g_shopStreakTime)
+		&& level.time >= cl->pers.shopStreakTime)
+	{
+		cl->pers.shopStreak++;
+	}
+	else
+	{
+		cl->pers.shopStreak = 1;
+	}
+	cl->pers.shopStreakTime = level.time;
+
+	streak = cl->pers.shopStreak < max ? cl->pers.shopStreak : max;
+	reward = g_shopKillCredits.integer * streak;
+	if (BG_HasWeapon(victim->client->ps.stats, WP_SABER))
+	{
+		reward *= 2; // a saber user
+	}
+	Shop_AddCredits(attacker, reward);
+	if (cl->pers.shopStreak > 1)
+	{
+		Pzk_Print(attacker->s.number, va("^3+%i credits^7 (%i kills in a row)", reward, cl->pers.shopStreak));
+	}
+	else
+	{
+		Pzk_Print(attacker->s.number, va("^3+%i credits", reward));
+	}
+}
+
+// Why this player can't shop now (NULL: he can)
+static const char* Shop_BusyReason(gentity_t* ent)
+{
+	const char* busy;
+
+	if (!Pzk_CanPlay(ent, qfalse))
+	{
+		return "";
+	}
+	if (G_Pazaak_IsPlaying(ent->s.number))
+	{
+		return "You are playing pazaak.";
+	}
+	busy = Pzk_BusyReason(ent);
+	return busy == pzkNoGround ? NULL : busy; // in the air is fine for shopping
+}
+
+static qboolean Shop_HasWeapon(const gentity_t* ent, const int weapon)
+{
+	return weapon > WP_NONE && weapon < WP_NUM_WEAPONS && BG_HasWeapon(ent->client->ps.stats, weapon) ? qtrue : qfalse;
+}
+
+// What the UI shows: "pzk shop <what> <credits> <owned bits> <in hand bits> <ammo price> <medpac price> "<message>""
+// (64 hex digits each: bit n = item n of md_shop.dat)
+static void Shop_Send(const gentity_t* ent, const char* what, const char* message)
+{
+	const gclient_t* cl = ent->client;
+	unsigned int owned[8], inHand[8];
+	char ownedHex[8 * 8 + 1], handHex[8 * 8 + 1];
+	char msg[128];
+	char* q;
+	int i;
+
+	Shop_LoadItems();
+	memset(owned, 0, sizeof(owned));
+	memset(inHand, 0, sizeof(inHand));
+	for (i = 1; i <= shopNumItems && i <= SHOP_MAX_ITEMS; i++)
+	{
+		const int w = shopItems[i].weapon;
+		if (Shop_HasWeapon(ent, w))
+		{
+			owned[i >> 5] |= 1u << (i & 31);
+			if (cl->ps.weapon == w)
+			{
+				inHand[i >> 5] |= 1u << (i & 31);
+			}
+		}
+	}
+	ownedHex[0] = handHex[0] = 0;
+	for (i = 0; i < 8; i++)
+	{
+		Q_strcat(ownedHex, sizeof(ownedHex), va("%08x", owned[i]));
+		Q_strcat(handHex, sizeof(handHex), va("%08x", inHand[i]));
+	}
+	Q_strncpyz(msg, message ? message : "", sizeof(msg));
+	for (q = msg; *q; q++)
+	{
+		if (*q == '"')
+		{
+			*q = '\'';
+		}
+	}
+	trap->SendServerCommand(ent->s.number, va("pzk shop %s %i %s %s %i %i \"%s\"", what, cl->pers.shopCredits, ownedHex, handHex,
+		Shop_Cvar(&g_shopAmmoPrice) > 0 ? g_shopAmmoPrice.integer : 0, Shop_Cvar(&g_shopBactaPrice) > 0 ? g_shopBactaPrice.integer : 0, msg));
+}
+
+static void Shop_Open(gentity_t* ent, const char* message)
+{
+	const char* busy;
+
+	if (!Shop_Cvar(&g_shop))
+	{
+		Pzk_Print(ent->s.number, "The shop is switched off (g_shop 0).");
+		return;
+	}
+	busy = Shop_BusyReason(ent);
+	if (busy)
+	{
+		trap->SendServerCommand(ent->s.number, va("cp \"The shop is unavailable at this time.\n%s\"", busy));
+		return;
+	}
+	Shop_Send(ent, "open", message);
+	shopIsOpen[ent->s.number] = 1;
+	shopOpenHealth[ent->s.number] = ent->health;
+	shopNextCheck[ent->s.number] = level.time + 500;
+}
+
+// The ammo of every gun he carries, to the full (qfalse: nothing to fill)
+static qboolean Shop_FillAmmo(gentity_t* ent)
+{
+	qboolean filled = qfalse;
+	playerState_t* ps = &ent->client->ps;
+	int w;
+
+	for (w = WP_NONE + 1; w < WP_NUM_WEAPONS; w++)
+	{
+		int a;
+		if (w == WP_SABER || w == WP_MELEE || w == WP_STUN_BATON || !BG_HasWeapon(ps->stats, w))
+		{
+			continue;
+		}
+		a = weaponData[w].ammoIndex;
+		if (a <= AMMO_NONE || a >= AMMO_MAX || a == AMMO_FORCE)
+		{
+			continue;
+		}
+		if (ps->ammo[a] < ammoData[a].max)
+		{
+			ps->ammo[a] = ammoData[a].max;
+			filled = qtrue;
+		}
+	}
+	return filled;
+}
+
+static void Shop_Buy(gentity_t* ent, const int item)
+{
+	gclient_t* cl = ent->client;
+	const shopItem_t* it;
+	int weapon, price;
+
+	if (!Shop_Cvar(&g_shop) || Shop_BusyReason(ent))
+	{
+		return;
+	}
+	if (item == SHOP_ITEM_AMMO)
+	{
+		price = Shop_Cvar(&g_shopAmmoPrice) > 0 ? g_shopAmmoPrice.integer : 0;
+		if (cl->pers.shopCredits < price)
+		{
+			Shop_Send(ent, "state", va("You need %i credits for an ammo refill.", price));
+			return;
+		}
+		if (!Shop_FillAmmo(ent))
+		{
+			Shop_Send(ent, "state", "Your ammo is full.");
+			return;
+		}
+		Shop_AddCredits(ent, -price);
+		Shop_Send(ent, "state", "Ammo refilled.");
+		return;
+	}
+	if (item == SHOP_ITEM_BACTA)
+	{
+		price = Shop_Cvar(&g_shopBactaPrice) > 0 ? g_shopBactaPrice.integer : 0;
+		if (cl->pers.shopCredits < price)
+		{
+			Shop_Send(ent, "state", va("You need %i credits for a medpac.", price));
+			return;
+		}
+		if (cl->ps.stats[STAT_HOLDABLE_ITEMS] & 1 << HI_MEDPAC)
+		{
+			Shop_Send(ent, "state", "You already carry a medpac.");
+			return;
+		}
+		cl->ps.stats[STAT_HOLDABLE_ITEMS] |= 1 << HI_MEDPAC;
+		if (!cl->ps.stats[STAT_HOLDABLE_ITEM])
+		{
+			cl->ps.stats[STAT_HOLDABLE_ITEM] = BG_GetItemIndexByTag(HI_MEDPAC, IT_HOLDABLE);
+		}
+		Shop_AddCredits(ent, -price);
+		Shop_Send(ent, "state", "Bought a medpac.");
+		return;
+	}
+	Shop_LoadItems();
+	if (item <= 0 || item > shopNumItems || item > SHOP_MAX_ITEMS)
+	{
+		return;
+	}
+
+	it = &shopItems[item];
+	weapon = it->weapon;
+	price = it->price;
+	if (weapon <= WP_NONE || weapon >= WP_NUM_WEAPONS || weapon == WP_SABER)
+	{
+		return;
+	}
+	if (it->cat == SHOP_CAT_EXPLOSIVES)
+	{
+		// a pack of explosives
+		const int a = weaponData[weapon].ammoIndex;
+		if (cl->pers.shopCredits < price)
+		{
+			Shop_Send(ent, "state", va("You need %i credits for %s.", price, it->name));
+			return;
+		}
+		if (Shop_HasWeapon(ent, weapon) && a > AMMO_NONE && a < AMMO_MAX && cl->ps.ammo[a] >= ammoData[a].max)
+		{
+			Shop_Send(ent, "state", va("You can't carry more %s.", it->name));
+			return;
+		}
+		Shop_AddCredits(ent, -price);
+		BG_GiveWeapon(cl->ps.stats, weapon);
+		G_AddEvent(ent, EV_WEAPINVCHANGE, cl->ps.stats[STAT_WEAPONS]);
+		if (a > AMMO_NONE && a < AMMO_MAX)
+		{
+			Add_Ammo(ent, a, SHOP_PACK);
+		}
+		Shop_Send(ent, "state", va("Bought %i x %s.", SHOP_PACK, it->name));
+		return;
+	}
+	if (Shop_HasWeapon(ent, weapon))
+	{
+		// he has it already (pick it on the weapon wheel)
+		Shop_Send(ent, "state", va("You already have the %s.", it->name));
+		return;
+	}
+	if (cl->pers.shopCredits < price)
+	{
+		Shop_Send(ent, "state", va("You need %i credits for the %s.", price, it->name));
+		return;
+	}
+	Shop_AddCredits(ent, -price);
+	BG_GiveWeapon(cl->ps.stats, weapon);
+	G_AddEvent(ent, EV_WEAPINVCHANGE, cl->ps.stats[STAT_WEAPONS]);
+	{
+		const int a = weaponData[weapon].ammoIndex;
+		if (a > AMMO_NONE && a < AMMO_MAX && a != AMMO_FORCE && cl->ps.ammo[a] < ammoData[a].max / 2)
+		{
+			cl->ps.ammo[a] = ammoData[a].max / 2;
+		}
+	}
+	Shop_Send(ent, "state", va("Bought the %s.", it->name));
+}
+
+// Classes that don't talk (droids, animals, monsters, vehicles)
+static qboolean Shop_SilentClass(const int c)
+{
+	switch (c)
+	{
+	case CLASS_VEHICLE:
+	case CLASS_GONK:
+	case CLASS_MOUSE:
+	case CLASS_R2D2:
+	case CLASS_R5D2:
+	case CLASS_PROBE:
+	case CLASS_SEEKER:
+	case CLASS_REMOTE:
+	case CLASS_SENTRY:
+	case CLASS_INTERROGATOR:
+	case CLASS_MARK1:
+	case CLASS_MARK2:
+	case CLASS_ATST:
+	case CLASS_RANCOR:
+	case CLASS_WAMPA:
+	case CLASS_SAND_CREATURE:
+	case CLASS_HOWLER:
+	case CLASS_MINEMONSTER:
+	case CLASS_SWAMP:
+		return qtrue;
+	default:
+		return qfalse;
+	}
+}
+
+// g_utils.c TryUse: a friendly NPC asks "challenge to pazaak / buy items / leave" (qtrue: asked)
+qboolean G_Shop_TryTalk(gentity_t* player, const gentity_t* npc)
+{
+	char who[64];
+	char* q;
+
+	if (!Shop_Cvar(&g_npcTalk) || !Shop_IsHuman(player) || !npc || npc->s.eType != ET_NPC || !npc->NPC || !npc->client
+		|| npc->health <= 0 || npc->client->ps.pm_type == PM_DEAD || Pzk_InCutscene())
+	{
+		return qfalse;
+	}
+	if (npc->client->playerTeam != player->client->playerTeam && npc->client->playerTeam != NPCTEAM_NEUTRAL)
+	{
+		return qfalse;
+	}
+	if (npc->NPC->scriptFlags & SCF_NO_RESPONSE || npc->enemy && npc->enemy->health > 0 || Shop_SilentClass(npc->client->NPC_class)
+		|| G_Pazaak_IsPlaying(player->s.number))
+	{
+		return qfalse;
+	}
+	Q_strncpyz(who, npc->fullName && npc->fullName[0] ? npc->fullName : npc->NPC_type && npc->NPC_type[0] ? npc->NPC_type
+		: "this character", sizeof(who));
+	for (q = who; *q; q++)
+	{
+		if (*q == '"')
+		{
+			*q = '\'';
+		}
+	}
+	shopTalkNPC[player->s.number] = npc->s.number + 1;
+	trap->SendServerCommand(player->s.number, va("pzk talk \"You talk to %s^7. What do you want to do?\" 1", who));
+	return qtrue;
+}
+
+// "shoptalk <1 = pazaak, 2 = shop, 0 = leave>"
+static void Shop_TalkAnswer(gentity_t* ent, const int answer)
+{
+	const int n = shopTalkNPC[ent->s.number] - 1;
+	const gentity_t* npc;
+	const char* busy;
+	const char* name;
+
+	shopTalkNPC[ent->s.number] = 0;
+	if (n < MAX_CLIENTS || n >= ENTITYNUM_MAX_NORMAL)
+	{
+		return;
+	}
+	npc = &g_entities[n];
+	if (!npc->inuse || !npc->client || npc->health <= 0)
+	{
+		return;
+	}
+	name = npc->fullName && npc->fullName[0] ? npc->fullName : npc->NPC_type && npc->NPC_type[0] ? npc->NPC_type : "AI";
+	if (answer == 2)
+	{
+		Shop_Open(ent, va("%s^7 shows you the goods.", name));
+		return;
+	}
+	if (answer != 1 || !Pzk_CanPlay(ent, qtrue))
+	{
+		return;
+	}
+	// challenge him: an NPC lends his name to the AI (Pzk_StartMatch)
+	if (G_Pazaak_IsPlaying(ent->s.number))
+	{
+		Pzk_Print(ent->s.number, "^5Pazaak:^7 you are already playing.");
+		return;
+	}
+	busy = Pzk_BusyReason(ent);
+	if (busy)
+	{
+		Pzk_Unavailable(ent->s.number, busy);
+		return;
+	}
+	Pzk_StartMatch(ent, NULL, name, NULL);
+}
+
+// The shop's commands (G_Pazaak_ClientCommand passes them on): shop, shopbuy, shoptalk, shopclosed, shopcredits (cheat)
+static qboolean Shop_ClientCommand(gentity_t* ent, const char* cmd)
+{
+	char arg[MAX_TOKEN_CHARS];
+
+	if (!Shop_IsHuman(ent))
+	{
+		return qfalse;
+	}
+	trap->Argv(1, arg, sizeof(arg));
+	if (!Q_stricmp(cmd, "shop"))
+	{
+		Shop_Open(ent, "");
+		return qtrue;
+	}
+	if (!Q_stricmp(cmd, "shopbuy"))
+	{
+		Shop_Buy(ent, atoi(arg));
+		return qtrue;
+	}
+	if (!Q_stricmp(cmd, "shoptalk"))
+	{
+		Shop_TalkAnswer(ent, atoi(arg));
+		return qtrue;
+	}
+	if (!Q_stricmp(cmd, "shopclosed"))
+	{
+		shopIsOpen[ent->s.number] = 0; // the player closed the menu
+		return qtrue;
+	}
+	if (!Q_stricmp(cmd, "shopcredits"))
+	{
+		// shopcredits [amount] (cheat): shows, or sets, the credits
+		if (arg[0])
+		{
+			if (!trap->Cvar_VariableIntegerValue("sv_cheats"))
+			{
+				Pzk_Print(ent->s.number, "Cheats are not enabled on this server.");
+				return qtrue;
+			}
+			ent->client->pers.shopCredits = 0;
+			Shop_AddCredits(ent, atoi(arg));
+		}
+		Pzk_Print(ent->s.number, va("Credits: %i", ent->client->pers.shopCredits));
+		return qtrue;
+	}
+	return qfalse;
 }

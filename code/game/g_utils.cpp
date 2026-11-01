@@ -34,6 +34,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define ACT_ACTIVE		qtrue
 #define ACT_INACTIVE	qfalse
 extern void NPC_UseResponse(gentity_t* self, const gentity_t* user, qboolean useWhenDone);
+extern qboolean G_Shop_CanTalk(const gentity_t* player, const gentity_t* npc);
+extern qboolean G_Shop_TryTalk(gentity_t* player, const gentity_t* npc);
 extern qboolean PM_CrouchAnim(const int anim);
 extern qboolean PM_Dyinganim(const playerState_t* ps);
 extern qboolean rocket_trooper_player(const gentity_t* self);
@@ -2149,6 +2151,10 @@ qboolean CanUseInfrontOf(const gentity_t* ent)
 	{
 		return qtrue;
 	}
+	if (G_Shop_CanTalk(ent, target))
+	{
+		return qtrue; // the shop (2026-11-01): a friendly NPC to talk to (pazaak / buy items)
+	}
 
 	if (CanUseInfrontOfPartOfLevel(ent))
 	{
@@ -2285,6 +2291,12 @@ void TryUse(gentity_t* ent)
 	{
 		NPC_SetAnim(ent, SETANIM_TORSO, BOTH_BUTTON_HOLD, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 		GEntity_UseFunc(target, ent, ent);
+		return;
+	}
+	if (G_Shop_TryTalk(ent, target))
+	{
+		// the shop (2026-11-01, DH): a friendly NPC asks "challenge to pazaak / buy items" (g_pazaak.cpp)
+		NPC_UseResponse(target, ent, qfalse);
 		return;
 	}
 	if (target->client

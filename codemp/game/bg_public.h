@@ -147,7 +147,7 @@ animFlags_t BG_AnimStyleFlags(int animStyle);
 #define DEFAULT_REDTEAM_NAME	"Empire"
 #define DEFAULT_BLUETEAM_NAME	"Rebellion"
 
-#define CURRENT_MD_CLIENTVERSION		"Day-31,Month-10,Year-26,BuildNum-11" // build date
+#define CURRENT_MD_CLIENTVERSION		"Day-01,Month-11,Year-26,BuildNum-01" // build date
 
 #define	STEPSIZE		18
 

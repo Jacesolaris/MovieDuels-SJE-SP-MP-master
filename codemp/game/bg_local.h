@@ -88,7 +88,7 @@ qboolean PM_InRollComplete(const playerState_t* ps, int anim);
 
 int PM_AnimLength(const animNumber_t anim);
 
-int PM_ReadyPoseForsaber_anim_level(void);
+int PM_ReadyPoseForSaberAnimLevel(void);
 int PM_IdlePoseForsaber_anim_level(void);
 int PM_ReadyPoseForsaber_anim_levelBOT(void);
 int PM_ReadyPoseForsaber_anim_levelDucked(void);

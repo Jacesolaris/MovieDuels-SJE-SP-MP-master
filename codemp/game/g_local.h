@@ -685,6 +685,11 @@ typedef struct clientPersistant_s
 	char		logout[1024];
 	qboolean	plugindetect;
 	qboolean	isbeingpunished;
+	// the shop (2026-11-01, g_pazaak.c shop code): for this map (ClientConnect clears pers)
+	int			shopInit; // the starting credits were given
+	int			shopCredits;
+	int			shopStreak; // kills in a row (each within g_shopStreakTime of the last)
+	int			shopStreakTime; // level.time of the last kill
 } clientPersistant_t;
 
 typedef struct renderInfo_s

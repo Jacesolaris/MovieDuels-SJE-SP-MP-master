@@ -11766,8 +11766,14 @@ A fast client will have multiple ClientThink for each ClientEdFrame,
 while a slow client may have multiple ClientEndFrame between ClientThink.
 ==============
 */
+extern void G_Shop_PlayerThink(gentity_t* ent);
+
 void ClientEndFrame(gentity_t* ent)
 {
+	if (ent->s.number == 0 && ent->client)
+	{
+		G_Shop_PlayerThink(ent); // the shop (2026-11-01, g_pazaak.cpp): credits kept for the next level, the open menu
+	}
 	//
 	// If the end of unit layout is displayed, don't give
 	// the player any normal movement attributes

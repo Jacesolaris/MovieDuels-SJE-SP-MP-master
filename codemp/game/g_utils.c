@@ -2159,6 +2159,8 @@ static void G_GonkGiveBacta(gentity_t* gonk, const gentity_t* user)
 	gonkBactaTime[gonk->s.number] = level.time + (int)((g_gonkBactaCooldown.value > 0.0f ? g_gonkBactaCooldown.value : 0.0f) * 1000.0f);
 }
 
+extern qboolean G_Shop_TryTalk(gentity_t* player, const gentity_t* npc);
+
 void TryUse(gentity_t* ent)
 {
 	trace_t trace;
@@ -2365,6 +2367,12 @@ void TryUse(gentity_t* ent)
 	}
 
 #endif
+
+	if (!ValidUseTarget(target) && G_Shop_TryTalk(ent, target))
+	{
+		// the shop (2026-11-01, DH): a friendly NPC asks "challenge to pazaak / buy items" (g_pazaak.c)
+		return;
+	}
 
 	//Check for a use command
 	if (ValidUseTarget(target)

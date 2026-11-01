@@ -5120,6 +5120,8 @@ static void G_AwardStreaks(gentity_t* self, gentity_t* attacker)
 	}
 }
 
+extern void G_Shop_Died(gentity_t* victim, gentity_t* attacker);
+
 void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker,
 	const int damage, const int means_of_death, const int dflags, const int hit_loc)
 {
@@ -5149,6 +5151,11 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker,
 	if (self->client->stun)
 	{
 		Weapon_StunFree(self->client->stun);
+	}
+
+	if (self->client->ps.pm_type != PM_DEAD)
+	{
+		G_Shop_Died(self, attacker); // the shop (2026-11-01, g_pazaak.cpp): credits for the player's kills, the loss when he dies
 	}
 
 	// -----------------------------------------------------------------

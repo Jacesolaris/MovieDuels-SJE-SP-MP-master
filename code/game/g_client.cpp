@@ -966,6 +966,9 @@ Player_RestoreFromPrevLevel
   Argument		: gentity_t *ent
 ============
 */
+extern void G_Shop_RestoreFromPrevLevel(gentity_t* ent);
+extern int G_Shop_StartCredits();
+
 static void Player_RestoreFromPrevLevel(gentity_t* ent)
 {
 	gclient_t* client = ent->client;
@@ -1211,6 +1214,7 @@ static void Player_RestoreFromPrevLevel(gentity_t* ent)
 
 			client->ps.forceGripEntityNum = ENTITYNUM_NONE;
 			client->ps.forceDrainEntityNum = ENTITYNUM_NONE;
+			G_Shop_RestoreFromPrevLevel(ent); // the shop (2026-11-01): the credits of the last level (md_playersave_shop)
 		}
 	}
 }
@@ -3497,9 +3501,9 @@ qboolean ClientSpawn(gentity_t* ent, SavedGameJustLoaded_e e_saved_game_just_loa
 		client->airOutTime = level.time + 12000;
 
 		// initialize credits if not set (default starting currency)
-		if (client->ps.persistant[PERS_CREDITS] == 0)
+		if (client->ps.persistant[PERS_CREDITS] == 0 && !client->pers.shopInit)
 		{
-			client->ps.persistant[PERS_CREDITS] = 1000; // default starting credits
+			client->ps.persistant[PERS_CREDITS] = G_Shop_StartCredits(); // default starting credits (g_shopStartCredits)
 		}
 
 		for (i = 0; i < 3; i++)
@@ -3663,9 +3667,9 @@ qboolean ClientSpawn(gentity_t* ent, SavedGameJustLoaded_e e_saved_game_just_loa
 		client->airOutTime = level.time + 12000;
 
 		// initialize credits if not set (default starting currency)
-		if (client->ps.persistant[PERS_CREDITS] == 0)
+		if (client->ps.persistant[PERS_CREDITS] == 0 && !client->pers.shopInit)
 		{
-			client->ps.persistant[PERS_CREDITS] = 1000; // default starting credits
+			client->ps.persistant[PERS_CREDITS] = G_Shop_StartCredits(); // default starting credits (g_shopStartCredits)
 		}
 
 		// clear entity values

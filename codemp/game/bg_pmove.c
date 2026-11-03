@@ -953,6 +953,11 @@ static animNumber_t QINLINE PM_GetWeaponReadyAnim(void)
 }
 
 int PM_ReadyPoseForsaber_anim_levelBOT(void);
+static int PM_SPReadyPoseNPC(void);
+static int PM_SPReadyPosePlayer(void);
+static int PM_SPReadyPoseDucked(void);
+static qboolean PM_MoveIsNPC(void);
+static int PM_KeepStyleAnim(int anim);
 
 int PM_ReadyPoseForSaberAnimLevel(void)
 {
@@ -990,629 +995,19 @@ int PM_ReadyPoseForSaberAnimLevel(void)
 			return saber2->readyAnim;
 		}
 
-		if (saber1
-			&& saber2
-			&& !pm->ps->saberHolstered)
-		{
-			//dual sabers, both on
-			return BOTH_SABERDUAL_STANCE;
-		}
-		switch (pm->ps->fd.saberAnimLevel)
-		{
-		case SS_DUAL:
-			anim = BOTH_SABERDUAL_STANCE;
-			break;
-		case SS_STAFF:
-			anim = BOTH_SABERSTAFF_STANCE;
-			break;
-		case SS_TAVION:
-			anim = BOTH_SABERTAVION_STANCE;
-			break;
-		case SS_FAST:
-			anim = BOTH_SABERFAST_STANCE;
-			break;
-		case SS_STRONG:
-			anim = BOTH_SABERSLOW_STANCE;
-			break;
-		case SS_DESANN:
-			anim = BOTH_SABERDESANN_STANCE;
-			break;
-		case SS_NONE:
-		case SS_MEDIUM:
-		case SS_BLASTER: // SS_BLASTER (2026-10-14)
-		default:
-			anim = BOTH_STAND2;
-			break;
-		}
+		// SP's AMD-mode ready pose (DH 2026-11-02): NPCs and bots (MP's AI opponents) as SP's NPCs, players as SP's
+		// player; played as SP picks it (no generic style swap), the style's own stances come from SP's choices
+		anim = PM_KeepStyleAnim(PM_MoveIsNPC() ? PM_SPReadyPoseNPC() : PM_SPReadyPosePlayer());
 	}
 	return anim;
 }
 
+// SP has no separate idle pose: standing with the saber on is its ready pose (SP PM_Footsteps and PM_SetSaberMove LS_READY,
+// AMD mode). MP's own idle pose (BOTH_STAND1 unless block was held, the _ALT stances when tired, the bot / saber-type
+// stances) made MP stand differently from SP (DH 2026-11-02: MP as SP)
 int PM_IdlePoseForsaber_anim_level(void)
 {
-	int anim = BOTH_STAND2;
-
-	const saberInfo_t* saber1 = BG_MySaber(pm->ps->clientNum, 0);
-
-	const qboolean is_holding_block_button = ((pm->ps->ManualBlockingFlags & (1 << MBF_HOLDINGBLOCK)) != 0) ? qtrue : qfalse;	//Holding Block Button
-
-	const qboolean is_holding_block_button_and_attack = ((pm->ps->ManualBlockingFlags & (1 << MBF_HOLDINGBLOCKANDATTACK)) != 0) ? qtrue : qfalse; //Holding Block and attack Buttons
-
-	if (!pm->ps->saberEntityNum)
-	{
-		//lost it
-		return BOTH_STAND1;
-	}
-
-	if (BG_SabersOff(pm->ps))
-	{
-		return BOTH_STAND1;
-	}
-
-	if (pm->ps->fd.blockPoints <= BLOCKPOINTS_FAIL)
-	{
-		return BOTH_STAND1;
-	}
-
-#ifdef _GAME
-	if (g_entities[pm->ps->clientNum].r.svFlags & SVF_BOT || pm_entSelf->s.eType == ET_NPC)
-	{
-		anim = PM_ReadyPoseForsaber_anim_levelBOT();
-	}
-#endif
-	if (PM_BoltBlockingAnim(pm->ps->torsoAnim)
-		|| PM_SaberInBounce(pm->ps->saberMove))
-	{
-		//
-	}
-	else
-	{
-		if (pm->ps->pm_flags & PMF_DUCKED)
-		{
-			anim = PM_ReadyPoseForsaber_anim_levelDucked();
-		}
-		else
-		{
-			if (pm->cmd.buttons & BUTTON_WALKING &&
-				PM_SaberWalkAnim(pm->ps->legsAnim) &&
-				!is_holding_block_button &&
-				pm->cmd.forwardmove > 0 ||
-				pm->cmd.rightmove > 0 ||
-				pm->cmd.rightmove < 0)
-			{
-				if (pm->ps->fd.saberAnimLevel == SS_DUAL)
-				{
-					return BOTH_WALK1;
-				}
-				if (pm->ps->fd.saberAnimLevel == SS_STAFF)
-				{
-					return BOTH_WALK1;
-				}
-				if (pm->ps->fd.saberAnimLevel == SS_TAVION)
-				{
-					return BOTH_WALK1;
-				}
-				if ((pm->ps->fd.saberAnimLevel == SS_DESANN || pm->ps->fd.saberAnimLevel == SS_BLASTER)) // SS_BLASTER
-				{
-					return BOTH_WALK1;
-				}
-				if (pm->ps->fd.saberAnimLevel == SS_STRONG)
-				{
-					return BOTH_WALK1;
-				}
-				if (pm->ps->fd.saberAnimLevel == SS_MEDIUM)
-				{
-					return BOTH_WALK1;
-				}
-				if (pm->ps->fd.saberAnimLevel == SS_FAST)
-				{
-					return BOTH_WALK1;
-				}
-				return BOTH_WALK1;
-			}
-			if (pm->cmd.buttons & BUTTON_WALKING &&
-				PM_SaberWalkAnim(pm->ps->legsAnim) &&
-				!is_holding_block_button &&
-				pm->cmd.forwardmove > 0)
-			{
-				if (pm->ps->fd.saberAnimLevel == SS_DUAL)
-				{
-					return BOTH_WALK1;
-				}
-				if (pm->ps->fd.saberAnimLevel == SS_STAFF)
-				{
-					return BOTH_WALK1;
-				}
-				if (pm->ps->fd.saberAnimLevel == SS_TAVION)
-				{
-					return BOTH_WALK1;
-				}
-				if ((pm->ps->fd.saberAnimLevel == SS_DESANN || pm->ps->fd.saberAnimLevel == SS_BLASTER)) // SS_BLASTER
-				{
-					return BOTH_WALK1;
-				}
-				if (pm->ps->fd.saberAnimLevel == SS_STRONG)
-				{
-					return BOTH_WALK1;
-				}
-				if (pm->ps->fd.saberAnimLevel == SS_MEDIUM)
-				{
-					return BOTH_WALK1;
-				}
-				if (pm->ps->fd.saberAnimLevel == SS_FAST)
-				{
-					return BOTH_WALK1;
-				}
-				return BOTH_WALK1;
-			}
-			if (pm->cmd.buttons & BUTTON_WALKING &&
-				PM_SaberWalkAnim(pm->ps->legsAnim) &&
-				!is_holding_block_button &&
-				pm->cmd.forwardmove < 0 ||
-				pm->cmd.rightmove > 0 ||
-				pm->cmd.rightmove < 0)
-			{
-				if (pm->ps->fd.saberAnimLevel == SS_DUAL)
-				{
-					return BOTH_WALKBACK1;
-				}
-				if (pm->ps->fd.saberAnimLevel == SS_STAFF)
-				{
-					return BOTH_WALKBACK1;
-				}
-				if (pm->ps->fd.saberAnimLevel == SS_TAVION)
-				{
-					return BOTH_WALKBACK1;
-				}
-				if ((pm->ps->fd.saberAnimLevel == SS_DESANN || pm->ps->fd.saberAnimLevel == SS_BLASTER)) // SS_BLASTER
-				{
-					return BOTH_WALKBACK1;
-				}
-				if (pm->ps->fd.saberAnimLevel == SS_STRONG)
-				{
-					return BOTH_WALKBACK1;
-				}
-				if (pm->ps->fd.saberAnimLevel == SS_MEDIUM)
-				{
-					return BOTH_WALKBACK1;
-				}
-				if (pm->ps->fd.saberAnimLevel == SS_FAST)
-				{
-					return BOTH_WALKBACK1;
-				}
-				return BOTH_WALKBACK1;
-			}
-
-			switch (pm->ps->fd.saberAnimLevel)
-			{
-			case SS_DUAL:
-				if (pm->ps->fd.blockPoints < BLOCKPOINTS_FULL)
-				{
-					anim = BOTH_SABERDUAL_STANCE_ALT;
-				}
-				else
-				{
-					//simple saber attack
-					if (is_holding_block_button)
-					{
-						if (saber1 && saber1->type == SABER_DUAL_GRIE)
-						{
-							return BOTH_SABERDUAL_STANCE_GRIEVOUS;
-						}
-						if (saber1 && saber1->type == SABER_DUAL_GRIE4)
-						{
-							anim = BOTH_SABERDUAL_STANCE_GRIEVOUS;
-						}
-						else
-						{
-							if (is_holding_block_button_and_attack)
-							{
-								anim = BOTH_SABERDUAL_STANCE_ALT;
-							}
-							else
-							{
-								anim = BOTH_SABERDUAL_STANCE;
-							}
-						}
-					}
-					else
-					{
-						anim = BOTH_SABERDUAL_STANCE_IDLE;
-					}
-				}
-				break;
-			case SS_STAFF:
-				if (pm->ps->fd.blockPoints < BLOCKPOINTS_FULL)
-				{
-					anim = BOTH_SABERSTAFF_STANCE_ALT;
-				}
-				else
-				{
-					if (is_holding_block_button)
-					{
-						if (saber1 && (saber1->type == SABER_SINGLE_BACKHAND
-							|| saber1->type == SABER_SINGLE_ASBACKHAND)) //saber backhand
-						{
-							anim = BOTH_SABERBACKHAND_STANCE;
-						}
-						else
-						{
-							if (is_holding_block_button_and_attack)
-							{
-								anim = BOTH_SABERSTAFF_STANCE_ALT;
-							}
-							else
-							{
-								anim = BOTH_SABERSTAFF_STANCE;
-							}
-						}
-					}
-					else
-					{
-						anim = BOTH_SABERSTAFF_STANCE_IDLE;
-					}
-				}
-				break;
-			case SS_FAST:
-				if (is_holding_block_button)
-				{
-					if (pm_entSelf->s.botclass == BCLASS_YODA)
-					{
-						anim = BOTH_SABERYODA_STANCE;
-					}
-					else if (pm_entSelf->s.botclass == BCLASS_DOOKU)
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_YODA) //yoda
-					{
-						anim = BOTH_SABERYODA_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_OBIWAN) //saber obi
-					{
-						anim = BOTH_SABEROBI_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_REY) //saber ray
-					{
-						anim = BOTH_SABER_REY_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_DOOKU) //dooku
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_UNSTABLE) //saber kylo
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_WINDU) //saber windu
-					{
-						anim = BOTH_SABEREADY_STANCE;
-					}
-					else
-					{
-						if (is_holding_block_button_and_attack)
-						{
-							anim = BOTH_SABEREADY_STANCE;
-						}
-						else
-						{
-							anim = BOTH_SABERFAST_STANCE;
-						}
-					}
-				}
-				else
-				{
-					if (pm->ps->fd.blockPoints < BLOCKPOINTS_FULL)
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else
-					{
-						anim = BOTH_STAND1;
-					}
-				}
-				break;
-			case SS_MEDIUM:
-			case SS_BLASTER: // SS_BLASTER
-				if (is_holding_block_button)
-				{
-					if (pm_entSelf->s.botclass == BCLASS_YODA)
-					{
-						anim = BOTH_SABERYODA_STANCE;
-					}
-					else if (pm_entSelf->s.botclass == BCLASS_DOOKU)
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_YODA) //yoda
-					{
-						anim = BOTH_SABERYODA_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_OBIWAN) //saber obi
-					{
-						anim = BOTH_SABEROBI_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_REY) //saber ray
-					{
-						anim = BOTH_SABER_REY_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_DOOKU) //dooku
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_UNSTABLE) //saber kylo
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_WINDU) //saber windu
-					{
-						anim = BOTH_SABEREADY_STANCE;
-					}
-					else
-					{
-						if (is_holding_block_button_and_attack)
-						{
-							anim = BOTH_SABEREADY_STANCE;
-						}
-						else
-						{
-							anim = BOTH_STAND2;
-						}
-					}
-				}
-				else
-				{
-					if (pm->ps->fd.blockPoints < BLOCKPOINTS_FULL)
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else
-					{
-						anim = BOTH_STAND1;
-					}
-				}
-				break;
-			case SS_STRONG:
-				if (is_holding_block_button)
-				{
-					if (pm_entSelf->s.botclass == BCLASS_YODA)
-					{
-						anim = BOTH_SABERYODA_STANCE;
-					}
-					else if (pm_entSelf->s.botclass == BCLASS_DOOKU)
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_YODA) //yoda
-					{
-						anim = BOTH_SABERYODA_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_OBIWAN) //saber obi
-					{
-						anim = BOTH_SABEROBI_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_REY) //saber ray
-					{
-						anim = BOTH_SABER_REY_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_DOOKU) //dooku
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_UNSTABLE) //saber kylo
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_WINDU) //saber windu
-					{
-						anim = BOTH_SABEREADY_STANCE;
-					}
-					else
-					{
-						if (is_holding_block_button_and_attack)
-						{
-							anim = BOTH_SABEREADY_STANCE;
-						}
-						else
-						{
-							anim = BOTH_SABERSLOW_STANCE;
-						}
-					}
-				}
-				else
-				{
-					if (pm->ps->fd.blockPoints < BLOCKPOINTS_FULL)
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else
-					{
-						anim = BOTH_STAND1;
-					}
-				}
-				break;
-			case SS_TAVION:
-				if (is_holding_block_button)
-				{
-					if (pm_entSelf->s.botclass == BCLASS_YODA)
-					{
-						anim = BOTH_SABERYODA_STANCE;
-					}
-					else if (pm_entSelf->s.botclass == BCLASS_DOOKU)
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_YODA) //yoda
-					{
-						anim = BOTH_SABERYODA_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_OBIWAN) //saber obi
-					{
-						anim = BOTH_SABEROBI_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_REY) //saber ray
-					{
-						anim = BOTH_SABER_REY_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_DOOKU) //dooku
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_UNSTABLE) //saber kylo
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_WINDU) //saber windu
-					{
-						anim = BOTH_SABEREADY_STANCE;
-					}
-					else
-					{
-						if (is_holding_block_button_and_attack)
-						{
-							anim = BOTH_SABEREADY_STANCE;
-						}
-						else
-						{
-							anim = BOTH_SABERTAVION_STANCE;
-						}
-					}
-				}
-				else
-				{
-					if (pm->ps->fd.blockPoints < BLOCKPOINTS_FULL)
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else
-					{
-						anim = BOTH_STAND1;
-					}
-				}
-				break;
-			case SS_DESANN:
-				if (is_holding_block_button)
-				{
-					if (pm_entSelf->s.botclass == BCLASS_YODA)
-					{
-						anim = BOTH_SABERYODA_STANCE;
-					}
-					else if (pm_entSelf->s.botclass == BCLASS_DOOKU)
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_YODA) //yoda
-					{
-						anim = BOTH_SABERYODA_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_OBIWAN) //saber obi
-					{
-						anim = BOTH_SABEROBI_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_REY) //saber ray
-					{
-						anim = BOTH_SABER_REY_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_DOOKU) //dooku
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_UNSTABLE) //saber kylo
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_WINDU) //saber windu
-					{
-						anim = BOTH_SABEREADY_STANCE;
-					}
-					else
-					{
-						if (is_holding_block_button_and_attack)
-						{
-							anim = BOTH_SABEREADY_STANCE;
-						}
-						else
-						{
-							anim = BOTH_SABERDESANN_STANCE;
-						}
-					}
-				}
-				else
-				{
-					if (pm->ps->fd.blockPoints < BLOCKPOINTS_FULL)
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else
-					{
-						anim = BOTH_STAND1;
-					}
-				}
-				break;
-			case SS_NONE:
-			default:
-				if (is_holding_block_button)
-				{
-					if (pm_entSelf->s.botclass == BCLASS_YODA)
-					{
-						anim = BOTH_SABERYODA_STANCE;
-					}
-					else if (pm_entSelf->s.botclass == BCLASS_DOOKU)
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_YODA) //yoda
-					{
-						anim = BOTH_SABERYODA_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_OBIWAN) //saber obi
-					{
-						anim = BOTH_SABEROBI_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_REY) //saber ray
-					{
-						anim = BOTH_SABER_REY_STANCE;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_DOOKU) //dooku
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_UNSTABLE) //saber kylo
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else if (saber1 && saber1->type == SABER_SINGLE_WINDU) //saber windu
-					{
-						anim = BOTH_SABEREADY_STANCE;
-					}
-					else
-					{
-						if (is_holding_block_button_and_attack)
-						{
-							anim = BOTH_SABEREADY_STANCE;
-						}
-						else
-						{
-							anim = BOTH_STAND2;
-						}
-					}
-				}
-				else
-				{
-					if (pm->ps->fd.blockPoints < BLOCKPOINTS_FULL)
-					{
-						anim = BOTH_SABERSTANCE_STANCE_ALT;
-					}
-					else
-					{
-						anim = BOTH_STAND1;
-					}
-				}
-				break;
-			}
-		}
-	}
-	return anim;
+	return PM_ReadyPoseForSaberAnimLevel();
 }
 
 static qboolean PM_EnemyInFrontCloseRange(void)
@@ -1640,7 +1035,7 @@ static qboolean PM_EnemyInFrontCloseRange(void)
 	VectorCopy(pm->ps->origin, start);
 	start[2] += 24.0f; // eye height
 
-	const float range = 350.0f;    // close range
+	const float range = 300.0f;    // close range (SP: 3 meters)
 	const float arcDegrees = 45.0f; // arc to each side
 
 	vec3_t baseAngles;
@@ -1678,8 +1073,15 @@ static qboolean PM_EnemyInFrontCloseRange(void)
 				continue;
 			}
 
-			// must be an enemy
-			if (hit->client->playerTeam != self->client->playerTeam)
+			// must be an enemy: SP's NPC teams; two players / bots by the game type's teams (in FFA everyone)
+			if (tr.entityNum < MAX_CLIENTS && selfNum < MAX_CLIENTS)
+			{
+				if (!OnSameTeam(self, hit))
+				{
+					return qtrue;
+				}
+			}
+			else if (hit->client->playerTeam != self->client->playerTeam)
 			{
 				return qtrue;
 			}
@@ -2081,8 +1483,6 @@ int PM_ReadyPoseForsaber_anim_levelBOT(void)
 
 int PM_ReadyPoseForsaber_anim_levelDucked(void)
 {
-	int anim = 0;
-
 	const saberInfo_t* saber1 = BG_MySaber(pm->ps->clientNum, 0);
 	const saberInfo_t* saber2 = BG_MySaber(pm->ps->clientNum, 1);
 
@@ -2109,52 +1509,8 @@ int PM_ReadyPoseForsaber_anim_levelDucked(void)
 		return saber2->readyAnim;
 	}
 
-	if (saber1
-		&& saber2
-		&& !pm->ps->saberHolstered)
-	{
-		//dual sabers, both on
-		if (saber1 && saber1->type == SABER_DUAL_GRIE)
-		{
-			return BOTH_SABERDUAL_STANCE_GRIEVOUS;
-		}
-		if (saber1 && saber1->type == SABER_DUAL_GRIE4)
-		{
-			return BOTH_SABERDUAL_STANCE_GRIEVOUS;
-		}
-		return BOTH_SABERDUALCROUCH;
-	}
-
-	switch (pm->ps->fd.saberAnimLevel)
-	{
-	case SS_DUAL:
-	case SS_BLASTER: // SS_BLASTER
-		anim = BOTH_SABERDUALCROUCH;
-		break;
-	case SS_STAFF:
-		anim = BOTH_SABERSTAFFCROUCH;
-		break;
-	case SS_FAST:
-		anim = BOTH_SABERSINGLECROUCH;
-		break;
-	case SS_TAVION:
-		anim = BOTH_SABERSINGLECROUCH;
-		break;
-	case SS_STRONG:
-		anim = BOTH_SABERSINGLECROUCH;
-		break;
-	case SS_MEDIUM:
-		anim = BOTH_SABERSINGLECROUCH;
-		break;
-	case SS_DESANN:
-		anim = BOTH_SABERSINGLECROUCH;
-		break;
-	case SS_NONE:
-	default:
-		anim = BOTH_SABERSINGLECROUCH;
-		break;
-	}
-	return anim;
+	// SP PM_ReadyPoseForSaberAnimLevelDucked (DH 2026-11-02: MP as SP), played as SP picks it
+	return PM_KeepStyleAnim(PM_SPReadyPoseDucked());
 }
 
 // ======================================================================
@@ -2192,6 +1548,318 @@ static int PM_KeepStyleAnim(const int anim)
 {
 	BG_KeepStyleAnim(anim);
 	return anim;
+}
+
+static qboolean PM_MoveClass(int npcClass, int botClass);
+
+// ======================================================================
+// SP's ready poses in AMD mode (SP bg_pmove.cpp PM_ReadyPoseForSaberAnimLevel / ...NPC / ...Ducked, DH 2026-11-02:
+// MP plays SP's g_SerenityJediEngineMode 2). g_NPCAnimationStyle is SP's read-only 1; g_RealisticBlockingMode is
+// the server's bg_realisticBlocking (PM_RealisticBlocking).
+// ======================================================================
+
+// SP PM_ReadyPoseForSaberAnimLevelDucked: the crouched stance
+static int PM_SPReadyPoseDucked(void)
+{
+	const animFlags_t flags = PM_Animationstyletable();
+	const qboolean styleOn = PM_ANIMSTYLE_ACTIVE ? qtrue : qfalse;
+
+	switch (pm->ps->fd.saberAnimLevel)
+	{
+	case SS_DUAL:
+		if (styleOn)
+		{
+			if (flags.isGalenMarek) return BOTH_SABERDUALCROUCH_GALEN;
+			if (flags.isKotor) return BOTH_SABERDUALCROUCH_KOTOR;
+			if (flags.isDarkForces2) return BOTH_SABERDUALCROUCH_DF2;
+		}
+		return BOTH_SABERDUALCROUCH;
+	case SS_STAFF:
+		if (styleOn)
+		{
+			if (flags.isBattleDroid) return BOTH_SABERSTAFFCROUCH_BDROID;
+			if (flags.isKotor) return BOTH_SABERSTAFFCROUCH_KOTOR;
+		}
+		return BOTH_SABERSTAFFCROUCH;
+	default: // every single-saber style, SS_BLASTER too
+		if (styleOn)
+		{
+			if (flags.isAnakin) return BOTH_SABERSINGLECROUCH_ANI;
+			if (flags.isVader) return BOTH_SABERSINGLECROUCH_VADER;
+			if (flags.isObiWan) return BOTH_SABERSINGLECROUCH_OBI;
+			if (flags.isDarkForces2) return BOTH_SABERSINGLECROUCH_DF2;
+			if (flags.isObiWanEP3) return BOTH_SABERSINGLECROUCH_OBI3;
+			if (flags.isKyloRen) return BOTH_SABERSINGLECROUCH_REN;
+			if (flags.isRey) return BOTH_SABERSINGLECROUCH_REY;
+		}
+		return BOTH_SABERSINGLECROUCH;
+	}
+}
+
+// SP NPCs with no enemy close in front (3 traces, server only): the character's own _JKA stance
+static qboolean PM_SPNPCEnemyFar(void)
+{
+	return PM_EnemyInFrontCloseRange() ? qfalse : qtrue;
+}
+
+// SP PM_ReadyPoseForSaberAnimLevelNPC, AMD mode, g_RealisticBlockingMode 0: the plain stance, or the character's own
+// _JKA stance while no enemy is close in front
+static int PM_SPReadyPoseNPCStance(const animFlags_t flags, const qboolean styled)
+{
+	switch (pm->ps->fd.saberAnimLevel)
+	{
+	case SS_DUAL:
+		return BOTH_SABERDUAL_STANCE;
+	case SS_STAFF:
+		if (styled && flags.isBenKenobi) return BOTH_SABERSTAFF_STANCE_BEN;
+		return BOTH_SABERSTAFF_STANCE;
+	case SS_FAST:
+		if (styled)
+		{
+			if (flags.isBenKenobi) return BOTH_SABERFAST_STANCE_JKA_BEN;
+			if (flags.isYoda) return BOTH_SABERTAVION_STANCE_JKA_YODA;
+			if (flags.isVader) return BOTH_SABERFAST_STANCE_JKA_VADER;
+			if (flags.isPalpatine) return BOTH_SABERFAST_STANCE_JKA_PAL;
+			if (flags.isCountDooku) return BOTH_SABERFAST_STANCE_JKA_DOOKU;
+			if (flags.isMaul) return BOTH_SABERFAST_STANCE_JKA_MAUL;
+			if (flags.isLukeSkywalker) return BOTH_SABERFAST_STANCE_JKA_LUKE;
+			if (flags.isMaceWindu) return BOTH_SABERFAST_STANCE_JKA_MACE;
+			if (flags.isObiWan) return BOTH_SABERFAST_STANCE_JKA_OBI;
+			if (flags.isKotor) return BOTH_SABERFAST_STANCE_JKA_KOTOR;
+			if (flags.isDarkForces2) return BOTH_SABERFAST_STANCE_JKA_DF2;
+			if (flags.isObiWanEP3) return BOTH_SABERFAST_STANCE_JKA_OBI3;
+			if (flags.isKyloRen) return BOTH_SABERFAST_STANCE_JKA_REN;
+			if (flags.isRey) return BOTH_SABERFAST_STANCE_JKA_REY;
+			if (flags.isCalKestis) return BOTH_SABERFAST_STANCE_JKA_CAL;
+			if (flags.isGrievous) return BOTH_SABERFAST_STANCE_JKA_GRIEV;
+		}
+		return BOTH_SABERFAST_STANCE;
+	case SS_TAVION:
+		if (styled)
+		{
+			if (flags.isBenKenobi) return BOTH_SABERFAST_STANCE_JKA_BEN;
+			if (flags.isYoda) return BOTH_SABERTAVION_STANCE_JKA_YODA;
+			if (flags.isVader) return BOTH_SABERTAVION_STANCE_JKA_VADER;
+			if (flags.isMaul) return BOTH_SABERTAVION_STANCE_JKA_MAUL;
+			if (flags.isMaceWindu) return BOTH_SABERTAVION_STANCE_JKA_MACE;
+			if (flags.isDarkForces2) return BOTH_SABERTAVION_STANCE_JKA_DF2;
+			if (flags.isObiWanEP3) return BOTH_SABERTAVION_STANCE_JKA_OBI3;
+			if (flags.isKyloRen) return BOTH_SABERTAVION_STANCE_JKA_REN;
+		}
+		return BOTH_SABERTAVION_STANCE;
+	case SS_STRONG:
+		if (styled)
+		{
+			if (flags.isBenKenobi) return BOTH_SABERFAST_STANCE_JKA_BEN;
+			if (flags.isYoda) return BOTH_SABERTAVION_STANCE_JKA_YODA;
+			if (flags.isVader) return BOTH_SABERSLOW_STANCE_JKA_VADER;
+			if (flags.isGalenMarek) return BOTH_SABERSLOW_STANCE_JKA_GALEN;
+			if (flags.isLukeSkywalker) return BOTH_SABERSLOW_STANCE_JKA_LUKE;
+			if (flags.isQuiGonJinn) return BOTH_SABERSLOW_STANCE_JKA_GON;
+			if (flags.isObiWan) return BOTH_SABERSLOW_STANCE_JKA_OBI;
+			if (flags.isKotor) return BOTH_SABERSLOW_STANCE_JKA_KOTOR;
+			if (flags.isDarkForces2) return BOTH_SABERSLOW_STANCE_JKA_DF2;
+			if (flags.isObiWanEP3) return BOTH_SABERSLOW_STANCE_JKA_OBI3;
+			if (flags.isKyloRen) return BOTH_SABERSLOW_STANCE_JKA_REN;
+			if (flags.isRey) return BOTH_SABERSLOW_STANCE_JKA_REY;
+			if (flags.isPalpatine) return BOTH_SABERSLOW_STANCE_JKA_PAL;
+			if (flags.isMaul) return BOTH_SABERSLOW_STANCE_JKA_MAUL;
+		}
+		return BOTH_SABERSLOW_STANCE;
+	case SS_DESANN:
+		if (styled)
+		{
+			if (flags.isBenKenobi) return BOTH_SABERFAST_STANCE_JKA_BEN;
+			if (flags.isYoda) return BOTH_SABERTAVION_STANCE_JKA_YODA;
+		}
+		return BOTH_SABERDESANN_STANCE;
+	case SS_MEDIUM:
+		if (styled)
+		{
+			if (flags.isAnakin) return BOTH_STAND_BLOCKING_ON_ANI;
+			if (flags.isBenKenobi) return BOTH_SABERFAST_STANCE_JKA_BEN;
+			if (flags.isYoda) return BOTH_SABERTAVION_STANCE_JKA_YODA;
+			if (flags.isVader) return BOTH_SABERFAST_STANCE_JKA_VADER;
+			if (flags.isPalpatine) return BOTH_SABERFAST_STANCE_JKA_PAL;
+			if (flags.isCountDooku) return BOTH_SABERFAST_STANCE_JKA_DOOKU;
+			if (flags.isMaul) return BOTH_SABERFAST_STANCE_JKA_MAUL;
+			if (flags.isLukeSkywalker) return BOTH_SABERFAST_STANCE_JKA_LUKE;
+			if (flags.isMaceWindu) return BOTH_SABERFAST_STANCE_JKA_MACE;
+			if (flags.isObiWan) return BOTH_SABERFAST_STANCE_JKA_OBI;
+			if (flags.isKotor) return BOTH_SABERFAST_STANCE_JKA_KOTOR;
+			if (flags.isDarkForces2) return BOTH_SABERFAST_STANCE_JKA_DF2;
+			if (flags.isObiWanEP3) return BOTH_SABERFAST_STANCE_JKA_OBI3;
+			if (flags.isKyloRen) return BOTH_SABERFAST_STANCE_JKA_REN;
+			if (flags.isRey) return BOTH_SABERFAST_STANCE_JKA_REY;
+			if (flags.isCalKestis) return BOTH_SABERFAST_STANCE_JKA_CAL;
+			if (flags.isGrievous) return BOTH_SABERFAST_STANCE_JKA_GRIEV;
+		}
+		return BOTH_STAND2;
+	default:
+		return BOTH_STAND2;
+	}
+}
+
+// SP PM_ReadyPoseForSaberAnimLevelNPC, AMD mode, g_RealisticBlockingMode 1: the NPC's block stance (MBF_NPCBLOCKSTANCE,
+// set by its AI) or the crouch; single sabers take the character's own _JKA stance while no enemy is close in front
+static int PM_SPReadyPoseNPCRealistic(const animFlags_t flags, const qboolean styleOn, const qboolean enemyFar)
+{
+	const qboolean block = (pm->ps->ManualBlockingFlags & (1 << MBF_NPCBLOCKSTANCE)) ? qtrue : qfalse;
+
+	if (in_camera)
+	{
+		switch (pm->ps->fd.saberAnimLevel)
+		{
+		case SS_DUAL: return BOTH_SABERDUAL_STANCE;
+		case SS_STAFF: return BOTH_SABERSTAFF_STANCE;
+		case SS_FAST: return BOTH_SABERFAST_STANCE;
+		case SS_TAVION: return BOTH_SABERTAVION_STANCE;
+		case SS_STRONG: return BOTH_SABERSLOW_STANCE;
+		case SS_DESANN: return BOTH_SABERDESANN_STANCE;
+		default: return BOTH_STAND2;
+		}
+	}
+
+	switch (pm->ps->fd.saberAnimLevel)
+	{
+	case SS_DUAL:
+		if (styleOn)
+		{
+			if (flags.isAnakin) return block ? BOTH_STAND_BLOCKING_ON_DUAL_ANI : BOTH_SABERDUALCROUCH;
+			if (flags.isGalenMarek) return block ? BOTH_STAND_BLOCKING_ON_DUAL_GALEN : BOTH_SABERDUALCROUCH_GALEN;
+			if (flags.isKotor) return block ? BOTH_STAND_BLOCKING_ON_DUAL : BOTH_SABERDUALCROUCH_KOTOR;
+			if (flags.isDarkForces2) return block ? BOTH_STAND_BLOCKING_ON_DUAL : BOTH_SABERDUALCROUCH_DF2;
+			if (flags.isJango) return block ? BOTH_STAND_BLOCKING_ON_DUAL_JANGO : BOTH_SABERDUALCROUCH;
+			if (flags.isCalKestis) return block ? BOTH_STAND_BLOCKING_ON_DUAL_CAL : BOTH_SABERDUALCROUCH;
+			if (flags.isGrievous) return block ? BOTH_STAND_BLOCKING_ON_DUAL_GRIEV : BOTH_SABERDUALCROUCH;
+			if (flags.isBenKenobi) return block ? BOTH_STAND_BLOCKING_ON_DUAL_BEN : BOTH_SABERDUALCROUCH;
+		}
+		return block ? BOTH_STAND_BLOCKING_ON_DUAL : BOTH_SABERDUALCROUCH;
+	case SS_STAFF:
+		if (styleOn)
+		{
+			if (flags.isBenKenobi) return block ? BOTH_STAND_BLOCKING_ON_STAFF_BEN : BOTH_SABERSTAFFCROUCH;
+			if (flags.isMaul) return block ? BOTH_STAND_BLOCKING_ON_STAFF_MAUL : BOTH_SABERSTAFFCROUCH;
+			if (flags.isCalKestis) return block ? BOTH_STAND_BLOCKING_ON_STAFF_CAL : BOTH_SABERSTAFFCROUCH;
+			if (flags.isGrievous) return block ? BOTH_STAND_BLOCKING_ON_STAFF_GRIEV : BOTH_SABERSTAFFCROUCH;
+			if (flags.isBattleDroid) return block ? BOTH_STAND_BLOCKING_ON_STAFF : BOTH_SABERSTAFFCROUCH_BDROID;
+			if (flags.isKotor) return block ? BOTH_STAND_BLOCKING_ON_STAFF : BOTH_SABERSTAFFCROUCH_KOTOR;
+		}
+		return block ? BOTH_STAND_BLOCKING_ON_STAFF : BOTH_SABERSTAFFCROUCH;
+	case SS_FAST:
+	case SS_TAVION:
+	case SS_STRONG:
+	case SS_DESANN:
+	case SS_MEDIUM:
+		if (styleOn)
+		{
+			// far from an enemy: the character's own stance (SP returns these at once)
+			if (enemyFar)
+			{
+				if (flags.isAnakin) return BOTH_STAND_BLOCKING_ON_ANI;
+				if (flags.isBenKenobi) return BOTH_SABERFAST_STANCE_JKA_BEN;
+				if (flags.isYoda) return BOTH_SABERTAVION_STANCE_JKA_YODA;
+				if (flags.isVader) return BOTH_SABERFAST_STANCE_JKA_VADER;
+				if (flags.isPalpatine) return BOTH_SABERFAST_STANCE_JKA_PAL;
+				if (flags.isMaul) return BOTH_SABERFAST_STANCE_JKA_MAUL;
+				if (flags.isLukeSkywalker) return BOTH_SABERFAST_STANCE_JKA_LUKE;
+				if (flags.isMaceWindu) return BOTH_SABERFAST_STANCE_JKA_MACE;
+				if (flags.isObiWan) return BOTH_SABERFAST_STANCE_JKA_OBI;
+				if (flags.isKotor) return BOTH_SABERFAST_STANCE_JKA_KOTOR;
+				if (flags.isDarkForces2) return BOTH_SABERFAST_STANCE_JKA_DF2;
+				if (flags.isObiWanEP3) return BOTH_SABERFAST_STANCE_JKA_OBI3;
+				if (flags.isKyloRen) return BOTH_SABERFAST_STANCE_JKA_REN;
+				if (flags.isGalenMarek) return BOTH_SABERFAST_STANCE_JKA;
+				if (flags.isRey) return BOTH_SABERFAST_STANCE_JKA_REY;
+				if (flags.isJango) return BOTH_SABERFAST_STANCE_JKA;
+				if (flags.isCalKestis) return BOTH_SABERFAST_STANCE_JKA_CAL;
+				if (flags.isGrievous) return BOTH_SABERFAST_STANCE_JKA_GRIEV;
+				if (flags.isCountDooku) return BOTH_SABERFAST_STANCE_JKA_DOOKU;
+			}
+			if (flags.isAnakin) return block ? BOTH_SABERFAST_STANCE_JKA_ANI : BOTH_SABERSINGLECROUCH_ANI;
+			if (flags.isBenKenobi) return block ? BOTH_STAND_BLOCKING_ON_BEN : BOTH_SABERSINGLECROUCH;
+			if (flags.isYoda) return block ? BOTH_STAND_BLOCKING_ON_YODA : BOTH_SABERSINGLECROUCH;
+			if (flags.isVader) return block ? BOTH_STAND_BLOCKING_ON_VADER : BOTH_SABERSINGLECROUCH_VADER;
+			if (flags.isPalpatine || flags.isMaul || flags.isLukeSkywalker || flags.isMaceWindu)
+			{
+				return block ? BOTH_STAND_BLOCKING_ON : BOTH_SABERSINGLECROUCH;
+			}
+			if (flags.isObiWan) return block ? BOTH_STAND_BLOCKING_ON : BOTH_SABERSINGLECROUCH_OBI;
+			if (flags.isKotor) return block ? BOTH_STAND_BLOCKING_ON : BOTH_SABERSINGLECROUCH;
+			if (flags.isDarkForces2) return block ? BOTH_STAND_BLOCKING_ON : BOTH_SABERSINGLECROUCH_DF2;
+			if (flags.isObiWanEP3) return block ? BOTH_STAND_BLOCKING_ON : BOTH_SABERSINGLECROUCH_OBI3;
+			if (flags.isKyloRen) return block ? BOTH_STAND_BLOCKING_ON : BOTH_SABERSINGLECROUCH_REN;
+			if (flags.isGalenMarek) return block ? BOTH_STAND_BLOCKING_ON_GALEN : BOTH_SABERSINGLECROUCH;
+			if (flags.isRey) return block ? BOTH_STAND_BLOCKING_ON_REY : BOTH_SABERSINGLECROUCH_REY;
+			if (flags.isJango) return block ? BOTH_STAND_BLOCKING_ON_JANGO : BOTH_SABERSINGLECROUCH;
+			if (flags.isCalKestis) return block ? BOTH_STAND_BLOCKING_ON_CAL : BOTH_SABERSINGLECROUCH;
+			if (flags.isGrievous) return block ? BOTH_STAND_BLOCKING_ON_GRIEV : BOTH_SABERSINGLECROUCH;
+			if (flags.isCountDooku) return block ? BOTH_STAND_BLOCKING_ON_DOOKU : BOTH_SABERSINGLECROUCH;
+		}
+		return block ? BOTH_STAND_BLOCKING_ON : BOTH_SABERSINGLECROUCH;
+	default:
+		return BOTH_STAND2;
+	}
+}
+
+// SP PM_ReadyPoseForSaberAnimLevelNPC (AMD mode): SP's NPCs, and MP's bots, its AI opponents
+static int PM_SPReadyPoseNPC(void)
+{
+	const animFlags_t flags = PM_Animationstyletable();
+	const qboolean styleOn = PM_ANIMSTYLE_ACTIVE ? qtrue : qfalse;
+	// SP only traces with g_NPCAnimationStyle 1 (its read-only default), and only reads the result with a style on
+	const qboolean enemyFar = styleOn ? PM_SPNPCEnemyFar() : qtrue;
+
+	if (pm->ps->pm_flags & PMF_DUCKED)
+	{
+		return PM_SPReadyPoseDucked();
+	}
+	if (pm->ps->fd.saberAnimLevel == SS_BLASTER) // SS_BLASTER: NPCs use the BOTH_STAND2 stance (as SJE)
+	{
+		return BOTH_STAND2;
+	}
+	if (PM_RealisticBlocking())
+	{
+		return PM_SPReadyPoseNPCRealistic(flags, styleOn, enemyFar);
+	}
+	return PM_SPReadyPoseNPCStance(flags, styleOn && enemyFar ? qtrue : qfalse);
+}
+
+// SP PM_ReadyPoseForSaberAnimLevel, AMD mode, for a player: g_RealisticBlockingMode 1 stands in BOTH_STAND1 (Sith lords
+// BOTH_STAND9, Galen's class BOTH_STAND2IDLE2, battle droids with the style on BOTH_STAND1_BDROID); 0 takes the style's
+// stance (SP PM_ReadyPoseForSaberAnimLevelAMD)
+static int PM_SPReadyPosePlayer(void)
+{
+	if (pm->ps->pm_flags & PMF_DUCKED)
+	{
+		return PM_SPReadyPoseDucked();
+	}
+	if (PM_RealisticBlocking())
+	{
+		if (PM_MoveClass(CLASS_SITHLORD, BCLASS_SITHLORD))
+		{
+			return BOTH_STAND9;
+		}
+		if (PM_MoveClass(CLASS_GALEN, -1))
+		{
+			return BOTH_STAND2IDLE2;
+		}
+		if (PM_ANIMSTYLE_ACTIVE && PM_Animationstyletable().isBattleDroid)
+		{
+			return BOTH_STAND1_BDROID;
+		}
+		return BOTH_STAND1;
+	}
+	switch (pm->ps->fd.saberAnimLevel)
+	{
+	case SS_DUAL: return BOTH_SABERDUAL_STANCE;
+	case SS_STAFF: return BOTH_SABERSTAFF_STANCE;
+	case SS_TAVION: return BOTH_SABERTAVION_STANCE;
+	case SS_FAST: return BOTH_SABERFAST_STANCE;
+	case SS_STRONG: return BOTH_SABERSLOW_STANCE;
+	case SS_DESANN: return BOTH_SABERDESANN_STANCE;
+	default: return BOTH_STAND2; // SS_MEDIUM, SS_BLASTER, SS_NONE
+	}
 }
 
 // ======================================================================
@@ -4479,15 +4147,9 @@ int PM_BlockingPoseForsaber_anim_levelSingle(void)
 	}
 	else
 	{
-#ifdef _GAME
-		if (g_entities[pm->ps->clientNum].r.svFlags & SVF_BOT || pm_entSelf->s.eType == ET_NPC)
 		{
-			anim = PM_ReadyPoseForsaber_anim_levelBOT();
-		}
-		else if (pm->cmd.upmove <= 0)
-#endif
-		{
-			// SP AMD mode (MD MP always plays as g_SerenityJediEngineMode 2)
+			// SP AMD mode (MD MP always plays as g_SerenityJediEngineMode 2), for NPCs and bots too as in SP (SP's pose keeps
+			// the ready pose while jumping)
 			anim = PM_KeepStyleAnim(PM_SPBlockingPoseSingleAMD());
 		}
 	}
@@ -4514,21 +4176,15 @@ int PM_BlockingPoseForsaber_anim_levelDual(void)
 	{
 		//
 	}
-	else if (!pm->ps->fd.saberAnimLevel == SS_DUAL)
+	else if (pm->ps->fd.saberAnimLevel != SS_DUAL)
 	{
 		anim = PM_BlockingPoseForsaber_anim_levelSingle();
 	}
 	else
 	{
-#ifdef _GAME
-		if (g_entities[pm->ps->clientNum].r.svFlags & SVF_BOT || pm_entSelf->s.eType == ET_NPC)
 		{
-			anim = PM_ReadyPoseForsaber_anim_levelBOT();
-		}
-		else if (pm->cmd.upmove <= 0)
-#endif
-		{
-			// SP AMD mode (MD MP always plays as g_SerenityJediEngineMode 2)
+			// SP AMD mode (MD MP always plays as g_SerenityJediEngineMode 2), for NPCs and bots too as in SP (SP's pose keeps
+			// the ready pose while jumping)
 			anim = PM_KeepStyleAnim(PM_SPBlockingPoseDualAMD());
 		}
 	}
@@ -4555,21 +4211,15 @@ int PM_BlockingPoseForsaber_anim_levelStaff(void)
 	{
 		//
 	}
-	else if (!pm->ps->fd.saberAnimLevel == SS_STAFF)
+	else if (pm->ps->fd.saberAnimLevel != SS_STAFF)
 	{
 		anim = PM_BlockingPoseForsaber_anim_levelSingle();
 	}
 	else
 	{
-#ifdef _GAME
-		if (g_entities[pm->ps->clientNum].r.svFlags & SVF_BOT || pm_entSelf->s.eType == ET_NPC)
 		{
-			anim = PM_ReadyPoseForsaber_anim_levelBOT();
-		}
-		else if (pm->cmd.upmove <= 0)
-#endif
-		{
-			// SP AMD mode (MD MP always plays as g_SerenityJediEngineMode 2)
+			// SP AMD mode (MD MP always plays as g_SerenityJediEngineMode 2), for NPCs and bots too as in SP (SP's pose keeps
+			// the ready pose while jumping)
 			anim = PM_KeepStyleAnim(PM_SPBlockingPoseStaffAMD());
 		}
 	}
@@ -23408,6 +23058,8 @@ static void WP_SaberBlasterThink(void)
 	// else: SBE_FIRE at the anim's SABERBLASTER_FIRE_FRAME (top of this function, a later pmove)
 }
 
+extern int pm_irandCount; // bg_saber.c PM_irand_timesync
+
 static void PmoveSingle(pmove_t* pmove)
 {
 	qboolean stiffenedUp = qfalse;
@@ -23416,6 +23068,7 @@ static void PmoveSingle(pmove_t* pmove)
 	qboolean slowMoFallGravity = qfalse; // SP PMF_SLOW_MO_FALL (force long leap): half gravity this pmove
 
 	pm = pmove;
+	pm_irandCount = 0; // PM_irand_timesync: the client's prediction and the server draw the same numbers
 
 	BG_KeepStyleAnim(-1); // no SP style pick kept from the previous pmove (another client)
 

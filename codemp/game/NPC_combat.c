@@ -59,7 +59,7 @@ void G_ClearEnemy(gentity_t* self)
 	{
 		//don't lose locked enemies
 		// (self may be a player or a ship, no NPC: a player shot by an AI ship of the space maps, ai_fighter.c)
-		if (self->NPC && G_ValidEnemy(self, self->enemy) && self->NPC->aiFlags & NPCAI_LOCKEDENEMY)
+		if (self->NPC && G_ValidEnemy(self, self->enemy) && self->NPC->aiFlags2 & NPCAI2_LOCKEDENEMY)
 		{
 			return;
 		}
@@ -404,6 +404,35 @@ static void G_AttackDelay(const gentity_t* self, const gentity_t* enemy)
 			return;
 		case WP_EMPLACED_GUN:
 			return;
+		// (DH 2026-11-03: SP NPC_combat.cpp G_AttackDelay for the weapons MP had no case for)
+		case WP_NOGHRI_STICK:
+			attDelay += Q_irand(0, 500);
+			break;
+		case WP_Z6_ROTARY_CANNON:
+		case WP_BATTLEDROID:
+		case WP_THEFIRSTORDER:
+		case WP_CLONECARBINE:
+		case WP_REBELBLASTER:
+		case WP_CLONERIFLE:
+		case WP_CLONECOMMANDO:
+		case WP_REBELRIFLE:
+		case WP_BOBA:
+		case WP_JANGO:
+			if (self->NPC->scriptFlags & SCF_ALT_FIRE)
+			{
+				//rapid-fire blasters
+				attDelay += Q_irand(0, 500);
+			}
+			else
+			{
+				//regular blaster
+				attDelay -= Q_irand(0, 500);
+			}
+			break;
+		case WP_CLONEPISTOL:
+		case WP_REY:
+			attDelay -= Q_irand(500, 1500);
+			break;
 		case WP_TURRET: // turret guns
 			return;
 		default:;
@@ -1056,6 +1085,153 @@ void ChangeWeapon(const gentity_t* ent, int new_weapon)
 		}
 		break;
 
+	// (DH 2026-11-03: SP NPC_combat.cpp ChangeWeapon for the weapons MP had no case for: their fire rate / bursts)
+	case WP_TUSKEN_RIFLE:
+		ent->NPC->aiFlags &= ~NPCAI_BURST_WEAPON;
+		if (ent->NPC->scriptFlags & SCF_ALT_FIRE)
+		{
+			switch (g_npcspskill.integer)
+			{
+			case 0:
+				ent->NPC->burstSpacing = 2500; //attackdebounce
+				break;
+			case 1:
+				ent->NPC->burstSpacing = 2000; //attackdebounce
+				break;
+			default:
+				ent->NPC->burstSpacing = 1750; //attackdebounce
+				break;
+			}
+		}
+		else
+		{
+			ent->NPC->burstSpacing = 2000; //attackdebounce
+		}
+		break;
+
+	case WP_TUSKEN_STAFF:
+		ent->NPC->aiFlags &= ~NPCAI_BURST_WEAPON;
+		ent->NPC->burstSpacing = 2500; //attackdebounce
+		break;
+
+	case WP_NOGHRI_STICK:
+		ent->NPC->aiFlags &= ~NPCAI_BURST_WEAPON;
+		if (g_npcspskill.integer == 0)
+			ent->NPC->burstSpacing = 2250; //attack debounce
+		else if (g_npcspskill.integer == 1)
+			ent->NPC->burstSpacing = 1500; //attack debounce
+		else
+			ent->NPC->burstSpacing = 1000; //attack debounce
+		break;
+
+	case WP_Z6_ROTARY_CANNON:
+		ent->NPC->aiFlags |= NPCAI_BURST_WEAPON;
+		ent->NPC->burstMin = 6;
+		ent->NPC->burstMean = 12;
+		ent->NPC->burstMax = 18;
+		if (g_npcspskill.integer == 0)
+			ent->NPC->burstSpacing = 3000; //attack debounce
+		else if (g_npcspskill.integer == 1)
+			ent->NPC->burstSpacing = 2750; //attack debounce
+		else
+			ent->NPC->burstSpacing = 2500; //attack debounce
+		break;
+
+	case WP_BATTLEDROID:
+ 		if (ent->NPC->scriptFlags & SCF_ALT_FIRE)
+		{
+			ent->NPC->aiFlags |= NPCAI_BURST_WEAPON;
+			ent->NPC->burstMin = 3;
+			ent->NPC->burstMean = 3;
+			ent->NPC->burstMax = 3;
+			if (g_npcspskill.integer == 0)
+				ent->NPC->burstSpacing = 1500; //attack debounce
+			else if (g_npcspskill.integer == 1)
+				ent->NPC->burstSpacing = 1250; //attack debounce
+			else
+				ent->NPC->burstSpacing = 1000; //attack debounce
+		}
+		else
+		{
+			ent->NPC->aiFlags &= ~NPCAI_BURST_WEAPON;
+			if (g_npcspskill.integer == 0)
+				ent->NPC->burstSpacing = 1500; //attack debounce
+			else if (g_npcspskill.integer == 1)
+				ent->NPC->burstSpacing = 1250; //attack debounce
+			else
+				ent->NPC->burstSpacing = 1000; //attack debounce
+		}
+		break;
+
+	case WP_THEFIRSTORDER:
+	case WP_CLONECARBINE:
+	case WP_REBELBLASTER:
+	case WP_CLONERIFLE:
+	case WP_CLONECOMMANDO:
+	case WP_REBELRIFLE:
+	case WP_BOBA:
+ 		if (ent->NPC->scriptFlags & SCF_ALT_FIRE)
+		{
+			ent->NPC->aiFlags |= NPCAI_BURST_WEAPON;
+			ent->NPC->burstMin = 3;
+			ent->NPC->burstMean = 3;
+			ent->NPC->burstMax = 3;
+			if (g_npcspskill.integer == 0)
+				ent->NPC->burstSpacing = 1500; //attack debounce
+			else if (g_npcspskill.integer == 1)
+				ent->NPC->burstSpacing = 1250; //attack debounce
+			else
+				ent->NPC->burstSpacing = 1000; //attack debounce
+		}
+		else
+		{
+			ent->NPC->aiFlags &= ~NPCAI_BURST_WEAPON;
+			if (g_npcspskill.integer == 0)
+				ent->NPC->burstSpacing = 1200; //attack debounce
+			else if (g_npcspskill.integer == 1)
+				ent->NPC->burstSpacing = 1000; //attack debounce
+			else
+				ent->NPC->burstSpacing = 800; //attack debounce
+		}
+		break;
+
+	case WP_REY:
+	case WP_CLONEPISTOL:
+		ent->NPC->aiFlags &= ~NPCAI_BURST_WEAPON;
+		if (g_npcspskill.integer == 0)
+			ent->NPC->burstSpacing = 1000; //attack debounce
+		else if (g_npcspskill.integer == 1)
+			ent->NPC->burstSpacing = 800; //attack debounce
+		else
+			ent->NPC->burstSpacing = 600; //attack debounce
+		break;
+
+	case WP_JANGO:
+ 		if (ent->NPC->scriptFlags & SCF_ALT_FIRE)
+		{
+			ent->NPC->aiFlags |= NPCAI_BURST_WEAPON;
+			ent->NPC->burstMin = 2;
+			ent->NPC->burstMean = 2;
+			ent->NPC->burstMax = 2;
+			if (g_npcspskill.integer == 0)
+				ent->NPC->burstSpacing = 1900; //attack debounce
+			else if (g_npcspskill.integer == 1)
+				ent->NPC->burstSpacing = 1200; //attack debounce
+			else
+				ent->NPC->burstSpacing = 900; //attack debounce
+		}
+		else
+		{
+			ent->NPC->aiFlags &= ~NPCAI_BURST_WEAPON;
+			if (g_npcspskill.integer == 0)
+				ent->NPC->burstSpacing = 1500; //attack debounce
+			else if (g_npcspskill.integer == 1)
+				ent->NPC->burstSpacing = 1150; //attack debounce
+			else
+				ent->NPC->burstSpacing = 800; //attack debounce
+		}
+		break;
+
 	default:
 		ent->NPC->aiFlags &= ~NPCAI_BURST_WEAPON;
 		break;
@@ -1201,12 +1377,16 @@ void WeaponThink(void)
 		return;
 	}
 
-	// Clear attack button
-	NPCS.ucmd.buttons &= ~BUTTON_ATTACK;
+	// Clear attack button (SP: not for a saber NPC, the saber AI keeps it pressed)
+	if (NPCS.client->ps.weapon != WP_SABER)
+	{
+		NPCS.ucmd.buttons &= ~BUTTON_ATTACK;
+	}
 
-	// Cannot fire while raising or dropping weapon
+	// Cannot fire while raising, dropping or reloading the weapon (SP: WEAPON_RELOADING; MP's reload is an anim)
 	if (NPCS.client->ps.weaponstate == WEAPON_RAISING ||
-		NPCS.client->ps.weaponstate == WEAPON_DROPPING)
+		NPCS.client->ps.weaponstate == WEAPON_DROPPING ||
+		PM_ReloadAnim(NPCS.client->ps.torsoAnim))
 	{
 		NPCS.ucmd.weapon = NPCS.client->ps.weapon;
 		return;
@@ -1214,6 +1394,12 @@ void WeaponThink(void)
 
 	// Cannot fire while cloaked
 	if (NPCS.NPC->client->ps.powerups[PW_CLOAKED] != 0)
+	{
+		return;
+	}
+
+	// Assassin droid shield prevents firing (SP)
+	if (NPCS.NPC->flags & FL_SHIELDED && NPCS.NPC->client->NPC_class == CLASS_ASSASSIN_DROID)
 	{
 		return;
 	}
@@ -2171,7 +2357,7 @@ gentity_t* NPC_CheckEnemy(const qboolean find_new, const qboolean too_far_ok, co
 		return NULL;
 	}
 
-	if (NPCS.NPC->NPC->aiFlags & NPCAI_LOCKEDENEMY)
+	if (NPCS.NPC->NPC->aiFlags2 & NPCAI2_LOCKEDENEMY)
 	{
 		//keep this enemy until dead
 		if (NPCS.NPC->enemy)
@@ -2184,7 +2370,7 @@ gentity_t* NPC_CheckEnemy(const qboolean find_new, const qboolean too_far_ok, co
 				return NULL;
 			}
 		}
-		NPCS.NPC->NPC->aiFlags &= ~NPCAI_LOCKEDENEMY;
+		NPCS.NPC->NPC->aiFlags2 &= ~NPCAI2_LOCKEDENEMY;
 	}
 
 	if (NPCS.NPC->enemy)

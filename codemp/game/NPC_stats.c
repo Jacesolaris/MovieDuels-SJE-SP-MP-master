@@ -834,6 +834,7 @@ qboolean NPC_ParseParms(const char* npc_name, gentity_t* npc)
 	float f = 0.0f;
 	char playerModel[MAX_QPATH];
 	char customSkin[MAX_QPATH];
+	int npcAnimStyle = -1; // the NPC file's animationstyle line (ANIMSTYLE_*), -1 = none
 	renderInfo_t* ri = &npc->client->renderInfo;
 	gNPCstats_t* stats = NULL;
 	qboolean md3Model = qtrue;
@@ -1385,6 +1386,17 @@ qboolean NPC_ParseParms(const char* npc_name, gentity_t* npc)
 				}
 				//md3 models use their legsmodel as their player model
 				Q_strncpyz(playerModel, value, sizeof playerModel);
+				continue;
+			}
+
+			// animationstyle (SP's "animationstyle CS_...", DH 2026-11-02): the NPC's style with the Master animation style
+			if (!Q_stricmp(token, "animationstyle"))
+			{
+				if (COM_ParseString(&p, &value))
+				{
+					continue;
+				}
+				npcAnimStyle = G_AnimStyleFromCSName(value);
 				continue;
 			}
 
@@ -3496,6 +3508,9 @@ qboolean NPC_ParseParms(const char* npc_name, gentity_t* npc)
 
 		npc->s.npcSaber1 = npcSaber1;
 		npc->s.npcSaber2 = npcSaber2;
+
+		// the NPC's animation style (its animationstyle line, else its model's; DEFAULT with Classic)
+		npc->client->pers.animStyle = npc->client->ps.animStyle = G_NPCAnimStyle(playerModel, npcAnimStyle);
 
 		if (!customSkin[0])
 		{

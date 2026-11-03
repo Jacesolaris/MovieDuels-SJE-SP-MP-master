@@ -435,6 +435,9 @@ vmCvar_t cg_ignitionSpeedstaff;
 vmCvar_t cg_smoothCamera;
 vmCvar_t cg_speedTrail;
 vmCvar_t cg_saberLightRadius; // saber-only light (DH 2026-10-27): cg_saberLightRadius / cg_saberLightIntensity scale only lightsaber light, on top of r_dlightRadius / r_dlightIntensity
+vmCvar_t cg_lightningFxInterval; // force lightning bolt copies (DH 2026-11-02)
+vmCvar_t cg_lightningMarks; // force lightning scorch marks (DH 2026-11-02)
+vmCvar_t cg_lightningMarkInterval;
 vmCvar_t cg_saberLightIntensity;
 vmCvar_t cg_fovViewmodel;
 vmCvar_t cg_fovViewmodelAdjust;
@@ -692,6 +695,9 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_smoothCamera, "cg_smoothCamera", "1", CVAR_ARCHIVE },
 	{ &cg_speedTrail, "cg_speedTrail", "0", CVAR_ARCHIVE }, // force speed after-image trail, off by default (DH)
 	{ &cg_saberLightRadius, "cg_saberLightRadius", "0.703125", CVAR_ARCHIVE }, // saber light reach (1 = as before)
+	{ &cg_lightningFxInterval, "cg_lightningFxInterval", "50", CVAR_ARCHIVE }, // ms between new copies of the force lightning bolt effect (16 = as before)
+	{ &cg_lightningMarks, "cg_lightningMarks", "1", CVAR_ARCHIVE }, // force lightning scorch / burn marks that fade (0 = off)
+	{ &cg_lightningMarkInterval, "cg_lightningMarkInterval", "150", CVAR_ARCHIVE }, // ms between lightning marks per caster
 	{ &cg_saberLightIntensity, "cg_saberLightIntensity", "1.070312", CVAR_ARCHIVE }, // saber light strength (1 = as before)
 	{ &cg_fovViewmodel, "cg_fovViewmodel", "0", CVAR_ARCHIVE },
 	{ &cg_fovViewmodelAdjust, "cg_fovViewmodelAdjust", "1", CVAR_ARCHIVE },
@@ -3389,15 +3395,15 @@ void CG_Init(const int serverCommandSequence)
 		"gfx/mp/f_icon_dk_drain", //FP_DRAIN,
 		"gfx/mp/f_icon_sight", //FP_SEE,
 		"gfx/mp/f_icon_dk_destruction", //FP_DESTRUCTION,
-		"gfx/mp/f_icon_lt_stasis", //FP_STASIS,
+		"gfx/mp/f_icon_dk_stasis", //FP_STASIS,
 		"gfx/mp/f_icon_lt_grasp", //FP_GRASP
-		"gfx/mp/f_icon_repulse", //FP_REPULSE
+		"gfx/mp/f_icon_lt_repulse", //FP_REPULSE
 		"gfx/mp/f_icon_dk_lightning_strike", //FP_LIGHTNING_STRIKE
 		"gfx/mp/f_icon_dk_fear", //FP_FEAR
 		"gfx/mp/f_icon_dk_deadlysight", //FP_DEADLYSIGHT
 		"gfx/mp/f_icon_lt_projection", //FP_PROJECTION
 		"gfx/mp/f_icon_lt_blast", //FP_BLAST
-		"gfx/mp/f_icon_dk_stasis", //FP_DARK_STASIS
+		"gfx/mp/new_f_icon_dk_stasis", //FP_DARK_STASIS (own icon now that Stasis uses f_icon_dk_stasis)
 	};
 
 	// Precache inventory icons
@@ -5113,24 +5119,24 @@ int showPowers[MAX_SHOWPOWERS] =
 	FP_TELEPATHY,
 	FP_LIGHTNING_STRIKE,
 	FP_BLAST,
+	FP_PROJECTION,
+	FP_REPULSE,
 
-	FP_STASIS,
 	FP_SPEED,
 	FP_PUSH,
 	FP_PULL,
 	FP_SEE,
 	FP_GRASP,
-	FP_REPULSE,
 
 	FP_DRAIN,
 	FP_LIGHTNING,
 	FP_RAGE,
 	FP_GRIP,
 	FP_DESTRUCTION,
+	FP_STASIS,
 	FP_FEAR,
 	FP_DEADLYSIGHT,
 	FP_DARK_STASIS,
-	FP_PROJECTION,
 };
 
 const char* showPowersName[MAX_SHOWPOWERS] =
@@ -5141,24 +5147,24 @@ const char* showPowersName[MAX_SHOWPOWERS] =
 	"SP_INGAME_MINDTRICK2",
 	"SP_INGAME_LIGHTNING_STRIKE2",
 	"SP_INGAME_BLAST2",
+	"SP_INGAME_PROJECTION2",
+	"SP_INGAME_REPULSE2",
 
-	"SP_INGAME_STASIS2",
 	"SP_INGAME_SPEED2",
 	"SP_INGAME_PUSH2",
 	"SP_INGAME_PULL2",
 	"SP_INGAME_SEEING2",
 	"SP_INGAME_GRASP2",
-	"SP_INGAME_REPULSE2",
 
 	"SP_INGAME_DRAIN2",
 	"SP_INGAME_LIGHTNING2",
 	"SP_INGAME_DARK_RAGE2",
 	"SP_INGAME_GRIP2",
 	"SP_INGAME_DESTRUCTION2",
+	"SP_INGAME_STASIS2",
 	"SP_INGAME_FEAR2",
 	"SP_INGAME_DEADLYSIGHT2",
 	"DARKSTASIS_NAME",
-	"SP_INGAME_PROJECTION2",
 };
 
 // Keep these with groups light side, core, and dark side
@@ -5171,7 +5177,8 @@ int showDataPadPowers[MAX_DPSHOWPOWERS] =
 	FP_TELEPATHY,
 	FP_LIGHTNING_STRIKE,
 	FP_BLAST,
-	FP_STASIS,
+	FP_PROJECTION,
+	FP_REPULSE,
 
 	// Core Powers
 	FP_LEVITATION,
@@ -5183,7 +5190,6 @@ int showDataPadPowers[MAX_DPSHOWPOWERS] =
 	FP_SABER_OFFENSE,
 	FP_SEE,
 	FP_GRASP,
-	FP_REPULSE,
 
 	//Dark Side
 	FP_DRAIN,
@@ -5191,10 +5197,10 @@ int showDataPadPowers[MAX_DPSHOWPOWERS] =
 	FP_RAGE,
 	FP_GRIP,
 	FP_DESTRUCTION,
+	FP_STASIS,
 	FP_FEAR,
 	FP_DEADLYSIGHT,
 	FP_DARK_STASIS,
-	FP_PROJECTION,
 };
 
 /*
@@ -5805,7 +5811,8 @@ const char* forcepowerDesc[NUM_FORCE_POWERS] =
 	"FORCE_MIND_TRICK_DESC",
 	"FORCE_LIGHTNINGSTRIKE_DESC",
 	"FORCE_BLAST_DESC",
-	"FORCE_STASIS_DESC",
+	"FORCE_PROJECTION_DESC",
+	"FORCE_REPULSE_DESC",
 
 	"FORCE_JUMP_DESC",
 	"FORCE_SPEED_DESC",
@@ -5816,16 +5823,15 @@ const char* forcepowerDesc[NUM_FORCE_POWERS] =
 	"FORCE_SABER_OFFENSE_DESC",
 	"FORCE_SENSE_DESC",
 	"FORCE_GRASP_DESC",
-	"FORCE_REPULSE_DESC",
 
 	"FORCE_DRAIN_DESC",
 	"FORCE_LIGHTNING_DESC",
 	"FORCE_RAGE_DESC",
 	"FORCE_GRIP_DESC",
 	"FORCE_DESTRUCTION_DESC",
+	"FORCE_STASIS_DESC",
 	"FORCE_FEAR_DESC",
 	"FORCE_DEADLYSIGHT_DESC",
-	"FORCE_PROJECTION_DESC",
 	"DARKSTASIS_DESC",
 };
 
@@ -5837,7 +5843,8 @@ const char* forcepowerLvl1Desc[NUM_FORCE_POWERS] =
 	"FORCE_MIND_TRICK_LVL1_DESC",
 	"FORCE_LIGHTNING_STRIKE_LVL1_DESC",
 	"FORCE_BLAST_LVL1_DESC",
-	"FORCE_STASIS_LVL1_DESC",
+	"FORCE_PROJECTION_LVL1_DESC",
+	"FORCE_REPULSE_LVL1_DESC",
 
 	"FORCE_JUMP_LVL1_DESC",
 	"FORCE_SPEED_LVL1_DESC",
@@ -5848,16 +5855,15 @@ const char* forcepowerLvl1Desc[NUM_FORCE_POWERS] =
 	"FORCE_SABER_OFFENSE_LVL1_DESC",
 	"FORCE_SENSE_LVL1_DESC",
 	"FORCE_GRASP_LVL1_DESC",
-	"FORCE_REPULSE_LVL1_DESC",
 
 	"FORCE_DRAIN_LVL1_DESC",
 	"FORCE_LIGHTNING_LVL1_DESC",
 	"FORCE_RAGE_LVL1_DESC",
 	"FORCE_GRIP_LVL1_DESC",
 	"FORCE_DESTRUCTION_LVL1_DESC",
+	"FORCE_STASIS_LVL1_DESC",
 	"FORCE_FEAR_LVL1_DESC",
 	"FORCE_DEADLYSIGHT_LVL1_DESC",
-	"FORCE_PROJECTION_LVL1_DESC",
 	"DARKSTASIS_LVL1_DESC",
 };
 
@@ -5869,7 +5875,8 @@ const char* forcepowerLvl2Desc[NUM_FORCE_POWERS] =
 	"FORCE_MIND_TRICK_LVL2_DESC",
 	"FORCE_LIGHTNING_STRIKE_LVL2_DESC",
 	"FORCE_BLAST_LVL2_DESC",
-	"FORCE_STASIS_LVL2_DESC",
+	"FORCE_PROJECTION_LVL2_DESC",
+	"FORCE_REPULSE_LVL2_DESC",
 
 	"FORCE_JUMP_LVL2_DESC",
 	"FORCE_SPEED_LVL2_DESC",
@@ -5880,16 +5887,15 @@ const char* forcepowerLvl2Desc[NUM_FORCE_POWERS] =
 	"FORCE_SABER_OFFENSE_LVL2_DESC",
 	"FORCE_SENSE_LVL2_DESC",
 	"FORCE_GRASP_LVL2_DESC",
-	"FORCE_REPULSE_LVL2_DESC",
 
 	"FORCE_DRAIN_LVL2_DESC",
 	"FORCE_LIGHTNING_LVL2_DESC",
 	"FORCE_RAGE_LVL2_DESC",
 	"FORCE_GRIP_LVL2_DESC",
 	"FORCE_DESTRUCTION_LVL2_DESC",
+	"FORCE_STASIS_LVL2_DESC",
 	"FORCE_FEAR_LVL2_DESC",
 	"FORCE_DEADLYSIGHT_LVL2_DESC",
-	"FORCE_PROJECTION_LVL2_DESC",
 	"DARKSTASIS_LVL2_DESC",
 };
 
@@ -5901,7 +5907,8 @@ const char* forcepowerLvl3Desc[NUM_FORCE_POWERS] =
 	"FORCE_MIND_TRICK_LVL3_DESC",
 	"FORCE_LIGHTNING_STRIKE_LVL3_DESC",
 	"FORCE_BLAST_LVL3_DESC",
-	"FORCE_STASIS_LVL3_DESC",
+	"FORCE_PROJECTION_LVL3_DESC",
+	"FORCE_REPULSE_LVL3_DESC",
 
 	"FORCE_JUMP_LVL3_DESC",
 	"FORCE_SPEED_LVL3_DESC",
@@ -5912,16 +5919,15 @@ const char* forcepowerLvl3Desc[NUM_FORCE_POWERS] =
 	"FORCE_SABER_OFFENSE_LVL3_DESC",
 	"FORCE_SENSE_LVL3_DESC",
 	"FORCE_GRASP_LVL3_DESC",
-	"FORCE_REPULSE_LVL3_DESC",
 
 	"FORCE_DRAIN_LVL3_DESC",
 	"FORCE_LIGHTNING_LVL3_DESC",
 	"FORCE_RAGE_LVL3_DESC",
 	"FORCE_GRIP_LVL3_DESC",
 	"FORCE_DESTRUCTION_LVL3_DESC",
+	"FORCE_STASIS_LVL3_DESC",
 	"FORCE_FEAR_LVL3_DESC",
 	"FORCE_DEADLYSIGHT_LVL3_DESC",
-	"FORCE_PROJECTION_LVL3_DESC",
 	"DARKSTASIS_LVL3_DESC",
 };
 
@@ -6258,12 +6264,14 @@ static int CG_MDWheel_ForceSide(const int power)
 	case FP_LIGHTNING_STRIKE:
 	case FP_BLAST:
 	case FP_PROJECTION:
+	case FP_REPULSE:
 		return 1;
 	case FP_DRAIN:
 	case FP_LIGHTNING:
 	case FP_RAGE:
 	case FP_GRIP:
 	case FP_DESTRUCTION:
+	case FP_STASIS:
 	case FP_FEAR:
 	case FP_DEADLYSIGHT:
 	case FP_DARK_STASIS:

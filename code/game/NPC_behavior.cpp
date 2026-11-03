@@ -79,10 +79,9 @@ static animFlags_t NPCBehaviour_Animationstyletable(const gentity_t* NPC)
 	}
 
 	const int style = NPC->client->animationstyle;
-	const int cvarStyle = (g_AnimationStyle ? g_AnimationStyle->integer : -1);
 
 	// Helper macro: match either NPC style or cvar override
-#define MATCH(s) ((style == (s)) || (cvarStyle == (s)))
+#define MATCH(s) (style == (s)) // the character's own style only: g_animationstyle no longer overrides it (DH 2026-11-02)
 
 	if (MATCH(CS_DEFAULT))        flags.isDefault = qtrue;
 	if (MATCH(CS_ANAKIN))         flags.isAnakin = qtrue;

@@ -1595,6 +1595,8 @@ struct gentity_s
 
 	int reloadTime; //Every 0.2 seconds reload a bullet
 	int reloadCooldown;
+	int aiClipShots; // AI clips and reloads (2026-11-02, from SJE): shots fired from the current clip (not saved: a fresh clip after a load)
+	int aiClipWeapon; // the weapon those shots were fired with
 	int weaponfiredelaytime;
 	int TimeOfWeaponDrop;
 	faction_t friendlyfaction;

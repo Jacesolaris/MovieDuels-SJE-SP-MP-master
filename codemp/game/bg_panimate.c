@@ -7673,6 +7673,13 @@ static const char* const bgAnimStyleExact[] =
 	"BOTH_S1_S7", "BOTH_DUAL_PUSH", "BOTH_READY_DUAL"
 };
 
+// Style anims SP's code never plays (2026-11-02, checked against every anim name in SP's game + cgame code): the base
+// anim stays for these
+static const char* const bgAnimStyleNever[] =
+{
+	"BOTH_FORCEGRIP3THROW_VADER", "BOTH_STAND1_TALK3_GRIEV", "BOTH_LEDGE_BIG_GRAB_GALEN"
+};
+
 static short bgStyleAnim[ANIMSTYLE_COUNT][MAX_ANIMATIONS];
 static short bgStyleBase[MAX_ANIMATIONS]; // a style's own anim -> the base anim it stands for (-1: not a style anim)
 static qboolean bgStyleAnimsBuilt = qfalse;
@@ -7750,6 +7757,13 @@ static void BG_BuildStyleAnims(void)
 			key.name = name;
 			key.id = -1;
 			const stringID_table_t* const* found = bsearch(&keyPtr, sorted, numAnims, sizeof sorted[0], BG_AnimNameCompare);
+			for (int n = 0; found && n < (int)ARRAY_LEN(bgAnimStyleNever); n++)
+			{
+				if (!Q_stricmp(name, bgAnimStyleNever[n]))
+				{
+					found = NULL;
+				}
+			}
 			if (found)
 			{
 				bgStyleAnim[s][baseId] = (short)(*found)->id;

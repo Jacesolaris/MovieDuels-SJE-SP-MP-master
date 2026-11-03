@@ -82,6 +82,7 @@ extern cvar_t* g_saber2_color;
 extern cvar_t* g_saberDarkSideSaberColor;
 extern cvar_t* g_SerenityJediEngineMode;
 void G_ChangePlayerModel(gentity_t* ent, const char* new_model);
+extern Animationstyles_t G_PlayerAnimationStyleFor(const gentity_t* ent);
 extern cvar_t* com_outcast;
 extern cvar_t* com_freeMelee;
 
@@ -2722,7 +2723,9 @@ qboolean G_InitPlayerLookFromPlayer(gentity_t* ent)
 	{
 		ent->client->renderInfo.customRGBA[i] = pl->client->renderInfo.customRGBA[i];
 	}
-	ent->client->animationstyle = pl->client->animationstyle;
+	// the new model's own style (its NPC file); the player's menu choice still wins (G_PlayerAnimationStyleFor, DH 2026-11-02)
+	ent->client->parsedAnimationStyle = pl->client->animationstyle;
+	ent->client->animationstyle = ent->s.number == 0 ? G_PlayerAnimationStyleFor(ent) : pl->client->animationstyle;
 
 	if (ent->client->clientInfo.customBasicSoundDir && gi.bIsFromZone(ent->client->clientInfo.customBasicSoundDir, TAG_G_ALLOC))
 	{
@@ -2998,11 +3001,6 @@ void G_ChangePlayerModel(gentity_t* ent, const char* new_model)
 					{
 						// Keep it
 					}
-					// 2. Global override
-					else if (g_AnimationStyle && g_AnimationStyle->integer >= 0)
-					{
-						ent->client->animationstyle = (Animationstyles_t)g_AnimationStyle->integer;
-					}
 					// 3. NPC file animationstyle — ONLY for NPCs, NOT the player
 					else if (ent->s.number != 0 && ent->client->parsedAnimationStyle >= 0)
 					{
@@ -3220,11 +3218,6 @@ void G_ChangePlayerModel(gentity_t* ent, const char* new_model)
 					if (ent->client->animationstyle >= 0)
 					{
 						// Keep it
-					}
-					// 2. Global override
-					else if (g_AnimationStyle && g_AnimationStyle->integer >= 0)
-					{
-						ent->client->animationstyle = (Animationstyles_t)g_AnimationStyle->integer;
 					}
 					// 3. NPC file animationstyle — ONLY for NPCs, NOT the player
 					else if (ent->s.number != 0 && ent->client->parsedAnimationStyle >= 0)
@@ -3554,11 +3547,6 @@ qboolean ClientSpawn(gentity_t* ent, SavedGameJustLoaded_e e_saved_game_just_loa
 				{
 					// Keep it
 				}
-				// 2. Global override
-				else if (g_AnimationStyle && g_AnimationStyle->integer >= 0)
-				{
-					ent->client->animationstyle = (Animationstyles_t)g_AnimationStyle->integer;
-				}
 				// 3. NPC file animationstyle — ONLY for NPCs, NOT the player
 				else if (ent->s.number != 0 && ent->client->parsedAnimationStyle >= 0)
 				{
@@ -3593,11 +3581,6 @@ qboolean ClientSpawn(gentity_t* ent, SavedGameJustLoaded_e e_saved_game_just_loa
 				if (ent->client->animationstyle >= 0)
 				{
 					// Keep it
-				}
-				// 2. Global override
-				else if (g_AnimationStyle && g_AnimationStyle->integer >= 0)
-				{
-					ent->client->animationstyle = (Animationstyles_t)g_AnimationStyle->integer;
 				}
 				// 3. NPC file animationstyle — ONLY for NPCs, NOT the player
 				else if (ent->s.number != 0 && ent->client->parsedAnimationStyle >= 0)
@@ -3888,11 +3871,6 @@ qboolean ClientSpawn(gentity_t* ent, SavedGameJustLoaded_e e_saved_game_just_loa
 				{
 					// Keep it
 				}
-				// 2. Global override
-				else if (g_AnimationStyle && g_AnimationStyle->integer >= 0)
-				{
-					ent->client->animationstyle = (Animationstyles_t)g_AnimationStyle->integer;
-				}
 				// 3. NPC file animationstyle — ONLY for NPCs, NOT the player
 				else if (ent->s.number != 0 && ent->client->parsedAnimationStyle >= 0)
 				{
@@ -3933,11 +3911,6 @@ qboolean ClientSpawn(gentity_t* ent, SavedGameJustLoaded_e e_saved_game_just_loa
 					{
 						// Keep it
 					}
-					// 2. Global override
-					else if (g_AnimationStyle && g_AnimationStyle->integer >= 0)
-					{
-						ent->client->animationstyle = (Animationstyles_t)g_AnimationStyle->integer;
-					}
 					// 3. NPC file animationstyle — ONLY for NPCs, NOT the player
 					else if (ent->s.number != 0 && ent->client->parsedAnimationStyle >= 0)
 					{
@@ -3968,11 +3941,6 @@ qboolean ClientSpawn(gentity_t* ent, SavedGameJustLoaded_e e_saved_game_just_loa
 					if (ent->client->animationstyle >= 0)
 					{
 						// Keep it
-					}
-					// 2. Global override
-					else if (g_AnimationStyle && g_AnimationStyle->integer >= 0)
-					{
-						ent->client->animationstyle = (Animationstyles_t)g_AnimationStyle->integer;
 					}
 					// 3. NPC file animationstyle — ONLY for NPCs, NOT the player
 					else if (ent->s.number != 0 && ent->client->parsedAnimationStyle >= 0)

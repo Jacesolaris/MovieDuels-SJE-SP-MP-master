@@ -329,10 +329,9 @@ static animFlags_t W_Animationstyletable(const gentity_t* self)
 	}
 
 	const int style = self->client->animationstyle;
-	const int cvarStyle = (g_AnimationStyle ? g_AnimationStyle->integer : -1);
 
 	// Helper macro: match either entity style or cvar override
-#define MATCH(s) ((style == (s)) || (cvarStyle == (s)))
+#define MATCH(s) (style == (s)) // the character's own style only: g_animationstyle no longer overrides it (DH 2026-11-02)
 
 	if (MATCH(CS_DEFAULT))        flags.isDefault = qtrue;
 	if (MATCH(CS_ANAKIN))         flags.isAnakin = qtrue;
@@ -40288,6 +40287,50 @@ static void ForceLightningDamage_MD(gentity_t* self, gentity_t* traceEnt, vec3_t
 ForceShootLightning
 ===========================
 */
+// Force lightning drain (DH 2026-11-02): held lightning used to cost one force point every game frame, 20 points a
+// second, so a full force bar was gone in under 4 seconds. g_lightningDrainRate = force points a second while
+// lightning is held (default 8); 0 = the old cost of one point a frame.
+static void WP_LightningDrain(const gentity_t* self, const forcePowers_t force_power, const int mult)
+{
+	static cvar_t* g_lightningDrainRate = nullptr;
+	static float drain_acc[MAX_GENTITIES];
+	static int drain_last[MAX_GENTITIES];
+
+	if (!g_lightningDrainRate)
+	{
+		g_lightningDrainRate = gi.cvar("g_lightningDrainRate", "8", CVAR_ARCHIVE);
+	}
+
+	const int num = self->s.number;
+	if (g_lightningDrainRate->value <= 0.0f || num < 0 || num >= MAX_GENTITIES)
+	{
+		for (int i = 0; i < mult; i++)
+		{
+			WP_ForcePowerDrain(self, force_power, 0);
+		}
+		return;
+	}
+
+	int dt = level.time - drain_last[num];
+	if (dt == 0)
+	{
+		return; // already paid this frame
+	}
+	if (dt < 0 || dt > 250)
+	{
+		dt = 50; // first frame of a new lightning, or after a load: one game frame
+	}
+	drain_last[num] = level.time;
+	drain_acc[num] += g_lightningDrainRate->value * static_cast<float>(mult) * static_cast<float>(dt) / 1000.0f;
+
+	const int drain = static_cast<int>(drain_acc[num]);
+	if (drain > 0)
+	{
+		drain_acc[num] -= static_cast<float>(drain);
+		WP_ForcePowerDrain(self, force_power, drain);
+	}
+}
+
 static void ForceShootLightning(gentity_t* self)
 {
 	trace_t tr;
@@ -47009,6 +47052,7 @@ static void wp_force_power_run(gentity_t* self, forcePowers_t force_power, userc
 		else
 		{
 			ForceShootLightning(self);
+			int lightning_drain_mult = 1;
 			if ((self->client->ps.torsoAnim == BOTH_FORCE_2HANDEDLIGHTNING || self->client->ps.torsoAnim == BOTH_FORCE_2HANDEDLIGHTNING_GALEN || self->client->ps.torsoAnim == BOTH_FORCE_2HANDEDLIGHTNING_PAL)
 				|| self->client->ps.torsoAnim == BOTH_FORCE_2HANDEDLIGHTNING_OLD
 				|| self->client->ps.torsoAnim == BOTH_FORCE_2HANDEDLIGHTNING_NEW
@@ -47018,11 +47062,12 @@ static void wp_force_power_run(gentity_t* self, forcePowers_t force_power, userc
 			{
 				//jackin' 'em up, Palpatine-style
 				//extra cost
-				WP_ForcePowerDrain(self, force_power, 0);
+				lightning_drain_mult = 2;
 			}
-			WP_ForcePowerDrain(self, force_power, 0);
+			WP_LightningDrain(self, force_power, lightning_drain_mult);
 
-			if (self->client->ps.forcePowersActive & 1 << FP_LIGHTNING)
+			if (self->client->ps.forcePowersActive & 1 << FP_LIGHTNING
+				&& self->client->ps.forcePowerLevel[FP_LIGHTNING] > FORCE_LEVEL_1) // level 1 never stopped the loop (DH 2026-11-03)
 			{
 				self->s.loopSound = G_SoundIndex("sound/weapons/force/lightningloop.mp3");
 			}

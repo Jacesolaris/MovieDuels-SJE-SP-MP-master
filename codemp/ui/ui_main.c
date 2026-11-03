@@ -2368,8 +2368,8 @@ void UI_LoadMenus(const char* menuFile, const qboolean reset)
 	Com_Printf("----------------------- MovieDuels-SJE-MP -----------------------\n");
 	Com_Printf("-----------------------------------------------------------------\n");
 	Com_Printf("-------------------------- Update 9.0 ---------------------------\n");
-	Com_Printf("--------------------- Build Date 01/11/2026 ---------------------\n");// build date
-	Com_Printf("--------------------------- Build 01 ----------------------------\n");
+	Com_Printf("--------------------- Build Date 03/11/2026 ---------------------\n");// build date
+	Com_Printf("--------------------------- Build 03 ----------------------------\n");
 	Com_Printf("-----------------------------------------------------------------\n");
 	Com_Printf("-------------------------- Lightsaber ---------------------------\n");
 	Com_Printf("---------- An elegant weapon for a more civilized age -----------\n");
@@ -7062,6 +7062,87 @@ static const mdSaberHilt_t mdSingleSaberHilts[] = {
 	{ "@MD_MENU_SABER_YARAEL",               "yarael_mp" },
 	{ "@MD_MENU_SABER_YODA",                 "yoda_mp" },
 	{ "@MD_MENU_SABER_YUN",                  "yun_mp" },
+	// MovieDuels Update 9 (2026-11-02): the MP sabers that were only at the end of the list, and the new MP copies
+	{ "@MD_MENU_SABER_ADI_GALLIA",           "adi_gallia_mp" },
+	{ "@MD_MENU_SABER_AHSOKA_ALT",           "ahsoka_alt_mp" },
+	{ "@MD_MENU_SABER_AHSOKA_SHORT_ALT",     "ahsoka_short_alt_mp" },
+	{ "@MD_MENU_SABER_ANAKIN_EP2_M",         "anakin_ep2_m_mp" },
+	{ "@MD_MENU_SABER_ANAKIN_EP2B_M",        "anakin_ep2b_m_mp" },
+	{ "@MD_MENU_SABER_ANAKIN_EP2B",          "anakin_ep2b_mp" },
+	{ "@MD_MENU_SABER_ANAKIN_EP3_JT_M",      "anakin_ep3_jt_m_mp" },
+	{ "@MD_MENU_SABER_ANAKIN_EP3_M",         "anakin_ep3_m_mp" },
+	{ "@MD_MENU_SABER_BAYLAN",               "baylan_mp" },
+	{ "@MD_MENU_SABER_CYBERNINJA",           "cyberninja_mp" },
+	{ "@MD_MENU_SABER_DESANN",               "desann_mp" },
+	{ "@MD_MENU_SABER_DESOLOUS_SHIELD",      "desolous_shield_mp" },
+	{ "@MD_MENU_SABER_DOOKU_JEDI",           "dooku_jedi_mp" },
+	{ "@MD_MENU_SABER_DRALLIG",              "drallig_mp" },
+	{ "@MD_MENU_SABER_VIBROSWORD",           "droid_vibrosword_mp" },
+	{ "@MD_MENU_SABER_DUAL_MAUL_SINGLE",     "dual_maul_single_mp" },
+	{ "@MD_MENU_SABER_ELECTRO_BATON",        "electro_baton_mp" },
+	{ "@MD_MENU_SABER_ELECTRO_BISENTO",      "electro-bisento_mp" },
+	{ "@MD_MENU_SABER_ELECTRO_CHAIN_WHIP",   "electro-chain_whip_mp" },
+	{ "@MD_MENU_SABER_FISTO",                "fisto_mp" },
+	{ "@MD_MENU_SABER_FORCE_PIKE",           "forcepike_mp" },
+	{ "@MD_MENU_SABER_GAMMOREAN_BATTLE_AXE", "gammobaxe_mp" },
+	{ "@MD_MENU_SABER_GAMMOBAXE2",           "gammobaxe2_mp" },
+	{ "@MD_MENU_SABER_GREEVEEB4",            "greeveeb4_mp" },
+	{ "@MD_MENU_SABER_GREEVEEG4",            "greeveeg4_mp" },
+	{ "@MD_MENU_SABER_GRIEVOUS",             "grievous_mp" },
+	{ "@MD_MENU_SABER_GUNGAN_SHIELD",        "gungan_shield_mp" },
+	{ "@MD_MENU_SABER_INDARA",               "indara_mp" },
+	{ "@MD_MENU_SABER_INQUISITOR_SHOTO",     "inquisitor_shoto_mp" },
+	{ "@MD_MENU_SABER_INQUISITOR4_SINGLE",   "inquisitor4_single_mp" },
+	{ "@MD_MENU_SABER_INQUISITOR5_SINGLE",   "inquisitor5_single_mp" },
+	{ "@MD_MENU_SABER_INQUISITOR6_SINGLE",   "inquisitor6_single_mp" },
+	{ "@MD_MENU_SABER_INQUISITOR7_SINGLE",   "inquisitor7_single_mp" },
+	{ "@MD_MENU_SABER_INQUISITOR8_SINGLE",   "inquisitor8_single_mp" },
+	{ "@MD_MENU_SABER_JOCASTA_NU",           "jocasta_nu_mp" },
+	{ "@MD_MENU_SABER_JUHANI",               "juhani_mp" },
+	{ "@MD_MENU_SABER_KELNACCA",             "kelnacca_mp" },
+	{ "@MD_MENU_SABER_KYLE_BOSS",            "kyle_boss_mp" },
+	{ "@MD_MENU_SABER_LUKE",                 "luke_mp" },
+	{ "@MD_MENU_SABER_MANDO_ARM",            "mando_arm_mp" },
+	{ "@MD_MENU_SABER_MANDO_ARM2",           "mando_arm2_mp" },
+	{ "@MD_MENU_SABER_MILITIA_STUN_BATON",   "militia_baton_mp" },
+	{ "@MD_MENU_SABER_LUKE_CONCEPT",         "mqstarkiller_mp" },
+	{ "@MD_MENU_SABER_D_VADER_CONCEPT",      "mqvader_mp" },
+	{ "@MD_MENU_SABER_OBIWAN_EP1_M",         "obiwan_ep1_m_mp" },
+	{ "@MD_MENU_SABER_OBIWAN_EP2B_M",        "obiwan_ep2b_m_mp" },
+	{ "@MD_MENU_SABER_OBIWAN_EP2B",          "obiwan_ep2b_mp" },
+	{ "@MD_MENU_SABER_OBIWAN_EP3_M",         "obiwan_ep3_m_mp" },
+	{ "@MD_MENU_SABER_PURGE_TROOPER_DAGGER", "purge_dagger_mp" },
+	{ "@MD_MENU_SABER_PURGE_TROOPER_HAMMER", "purge_hammer_mp" },
+	{ "@MD_MENU_SABER_QIMIR",                "qimir_mp" },
+	{ "@MD_MENU_SABER_QUIGON_M",             "quigon_m_mp" },
+	{ "@MD_MENU_SABER_REBORN",               "reborn" },
+	{ "@MD_MENU_SABER_REN",                  "ren_mp" },
+	{ "@MD_MENU_SABER_REVAN_JEDI",           "revan_jedi_mp" },
+	{ "@MD_MENU_SABER_REVAN2",               "revan2_mp" },
+	{ "@MD_MENU_SABER_RIOT_BATON",           "riot_baton_mp" },
+	{ "@MD_MENU_SABER_RIOT_SHIELD",          "riot_shield_mp" },
+	{ "@MD_MENU_SABER_SHIN",                 "shin_mp" },
+	{ "@MD_MENU_SABER_SIDIOUS_M",            "sidious_m_mp" },
+	{ "@MD_MENU_SABER_SIDIOUS2_M",           "sidious2_m_mp" },
+	{ "@MD_MENU_SABER_SINUBE",               "sinube_mp" },
+	{ "@MD_MENU_SABER_SION",                 "sion_mp" },
+	{ "@MD_MENU_SABER_SITH_SWORD",           "sith_sword_mp" },
+	{ "@MD_MENU_SABER_SOL",                  "sol_mp" },
+	{ "@MD_MENU_SABER_STUN_BATON",           "stunbaton_mp" },
+	{ "@MD_MENU_SABER_TALON",                "talon_mp" },
+	{ "@MD_MENU_SABER_TEMPLE_GUARD2_FOLDED", "temple_guard2_folded_mp" },
+	{ "@MD_MENU_SABER_TEMPLE_GUARD2_SINGLE", "temple_guard2_single_mp" },
+	{ "@MD_MENU_SABER_VADER_EP4_M",          "vader_ep4_m_mp" },
+	{ "@MD_MENU_SABER_VADER_EP6_M",          "vader_ep6_m_mp" },
+	{ "@MD_MENU_SABER_VADER_M",              "vader_m_mp" },
+	{ "@MD_MENU_SABER_VADER_RO_M",           "vader_ro_m_mp" },
+	{ "@MD_MENU_SABER_VERNESTRA",            "vernestra_mp" },
+	{ "@MD_MENU_SABER_VIBRO_ARBIR_BLADES",   "vibro-arbir_blades_mp" },
+	{ "@MD_MENU_SABER_VIBRO_VOLUGE",         "vibro-voluge_mp" },
+	{ "@MD_MENU_SABER_VISAS",                "visas_mp" },
+	{ "@MD_MENU_SABER_WINDU_M",              "windu_m_mp" },
+	{ "@MD_MENU_SABER_YADDLE",               "yaddle_mp" },
+	{ "@MD_MENU_SABER_YOUNGLING",            "youngling_mp" },
 };
 
 static const mdSaberHilt_t mdStaffSaberHilts[] = {
@@ -7088,6 +7169,30 @@ static const mdSaberHilt_t mdStaffSaberHilts[] = {
 	{ "@MD_MENU_SABER_SAVAGE",               "dual_opress_mp" },
 	{ "@MD_MENU_SABER_JT_GUARD",             "temple_guard_mp" },
 	{ "@MD_MENU_SABER_BASTILA",              "bastila_staff_mp" },
+	// MovieDuels Update 9 (2026-11-02): the MP sabers that were only at the end of the list, and the new MP copies
+	{ "@MD_MENU_SABER_ARC_SHIV_DUAL",        "arc_shiv_dual_mp" },
+	{ "@MD_MENU_SABER_ARC_SHIV",             "arc_shiv_mp" },
+	{ "@MD_MENU_SABER_ELECTROSTAFF",         "electrostaff_mp" },
+	{ "@MD_MENU_SABER_GALENMAREK_CJR_M",     "galenmarek_cjr_m_mp" },
+	{ "@MD_MENU_SABER_GUNGAN_BATTLE_STAFF",  "gungan_battle_staff_mp" },
+	{ "@MD_MENU_SABER_INQUISITOR_CROW",      "inquisitor_crow_mp" },
+	{ "@MD_MENU_SABER_INQUISITOR5",          "inquisitor5_mp" },
+	{ "@MD_MENU_SABER_SECONDSISTER",         "inquisitor6_mp" },
+	{ "@MD_MENU_SABER_THIRDSISTER",          "inquisitor7_mp" },
+	{ "@MD_MENU_SABER_INQUISITOR8",          "inquisitor8_mp" },
+	{ "@MD_MENU_SABER_MAGNAGUARD_STAFF",     "magnaguard_staff_mp" },
+	{ "@MD_MENU_SABER_MAGNAGUARD_STAFF_YELLOW", "magnaguard_staff2_mp" },
+	{ "@MD_MENU_SABER_PHASMA_QUICKSILVER_BATON", "phasma_baton_mp" },
+	{ "@MD_MENU_SABER_PIKESABER",            "pikesaber_mp" },
+	{ "@MD_MENU_SABER_PONG_KRELL",           "pong_krell_mp" },
+	{ "@MD_MENU_SABER_PURGE_TROOPER_STAFF",  "purge_staff_mp" },
+	{ "@MD_MENU_SABER_REY_QUARTERSTAFF",     "rey_qs_mp" },
+	{ "@MD_MENU_SABER_SABER_TRILLA",         "saber_trilla_mp" },
+	{ "@MD_MENU_SABER_SITH_STALKER_M",       "sith_stalker_m_mp" },
+	{ "@MD_MENU_SABER_STARKILLER_M",         "starkiller_m_mp" },
+	{ "@MD_MENU_SABER_TEMPLE_GUARD_REB",     "temple_guard_reb_mp" },
+	{ "@MD_MENU_SABER_TUSKEN_CHIEFTAIN_GAFFI", "tusken_chieftain_gaffi_mp" },
+	{ "@MD_MENU_SABER_VIBRO_ARBIR_BLADES_STAFF", "vibro-arbir_blades_staff_mp" },
 };
 
 typedef struct
@@ -12657,17 +12762,18 @@ static void UI_Refresh(int realtime)
 	{
 		int index = g_cursor.integer;
 
-		// Clamp to valid range
+		// Out of range: the Kylo cursor, like SP
 		if (index < 0 || index >= (int)(sizeof(uiCursors) / sizeof(uiCursors[0])))
 		{
-			index = 0; // fallback to default cursor
+			index = 4;
 		}
 
+		// 48x48 like SP (ui_main.cpp _UI_Refresh)
 		UI_DrawHandlePic(
 			(float)uiInfo.uiDC.cursorx,
 			(float)uiInfo.uiDC.cursory,
-			40.0f,
-			40.0f,
+			48.0f,
+			48.0f,
 			*uiCursors[index]
 		);
 	}

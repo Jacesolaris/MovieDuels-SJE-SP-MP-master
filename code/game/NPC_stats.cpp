@@ -3510,6 +3510,7 @@ qboolean NPC_ParseParms(const char* npc_name, gentity_t* npc)
 					continue;
 				}
 				npc->client->animationstyle = static_cast<Animationstyles_t>(GetIDForString(AnimationstylesTable, value));
+				npc->client->parsedAnimationStyle = npc->client->animationstyle; // the model's own style (the player keeps it, G_PlayerAnimationStyleFor)
 				continue;
 			}
 

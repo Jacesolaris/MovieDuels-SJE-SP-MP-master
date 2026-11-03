@@ -132,9 +132,12 @@ XCVAR_DEF(ui_serverFilterType, "0", NULL, CVAR_ARCHIVE | CVAR_INTERNAL) //SERVER
 XCVAR_DEF(ui_serverStatusTimeOut, "7000", NULL, CVAR_ARCHIVE | CVAR_INTERNAL)
 XCVAR_DEF(ui_screenshotType, "jpg", UI_UpdateScreenshot, CVAR_ARCHIVE)
 XCVAR_DEF(ui_singlePlayerActive, "0", NULL, CVAR_INTERNAL)
-// MovieDuels animation style menu entries (setup / ingame_setup menus; the game module uses them in solo games)
+// MovieDuels animation style menu entries (setup / ingame_setup menus). g_ActivateAnimationStyle: the host's / server's
+// Classic or Master. md_animstyle: this player's own style with Master, sent to the server in the userinfo, online too
+// ("default" = his model's style) (DH 2026-11-02)
 XCVAR_DEF(g_ActivateAnimationStyle, "0", NULL, CVAR_ARCHIVE)
 XCVAR_DEF(g_PlayerAnimationStyle, "default", NULL, CVAR_ARCHIVE)
+XCVAR_DEF(md_animstyle, "default", NULL, CVAR_ARCHIVE | CVAR_USERINFO)
 XCVAR_DEF(ui_team_fraglimit, "0", NULL, CVAR_ARCHIVE | CVAR_INTERNAL)
 XCVAR_DEF(ui_team_friendly, "1", NULL, CVAR_ARCHIVE | CVAR_INTERNAL)
 XCVAR_DEF(ui_team_timelimit, "20", NULL, CVAR_ARCHIVE | CVAR_INTERNAL)
@@ -184,7 +187,7 @@ XCVAR_DEF(ui_char_skin, "model_default", NULL, CVAR_INTERNAL) // MovieDuels char
 XCVAR_DEF(ui_char_mute_voice_line, "0", NULL, CVAR_ARCHIVE) // MovieDuels character menu: no voice line on select
 XCVAR_DEF(md_charsel, "0", NULL, CVAR_USERINFO) // MovieDuels character menu: counts selections, the server opens the saber menu for a saber class
 XCVAR_DEF(com_rend2, "0", NULL, CVAR_ARCHIVE)
-XCVAR_DEF(g_cursor, "0", NULL, CVAR_ARCHIVE)
+XCVAR_DEF(g_cursor, "10", NULL, CVAR_ARCHIVE) // same default as SP (Vader cursor)
 XCVAR_DEF(ui_selectedHolocron, "", NULL, CVAR_ARCHIVE | CVAR_INTERNAL)
 
 #undef XCVAR_DEF

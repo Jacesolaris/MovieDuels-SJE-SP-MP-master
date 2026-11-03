@@ -736,6 +736,9 @@ extern vmCvar_t cg_holsteredweapons;
 extern vmCvar_t cg_holsterHide;
 extern vmCvar_t cg_blasterHipPullIn; // SS_BLASTER
 extern vmCvar_t cg_saberLightRadius; // saber-only light (DH 2026-10-27)
+extern vmCvar_t cg_lightningFxInterval; // force lightning (DH 2026-11-02)
+extern vmCvar_t cg_lightningMarks;
+extern vmCvar_t cg_lightningMarkInterval;
 extern vmCvar_t cg_saberLightIntensity;
 void CG_MDWheel_Down_f();
 void CG_MDWheel_Up_f();

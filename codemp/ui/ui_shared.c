@@ -61,17 +61,17 @@ const char* HolocronIcons[NUM_FORCE_POWERS] = {
 	"gfx/mp/f_icon_saber_attack", //FP_SABER_OFFENSE,
 	"gfx/mp/f_icon_saber_defend", //FP_SABER_DEFENSE,
 	"gfx/mp/f_icon_saber_throw", //FP_SABERTHROW
-	"gfx/mp/f_icon_lt_stasis", //FP_STASIS
+	"gfx/mp/f_icon_dk_stasis", //FP_STASIS (dark side, MD team 2026-11-02)
 	"gfx/mp/f_icon_dk_destruction", //FP_DESTRUCTION
 	"gfx/mp/f_icon_lt_grasp", //FP_GRASP
-	"gfx/mp/f_icon_repulse", //FP_REPULSE
+	"gfx/mp/f_icon_lt_repulse", //FP_REPULSE (light side, MD team 2026-11-02)
 	"gfx/mp/f_icon_lt_lightning_strike", //FP_LIGHTNING_STRIKE
 	"gfx/mp/f_icon_dk_fear", //FP_FEAR
 	"gfx/mp/f_icon_dk_deadlysight", //FP_DEADLYSIGHT
 	"gfx/mp/f_icon_lt_blast", //FP_BLAST
 	"gfx/mp/f_icon_dk_insanity", //FP_INSANITY
 	"gfx/mp/f_icon_lt_blinding", //FP_BLINDING
-	"gfx/mp/f_icon_dk_stasis" //FP_DARK_STASIS
+	"gfx/mp/new_f_icon_dk_stasis" //FP_DARK_STASIS (own icon now that Stasis uses f_icon_dk_stasis)
 };
 
 #define SCROLL_TIME_START					500

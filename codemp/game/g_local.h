@@ -539,6 +539,8 @@ struct gentity_s
 
 	int reloadTime; //Every 0.2 seconds reload a bullet
 	int reloadCooldown;
+	int aiClipShots; // AI clips and reloads (2026-11-02, from SJE): shots fired from the current clip (bots + NPCs)
+	int aiClipWeapon; // the weapon those shots were fired with
 	int TimeOfWeaponDrop;
 	qboolean exPhysWarned;
 	int weaponfiredelaytime;
@@ -1521,7 +1523,9 @@ qboolean G_PlayerHasCustomSkeleton(gentity_t* ent);
 
 // MovieDuels animation style (g_main.c / g_client.c)
 extern int g_mdAnimStyleActive;				// 1 = Master style in force for this map (g_animationStyleActive), 0 = Classic
-void G_SetClientAnimStyle(gentity_t* ent);	// the client's animation style for its model / the solo player's menu choice
+void G_SetClientAnimStyle(gentity_t* ent);
+int G_AnimStyleFromCSName(const char* name);	// "CS_MACE_WINDU" / "mace_windu" -> ANIMSTYLE_*, -1 when unknown
+int G_NPCAnimStyle(const char* model, int parsed);	// an NPC's style: its NPC file's line, else its model's (DH 2026-11-02)	// the client's animation style for its model / the solo player's menu choice
 int G_AnimStyleFromName(const char* name);	// "default", "yoda"... (SP AnimationstylesTable) -> ANIMSTYLE_*, -1 if unknown
 const char* G_AnimStyleName(int style);		// ANIMSTYLE_* -> its name
 

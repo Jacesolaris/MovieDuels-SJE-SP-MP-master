@@ -3420,21 +3420,69 @@ static int G_AnimStyleForClient(const gentity_t* ent, const char* model)
 	{
 		return ANIMSTYLE_DEFAULT;
 	}
-	if (ent->s.number < MAX_CLIENTS && !(ent->r.svFlags & SVF_BOT) && ent->client->pers.localClient)
+	if (ent->s.number < MAX_CLIENTS && !(ent->r.svFlags & SVF_BOT))
 	{
-		// the solo player (the host's own client; another human joining makes the game Classic at the next map load)
-		const int style = G_AnimStyleFromName(g_PlayerAnimationStyle.string);
-		if (style >= 0)
+		// a human player, online too (DH 2026-11-02): the style picked in his menu (userinfo md_animstyle; the host's
+		// console g_PlayerAnimationStyle when his userinfo has none), "default" = his own model's style
+		char userinfo[MAX_INFO_STRING];
+		const char* picked;
+		trap->GetUserinfo(ent->s.number, userinfo, sizeof userinfo);
+		picked = Info_ValueForKey(userinfo, "md_animstyle");
+		if (!picked[0] || (ent->client->pers.localClient && !Q_stricmp(picked, "default")))
+		{
+			picked = ent->client->pers.localClient ? g_PlayerAnimationStyle.string : "default";
+		}
+		const int style = G_AnimStyleFromName(picked);
+		if (style > ANIMSTYLE_DEFAULT)
 		{
 			return style;
 		}
-		if (warnedModification != g_PlayerAnimationStyle.modificationCount)
+		if (style < 0 && warnedModification != g_PlayerAnimationStyle.modificationCount)
 		{
 			warnedModification = g_PlayerAnimationStyle.modificationCount;
-			Com_Printf(S_COLOR_RED "g_PlayerAnimationStyle: unknown animation style \"%s\", type animationstyle for the list.\n",
-				g_PlayerAnimationStyle.string);
+			Com_Printf(S_COLOR_RED "Animation style: unknown style \"%s\" (client %i), type animationstyle for the list.\n",
+				picked, ent->s.number);
 		}
+	}
+	return G_AnimStyleForModel(model);
+}
+
+// SP's CS_* names (teams.h Animationstyles_t), in ANIMSTYLE_* order: the NPC files' "animationstyle CS_..." lines
+static const char* const g_animStyleCSNames[ANIMSTYLE_COUNT] = {
+	"CS_DEFAULT", "CS_ANAKIN", "CS_BATTLEDROID", "CS_BENKENOBI", "CS_CAL_KESTIS", "CS_CLONETROOPER", "CS_DARKFORCES2",
+	"CS_COUNT_DOOKU", "CS_GALEN_MAREK", "CS_QUI_GON_JINN", "CS_GRIEVOUS", "CS_JANGO", "CS_KOTOR", "CS_LUKE_SKYWALKER",
+	"CS_MACE_WINDU", "CS_MAUL", "CS_MOVIEDUELS", "CS_OBIWAN", "CS_OBIWAN_EP3", "CS_PALPATINE", "CS_REBELS", "CS_KYLO_REN",
+	"CS_REY", "CS_VADER", "CS_YODA"
+};
+
+// "CS_MACE_WINDU" (or "mace_windu") -> ANIMSTYLE_*, -1 when unknown
+int G_AnimStyleFromCSName(const char* name)
+{
+	if (!name)
+	{
+		return -1;
+	}
+	for (int i = 0; i < ANIMSTYLE_COUNT; i++)
+	{
+		if (!Q_stricmp(name, g_animStyleCSNames[i]))
+		{
+			return i;
+		}
+	}
+	return G_AnimStyleFromName(name);
+}
+
+// An NPC's animation style (DH 2026-11-02): its NPC file's animationstyle line (parsed, -1 = none), else its model's
+// style (g_animstyles.h); none with Classic or on a non-humanoid skeleton
+int G_NPCAnimStyle(const char* model, const int parsed)
+{
+	if (!g_mdAnimStyleActive || !model || BG_IsOwnSkeletonModel(model))
+	{
 		return ANIMSTYLE_DEFAULT;
+	}
+	if (parsed >= 0 && parsed < ANIMSTYLE_COUNT)
+	{
+		return parsed;
 	}
 	return G_AnimStyleForModel(model);
 }
@@ -4219,6 +4267,12 @@ char* ClientConnect(int clientNum, const qboolean firstTime, const qboolean isBo
 	}
 	G_ReadSessionData(client);
 
+	if (firstTime)
+	{
+		// a new player in this slot does not get the loadout its last player took along (g_target.c)
+		trap->Cvar_Set(va("g_missionLoadout%i", clientNum), "");
+	}
+
 	if (level.gametype == GT_SIEGE &&
 		(firstTime || level.newSession))
 	{
@@ -4327,6 +4381,42 @@ void ClientBegin(const int clientNum, const qboolean allowTeamReset)
 	char motd[1024];
 
 	gentity_t* ent = g_entities + clientNum;
+
+	// the Master animation style online (DH 2026-11-02): every human must run the same MovieDuels client (its renderer
+	// loads the master animation set; another client would play everyone's animations wrongly). The client engine is
+	// known by the cgame's userinfo MovieDuels_Clientplugin = CURRENT_MD_CLIENTVERSION, which the cgame registers only
+	// after connecting, so this is checked here (ClientBegin) and not in ClientConnect.
+	if (g_mdAnimStyleActive && !(ent->r.svFlags & SVF_BOT))
+	{
+		trap->GetUserinfo(clientNum, userinfo, sizeof userinfo);
+		if (strcmp(Info_ValueForKey(userinfo, "MovieDuels_Clientplugin"), CURRENT_MD_CLIENTVERSION) != 0)
+		{
+			trap->DropClient(clientNum, "This server uses the MovieDuels Update 9 animation styles (Master). Please install the current MovieDuels.");
+			return;
+		}
+	}
+
+	if (level.gametype == GT_SINGLE_PLAYER && ent->client && ent->client->sess.sessionTeam != TEAM_SPECTATOR)
+	{
+		// Missions: no more than g_missionMaxPlayers players (humans + bots) in the game (g_target.c G_MissionFull)
+		extern qboolean G_MissionFull(int clientNum);
+		if (G_MissionFull(clientNum))
+		{
+			ent->client->sess.sessionTeam = TEAM_SPECTATOR;
+			ent->client->sess.spectatorState = SPECTATOR_FREE;
+			trap->SendServerCommand(clientNum, "cp \"" S_COLOR_YELLOW "This mission is full.\nYou can watch until a place is free.\n\"");
+		}
+	}
+
+	if (level.gametype == GT_SINGLE_PLAYER)
+	{
+		// Missions: continue a saved mission (g_missionContinue), the objective list for this player (g_target.c,
+		// g_ICARUScb.c)
+		extern void G_MissionCheckContinue(void);
+		extern void G_MissionSendObjectives(int clientNum);
+		G_MissionCheckContinue();
+		G_MissionSendObjectives(clientNum);
+	}
 
 	if (ent->r.svFlags & SVF_BOT)
 	{
@@ -5326,7 +5416,27 @@ void ClientSpawn(gentity_t* ent)
 	// ------------------------------------------------------------
 	if (level.gametype == GT_SINGLE_PLAYER)
 	{
-		spawnPoint = SelectSPSpawnPoint(spawn_origin, spawn_angles);
+		// a player who came along from the last map starts at its spawn target (g_target.c G_MissionSpawnPoint)
+		extern gentity_t* G_MissionSpawnPoint(const gentity_t* ent, vec3_t origin, vec3_t angles);
+		spawnPoint = G_MissionSpawnPoint(ent, spawn_origin, spawn_angles);
+		if (!spawnPoint && ent->r.svFlags & SVF_BOT)
+		{
+			// a bot: a neutral bot spawn waypoint ('u', bot_wp_addflagged u) of the map's bot route, else the start
+			vec3_t wpSpawn;
+			if (BOT_FindFFAWaypointSpawnPoint(ent, wpSpawn) == qtrue)
+			{
+				VectorCopy(wpSpawn, spawn_origin);
+				BOT_WaypointSpawnAngles(client->sess.sessionTeam, spawn_origin, spawn_angles);
+				goto spawn_done;
+			}
+		}
+		if (!spawnPoint)
+		{
+			// (several players at the one SP start: a free spot around it, g_target.c G_MissionSpreadSpawn)
+			extern void G_MissionSpreadSpawn(const gentity_t* ent, const gentity_t* spot, vec3_t origin);
+			spawnPoint = SelectSPSpawnPoint(spawn_origin, spawn_angles);
+			G_MissionSpreadSpawn(ent, spawnPoint, spawn_origin);
+		}
 		goto spawn_done;
 	}
 
@@ -7925,6 +8035,13 @@ spawn_done:
 	{
 		client->playerTeam = ent->s.teamowner = NPCTEAM_PLAYER;
 		client->enemyTeam = NPCTEAM_ENEMY;
+	}
+
+	if (level.gametype == GT_SINGLE_PLAYER)
+	{
+		// Missions: the loadout he brought from the last map, on his first spawn here (g_target.c G_MissionApplyLoadout)
+		extern void G_MissionApplyLoadout(gentity_t* ent);
+		G_MissionApplyLoadout(ent);
 	}
 
 	// run a client frame to drop exactly to the floor,

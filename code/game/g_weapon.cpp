@@ -1592,6 +1592,240 @@ static void WP_NPCAimAtEnemy(const gentity_t* ent)
 	AngleVectors(aim_angles, forward_vec, vright_vec, up);
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// AI clips and reloads (2026-11-02, DH: port of the SJE AI improvements, SJE item 91). Gunner NPCs count the shots of
+// their clip (FireWeapon -> G_AIClipShot). When it is empty they reload for the gun's reload time: no firing
+// (ps.weaponTime + shotTime), BOTH_RELOAD, the reload sound, a duck (the "duck" timer the gunner AI already obeys while
+// standing) or a run to a cover combat point close by, and now and then a "cover me" callout. MovieDuels has no weapon
+// variants, so clip sizes and reload times come from the gun (G_AIWeaponClipShots / G_AIWeaponReloadTime).
+// The reserve ammo stays as before (NPCs top it up). g_aiReload 0 = the old endless fire; g_aiClipScale x every clip.
+// ---------------------------------------------------------------------------------------------------------------
+extern cvar_t* g_aiReload;
+extern cvar_t* g_aiClipScale;
+extern qboolean PM_HasAnimation(const gentity_t* ent, int animation);
+extern void G_AddVoiceEvent(const gentity_t* self, int event, int speak_debounce_time);
+
+constexpr float AI_RELOAD_COVER_DIST = 384.0f; // only run to cover this close
+static int aiReloadCalloutTime[TEAM_NUM_TEAMS]; // per team, so a whole squad doesn't shout at once
+
+// the shots an NPC fires before it must reload (0 = no clip)
+static int G_AIWeaponClipShots(const int weapon)
+{
+	switch (weapon)
+	{
+	case WP_BLASTER_PISTOL:
+	case WP_BRYAR_PISTOL:
+	case WP_REY:
+		return 16;
+	case WP_DUAL_PISTOL:
+	case WP_DUAL_CLONEPISTOL:
+		return 32;
+	case WP_BLASTER:
+	case WP_BATTLEDROID:
+	case WP_THEFIRSTORDER:
+	case WP_CLONECARBINE:
+	case WP_REBELBLASTER:
+	case WP_CLONERIFLE:
+	case WP_REBELRIFLE:
+		return 30;
+	case WP_CLONECOMMANDO:
+		return 40;
+	case WP_DISRUPTOR:
+		return 8;
+	case WP_BOWCASTER:
+		return 15;
+	case WP_REPEATER:
+		return 50;
+	case WP_DEMP2:
+		return 20;
+	case WP_FLECHETTE:
+		return 10;
+	case WP_ROCKET_LAUNCHER:
+		return 2;
+	case WP_CONCUSSION:
+		return 6;
+	case WP_Z6_ROTARY_CANNON:
+		return 100;
+	default:
+		return 0; // no clip: melee, sabers, grenades, mines, droid, droideka and vehicle guns, tusken weapons
+	}
+}
+
+// how long the reload takes, ms
+static int G_AIWeaponReloadTime(const int weapon)
+{
+	switch (weapon)
+	{
+	case WP_BLASTER_PISTOL:
+	case WP_BRYAR_PISTOL:
+	case WP_REY:
+		return 1200;
+	case WP_DUAL_PISTOL:
+	case WP_DUAL_CLONEPISTOL:
+		return 1600;
+	case WP_DISRUPTOR:
+	case WP_FLECHETTE:
+	case WP_CLONECOMMANDO:
+		return 2200;
+	case WP_REPEATER:
+	case WP_ROCKET_LAUNCHER:
+		return 3000;
+	case WP_CONCUSSION:
+		return 2500;
+	case WP_Z6_ROTARY_CANNON:
+		return 3500;
+	default:
+		return 2000;
+	}
+}
+
+static qboolean G_AIUsesClips(const gentity_t* ent)
+{
+	if (!g_aiReload || !g_aiReload->integer || !ent || !ent->client || !ent->NPC)
+	{
+		return qfalse;
+	}
+	if (ent->s.number == 0 || G_ControlledByPlayer(ent) || G_IsRidingVehicle(ent))
+	{
+		return qfalse; // the player keeps the manual reload
+	}
+	switch (ent->client->NPC_class)
+	{
+	case CLASS_ATST:
+	case CLASS_VEHICLE:
+	case CLASS_DROIDEKA: // has its own reload
+	case CLASS_SBD:
+	case CLASS_GALAKMECH:
+	case CLASS_MARK1:
+	case CLASS_MARK2:
+	case CLASS_PROBE:
+	case CLASS_REMOTE:
+	case CLASS_SEEKER:
+	case CLASS_SENTRY:
+	case CLASS_INTERROGATOR:
+		return qfalse;
+	default:
+		break;
+	}
+	return G_AIWeaponClipShots(ent->client->ps.weapon) > 0 ? qtrue : qfalse;
+}
+
+static int G_AIClipSize(const gentity_t* ent)
+{
+	int clip = G_AIWeaponClipShots(ent->client->ps.weapon);
+
+	if (g_aiClipScale && g_aiClipScale->value > 0.0f)
+	{
+		clip = static_cast<int>(clip * g_aiClipScale->value + 0.5f);
+	}
+	return clip < 1 ? 1 : clip;
+}
+
+static void G_AIStartReload(gentity_t* ent)
+{
+	gclient_t* client = ent->client;
+	const int reload_time = G_AIWeaponReloadTime(client->ps.weapon);
+
+	ent->aiClipShots = 0;
+
+	// no shooting until the reload is done
+	if (client->ps.weaponTime < reload_time)
+	{
+		client->ps.weaponTime = reload_time;
+	}
+	client->ps.weaponstate = WEAPON_RELOADING;
+	ent->NPC->shotTime = level.time + reload_time;
+
+	// stop aiming down the gun
+	client->ps.communicatingflags &= ~(1u << CF_AIMINGGUN);
+	client->IsAiming = qfalse;
+
+	if (PM_HasAnimation(ent, BOTH_RELOAD))
+	{
+		NPC_SetAnim(ent, SETANIM_TORSO, BOTH_RELOAD, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART);
+	}
+	G_SoundOnEnt(ent, CHAN_WEAPON, "sound/weapons/reload.mp3");
+
+	// get down while reloading (the gunner AI crouches while this runs and it isn't moving)
+	TIMER_Set(ent, "duck", reload_time);
+
+	// cover close by (maps with combat points): run there while reloading
+	if (ent->enemy && level.numCombatPoints > 0 && ent->NPC->combatPoint == -1)
+	{
+		vec3_t here;
+
+		VectorCopy(ent->currentOrigin, here);
+		SaveNPCGlobals();
+		SetNPCGlobals(ent);
+
+		const int cp = NPC_FindCombatPoint(ent->currentOrigin, ent->enemy->currentOrigin, here,
+			CP_COVER | CP_AVOID_ENEMY | CP_HAS_ROUTE, 0, -1);
+
+		if (cp != -1 && DistanceSquared(level.combatPoints[cp].origin, ent->currentOrigin) <
+			AI_RELOAD_COVER_DIST * AI_RELOAD_COVER_DIST)
+		{
+			vec3_t cover;
+
+			VectorCopy(level.combatPoints[cp].origin, cover);
+			NPC_SetCombatPoint(cp);
+			NPC_SetMoveGoal(ent, cover, 8, qtrue, cp);
+			TIMER_Set(ent, "verifyCP", reload_time + 1000);
+			TIMER_Set(ent, "roamTime", reload_time + 1000);
+		}
+		RestoreNPCGlobals();
+	}
+
+	// "cover me!" now and then
+	const int team = client->playerTeam;
+	if (team > TEAM_FREE && team < TEAM_NUM_TEAMS)
+	{
+		if (aiReloadCalloutTime[team] > level.time + 20000)
+		{
+			aiReloadCalloutTime[team] = 0; // a new level
+		}
+		if (aiReloadCalloutTime[team] < level.time && Q_irand(0, 1))
+		{
+			G_AddVoiceEvent(ent, Q_irand(EV_COVER1, EV_COVER5), 3000);
+			aiReloadCalloutTime[team] = level.time + Q_irand(6000, 10000);
+		}
+	}
+}
+
+// a gunner NPC fired a shot: count it, reload when the clip is empty
+static void G_AIClipShot(gentity_t* ent, const qboolean alt_fire)
+{
+	if (!G_AIUsesClips(ent))
+	{
+		return;
+	}
+	if (ent->aiClipWeapon != ent->client->ps.weapon)
+	{
+		ent->aiClipWeapon = ent->client->ps.weapon; // a fresh clip with a new gun
+		ent->aiClipShots = 0;
+	}
+
+	int cost = 1;
+	if (alt_fire)
+	{
+		// big alt shots use more of the clip
+		const weaponData_t* wd = &weaponData[ent->client->ps.weapon];
+		if (wd->energyPerShot > 0 && wd->altEnergyPerShot > wd->energyPerShot)
+		{
+			cost = wd->altEnergyPerShot / wd->energyPerShot;
+			if (cost > 8)
+			{
+				cost = 8;
+			}
+		}
+	}
+	ent->aiClipShots += cost;
+
+	if (ent->aiClipShots >= G_AIClipSize(ent))
+	{
+		G_AIStartReload(ent);
+	}
+}
+
 //---------------------------------------------------------
 void FireWeapon(gentity_t* ent, const qboolean alt_fire)
 //---------------------------------------------------------
@@ -1634,7 +1868,7 @@ void FireWeapon(gentity_t* ent, const qboolean alt_fire)
 			ent->s.weapon == WP_REBELBLASTER)
 		{
 			const qboolean jango = g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1
-				&& (ent->client->animationstyle == CS_JANGO || (g_AnimationStyle && g_AnimationStyle->integer == CS_JANGO))
+				&& ent->client->animationstyle == CS_JANGO
 				? qtrue : qfalse;
 			NPC_SetAnim(ent, SETANIM_TORSO, jango ? (ent->weaponModel[1] > 0 ? BOTH_2PISTOLFAIL_JANGO : BOTH_PISTOLFAIL_JANGO) : BOTH_PISTOLFAIL, SETANIM_AFLAG_BLOCKPACE);
 		}
@@ -1645,7 +1879,7 @@ void FireWeapon(gentity_t* ent, const qboolean alt_fire)
 		else
 		{
 			const qboolean battle_droid = g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1
-				&& (ent->client->animationstyle == CS_BATTLEDROID || (g_AnimationStyle && g_AnimationStyle->integer == CS_BATTLEDROID))
+				&& ent->client->animationstyle == CS_BATTLEDROID
 				? qtrue : qfalse;
 			NPC_SetAnim(ent, SETANIM_TORSO, battle_droid ? BOTH_RIFLEFAIL_BDROID : BOTH_RIFLEFAIL, SETANIM_AFLAG_BLOCKPACE);
 		}
@@ -2247,6 +2481,8 @@ void FireWeapon(gentity_t* ent, const qboolean alt_fire)
 	default:
 		return;
 	}
+
+	G_AIClipShot(ent, alt_fire); // AI clips and reloads (2026-11-02)
 
 	if (!ent->s.number)
 	{

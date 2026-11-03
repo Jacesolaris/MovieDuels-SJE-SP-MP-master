@@ -150,10 +150,9 @@ static animFlags_t PA_Animationstyletable(const pmove_t* pm)
 	}
 
 	const int style = pm->gent->client->animationstyle;
-	const int cvarStyle = (g_AnimationStyle ? g_AnimationStyle->integer : -1);
 
 	// Helper macro: match either client style or cvar override
-#define MATCH(s) ((style == (s)) || (cvarStyle == (s)))
+#define MATCH(s) (style == (s)) // the character's own style only: g_animationstyle no longer overrides it (DH 2026-11-02)
 
 	if (MATCH(CS_DEFAULT))        flags.isDefault = qtrue;
 	if (MATCH(CS_ANAKIN))         flags.isAnakin = qtrue;
@@ -4969,8 +4968,6 @@ static saberMoveName_t PM_CheckDualSpinProtect()
 				((pm->gent != nullptr && pm->gent->client != nullptr &&
 					pm->gent->client->animationstyle == CS_GRIEVOUS) ? qtrue : qfalse);
 
-			const qboolean globalGrievousStyle =
-				((g_AnimationStyle != nullptr && g_AnimationStyle->integer == 11) ? qtrue : qfalse);
 
 			const qboolean grievousSaberType =
 				((pm->ps->saber[0].type == SABER_DUAL_GRIE ||
@@ -4979,7 +4976,6 @@ static saberMoveName_t PM_CheckDualSpinProtect()
 					pm->ps->saber[0].type == SABER_GRIE4) ? qtrue : qfalse);
 
 			if (grievousStyleActive == qtrue ||
-				globalGrievousStyle == qtrue ||
 				grievousSaberType == qtrue)
 			{
 				return LS_DUAL_SPIN_PROTECT_GRIEVOUS;

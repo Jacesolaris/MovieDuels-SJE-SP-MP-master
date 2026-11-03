@@ -103,9 +103,17 @@ saberMoveName_t PM_NPC_Force_Leap_Attack(void);
 extern qboolean PM_SaberInnonblockableAttack(int anim);
 extern qboolean PM_SaberInSmashdown(saberMoveName_t saberMove);
 
+// The pmove code's random number (SP uses Q_irand, SP has no prediction): the client's prediction and the server draw
+// the same numbers for the same command. Seed = the command's time, the client and how many numbers this pmove drew
+// already (PmoveSingle resets pm_irandCount). It used to be Q_random(&pm->cmd.serverTime), which moved the command's
+// time on every call, and never returned val2 (PM_irand_timesync(0, 1) was always 0).
+int pm_irandCount;
+
 int PM_irand_timesync(const int val1, const int val2)
 {
-	int i = val1 - 1 + Q_random(&pm->cmd.serverTime) * (val2 - val1) + 1;
+	int seed = pm->cmd.serverTime * 31 + pm->ps->clientNum * 1103 + pm_irandCount++ * 7919;
+	Q_random(&seed); // mix the seed once
+	int i = val1 + (int)(Q_random(&seed) * (val2 - val1 + 1));
 	if (i < val1)
 	{
 		i = val1;
@@ -646,10 +654,10 @@ static saberMoveName_t PM_NPCSaberAttackFromBlock(const int quad)
 	switch (quad)
 	{
 	case Q_T:
-		return Q_irand(0, 1) ? LS_A_T2B : LS_A_TR2BL;
+		return PM_irand_timesync(0, 1) ? LS_A_T2B : LS_A_TR2BL;
 
 	case Q_TR:
-		switch (Q_irand(0, 2))
+		switch (PM_irand_timesync(0, 2))
 		{
 		case 0: return LS_A_R2L;
 		case 1: return LS_A_TR2BL;
@@ -657,7 +665,7 @@ static saberMoveName_t PM_NPCSaberAttackFromBlock(const int quad)
 		}
 
 	case Q_TL:
-		switch (Q_irand(0, 2))
+		switch (PM_irand_timesync(0, 2))
 		{
 		case 0: return LS_A_L2R;
 		case 1: return LS_A_TL2BR;
@@ -665,7 +673,7 @@ static saberMoveName_t PM_NPCSaberAttackFromBlock(const int quad)
 		}
 
 	case Q_BR:
-		switch (Q_irand(0, 2))
+		switch (PM_irand_timesync(0, 2))
 		{
 		case 0: return LS_A_BR2TL;
 		case 1: return LS_T1_BR_TR;
@@ -673,7 +681,7 @@ static saberMoveName_t PM_NPCSaberAttackFromBlock(const int quad)
 		}
 
 	case Q_BL:
-		switch (Q_irand(0, 2))
+		switch (PM_irand_timesync(0, 2))
 		{
 		case 0: return LS_A_BL2TR;
 		case 1: return LS_T1_BL_TL;
@@ -681,7 +689,7 @@ static saberMoveName_t PM_NPCSaberAttackFromBlock(const int quad)
 		}
 
 	case Q_L:
-		switch (Q_irand(0, 2))
+		switch (PM_irand_timesync(0, 2))
 		{
 		case 0: return LS_A_L2R;
 		case 1: return LS_T1__L_T_;
@@ -689,7 +697,7 @@ static saberMoveName_t PM_NPCSaberAttackFromBlock(const int quad)
 		}
 
 	case Q_R:
-		switch (Q_irand(0, 2))
+		switch (PM_irand_timesync(0, 2))
 		{
 		case 0: return LS_A_R2L;
 		case 1: return LS_T1__R_T_;
@@ -722,10 +730,10 @@ static saberMoveName_t PM_NPCSaberAttackFromQuad(const int quad)
 	switch (quad)
 	{
 	case Q_T:
-		return Q_irand(0, 1) ? LS_A_T2B : LS_A_TR2BL;
+		return PM_irand_timesync(0, 1) ? LS_A_T2B : LS_A_TR2BL;
 
 	case Q_TR:
-		switch (Q_irand(0, 2))
+		switch (PM_irand_timesync(0, 2))
 		{
 		case 0: return LS_A_R2L;
 		case 1: return LS_A_TR2BL;
@@ -733,7 +741,7 @@ static saberMoveName_t PM_NPCSaberAttackFromQuad(const int quad)
 		}
 
 	case Q_TL:
-		switch (Q_irand(0, 2))
+		switch (PM_irand_timesync(0, 2))
 		{
 		case 0: return LS_A_L2R;
 		case 1: return LS_A_TL2BR;
@@ -741,7 +749,7 @@ static saberMoveName_t PM_NPCSaberAttackFromQuad(const int quad)
 		}
 
 	case Q_BR:
-		switch (Q_irand(0, 2))
+		switch (PM_irand_timesync(0, 2))
 		{
 		case 0: return LS_A_BR2TL;
 		case 1: return LS_T1_BR_TR;
@@ -749,7 +757,7 @@ static saberMoveName_t PM_NPCSaberAttackFromQuad(const int quad)
 		}
 
 	case Q_BL:
-		switch (Q_irand(0, 2))
+		switch (PM_irand_timesync(0, 2))
 		{
 		case 0: return LS_A_BL2TR;
 		case 1: return LS_T1_BL_TL;
@@ -757,7 +765,7 @@ static saberMoveName_t PM_NPCSaberAttackFromQuad(const int quad)
 		}
 
 	case Q_L:
-		switch (Q_irand(0, 2))
+		switch (PM_irand_timesync(0, 2))
 		{
 		case 0: return LS_A_L2R;
 		case 1: return LS_T1__L_T_;
@@ -765,7 +773,7 @@ static saberMoveName_t PM_NPCSaberAttackFromQuad(const int quad)
 		}
 
 	case Q_R:
-		switch (Q_irand(0, 2))
+		switch (PM_irand_timesync(0, 2))
 		{
 		case 0: return LS_A_R2L;
 		case 1: return LS_T1__R_T_;
@@ -802,7 +810,7 @@ static saberMoveName_t PM_NPCSaberAttackFromQuad(const int quad)
 				}
 				else
 				{
-					int choice = rand() % 4;   // FIXED: %4 so all 4 branches reachable
+					int choice = PM_irand_timesync(0, 3); // all 4 branches reachable
 
 					switch (choice)
 					{
@@ -842,7 +850,7 @@ static saberMoveName_t PM_NPCSaberAttackFromQuad(const int quad)
 				}
 				else
 				{
-					const int choice = rand() % 9;
+					const int choice = PM_irand_timesync(0, 8);
 
 					switch (choice)
 					{
@@ -1568,7 +1576,7 @@ qboolean PM_SaberKataDone(const int curmove, const int newmove)
 			}
 		}
 		if ((pm->ps->fd.saberAnimLevel == FORCE_LEVEL_2 || pm->ps->fd.saberAnimLevel == SS_DUAL)
-			&& pm->ps->saberAttackChainCount > Q_irand(MISHAPLEVEL_TWO, MISHAPLEVEL_LIGHT))
+			&& pm->ps->saberAttackChainCount > PM_irand_timesync(MISHAPLEVEL_TWO, MISHAPLEVEL_LIGHT))
 		{
 			return qtrue;
 		}
@@ -1889,7 +1897,9 @@ static int PM_SaberLockResultAnim(playerState_t* duelist, const qboolean super_b
 
 static void PM_SaberLockBreak(playerState_t* genemy, const qboolean victory, const int strength)
 {
-	const qboolean super_break = strength + pm->cmd.buttons & BUTTON_ATTACK;
+	// SP PM_SaberLockBreak (g_allowSuperSaberLockBreaks 1): a win with strength above 3 may be a super break. Was
+	// "strength + pm->cmd.buttons & BUTTON_ATTACK", which is (strength + buttons) & BUTTON_ATTACK
+	const qboolean super_break = victory && strength > 3 && PM_irand_timesync(0, 10) < strength ? qtrue : qfalse;
 
 	pm->ps->userInt3 &= ~(1 << FLAG_SABERLOCK_ATTACKER);
 	genemy->userInt3 &= ~(1 << FLAG_SABERLOCK_ATTACKER);
@@ -2169,7 +2179,7 @@ static void PM_SaberLocked(void)
 					{
 						if (!PM_irand_timesync(0, 4))
 						{
-							BG_AddPredictableEventToPlayerstate(Q_irand(EV_PUSHED1, EV_PUSHED3), floor((float)80 / 100 * 100.0f), genemy);
+							BG_AddPredictableEventToPlayerstate(PM_irand_timesync(EV_PUSHED1, EV_PUSHED3), floor((float)80 / 100 * 100.0f), genemy);
 						}
 						PM_SetAnimFrame(genemy, anim->firstFrame + remaining);
 					}
@@ -2206,7 +2216,7 @@ static void PM_SaberLocked(void)
 				{
 					int remaining = 0;
 					int cur_frame = 0;
-					const int strength = Q_irand(1, pm->ps->fd.forcePowerLevel[FP_SABER_OFFENSE]);
+					const int strength = PM_irand_timesync(1, pm->ps->fd.forcePowerLevel[FP_SABER_OFFENSE]);
 
 					pm->ps->saberLockAdvance = qfalse;
 
@@ -2302,7 +2312,7 @@ static void PM_SaberLocked(void)
 						{
 							if (!PM_irand_timesync(0, 4))
 							{
-								BG_AddPredictableEventToPlayerstate(Q_irand(EV_PUSHED1, EV_PUSHED3), floor((float)80 / 100 * 100.0f), genemy);
+								BG_AddPredictableEventToPlayerstate(PM_irand_timesync(EV_PUSHED1, EV_PUSHED3), floor((float)80 / 100 * 100.0f), genemy);
 							}
 							PM_SetAnimFrame(genemy, anim->firstFrame + remaining);
 						}
@@ -3005,7 +3015,7 @@ saberMoveName_t PM_NPC_Force_Leap_Attack(void)
 
 		if (pm->ps->fd.saberAnimLevel == SS_STAFF)
 		{
-			if (Q_irand(0, 1))
+			if (PM_irand_timesync(0, 1))
 			{
 				return LS_JUMPATTACK_STAFF_LEFT;
 			}
@@ -3644,7 +3654,7 @@ static saberMoveName_t PM_SaberAttackForMovement(const int curmove)
 #ifdef _GAME
 				if ((g_entities[pm->ps->clientNum].r.svFlags & SVF_BOT ||
 					pm_entSelf->s.eType == ET_NPC) &&
-					Q_irand(0, 3))// randomly use NPC random or chain attack for knockaways
+					PM_irand_timesync(0, 3))// randomly use NPC random or chain attack for knockaways
 				{
 					newmove = PM_NPCSaberAttackFromQuad(saberMoveData[curmove].endQuad);
 				}
@@ -3687,11 +3697,11 @@ static saberMoveName_t PM_SaberAttackForMovement(const int curmove)
 					return LS_A_T2B;
 				}
 				//for now, just pick a random attack
-				return Q_irand(LS_A_TL2BR, LS_A_T2B);
+				return PM_irand_timesync(LS_A_TL2BR, LS_A_T2B);
 			}
 			else if (curmove == LS_READY)
 			{
-				return Q_irand(LS_A_TL2BR, LS_A_T2B);
+				return PM_irand_timesync(LS_A_TL2BR, LS_A_T2B);
 			}
 		}
 	}
@@ -4318,7 +4328,7 @@ void PM_SetMeleeBlock(void)
 				{
 					anim = pm->ps->torsoAnim;
 				}
-				else if (Q_irand(0, 1))
+				else if (PM_irand_timesync(0, 1))
 				{
 					anim = MELEE_STANCE_T;
 				}
@@ -4335,7 +4345,7 @@ void PM_SetMeleeBlock(void)
 				{
 					anim = pm->ps->torsoAnim;
 				}
-				else if (Q_irand(0, 1))
+				else if (PM_irand_timesync(0, 1))
 				{
 					anim = MELEE_STANCE_B;
 				}
@@ -4413,7 +4423,7 @@ int PM_ReturnforQuad(const int quad)
 		return LS_R_BL2TR;
 	case Q_T:
 	{
-		if (!Q_irand(0, 1))
+		if (!PM_irand_timesync(0, 1))
 		{
 			return LS_R_BL2TR;
 		}
@@ -4689,83 +4699,83 @@ static void PM_SaberDroidWeapon(void)
 		switch (pm->ps->saberBlocked)
 		{
 		case BLOCKED_PARRY_BROKEN:
-			PM_SetAnim(SETANIM_BOTH, Q_irand(BOTH_PAIN1, BOTH_PAIN3), SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
+			PM_SetAnim(SETANIM_BOTH, PM_irand_timesync(BOTH_PAIN1, BOTH_PAIN3), SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		case BLOCKED_ATK_BOUNCE:
-			PM_SetAnim(SETANIM_BOTH, Q_irand(BOTH_PAIN1, BOTH_PAIN3), SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
+			PM_SetAnim(SETANIM_BOTH, PM_irand_timesync(BOTH_PAIN1, BOTH_PAIN3), SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		case BLOCKED_UPPER_RIGHT:
 			PM_SetAnim(SETANIM_BOTH, BOTH_P1_S1_TR, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-			pm->ps->legsTimer += Q_irand(200, 1000);
+			pm->ps->legsTimer += PM_irand_timesync(200, 1000);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		case BLOCKED_UPPER_RIGHT_PROJ:
 			PM_SetAnim(SETANIM_BOTH, BOTH_BLOCKATTACK_RIGHT, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-			pm->ps->legsTimer += Q_irand(200, 1000);
+			pm->ps->legsTimer += PM_irand_timesync(200, 1000);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		case BLOCKED_LOWER_RIGHT:
 		case BLOCKED_LOWER_RIGHT_PROJ:
 			PM_SetAnim(SETANIM_BOTH, BOTH_P1_S1_BR, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-			pm->ps->legsTimer += Q_irand(200, 1000);
+			pm->ps->legsTimer += PM_irand_timesync(200, 1000);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		case BLOCKED_UPPER_LEFT_PROJ:
 			PM_SetAnim(SETANIM_BOTH, BOTH_BLOCKATTACK_LEFT, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-			pm->ps->legsTimer += Q_irand(200, 1000);
+			pm->ps->legsTimer += PM_irand_timesync(200, 1000);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		case BLOCKED_UPPER_LEFT:
 			PM_SetAnim(SETANIM_BOTH, BOTH_P1_S1_TL, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-			pm->ps->legsTimer += Q_irand(200, 1000);
+			pm->ps->legsTimer += PM_irand_timesync(200, 1000);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		case BLOCKED_LOWER_LEFT:
 		case BLOCKED_LOWER_LEFT_PROJ:
 			PM_SetAnim(SETANIM_BOTH, BOTH_P1_S1_BL, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-			pm->ps->legsTimer += Q_irand(200, 1000);
+			pm->ps->legsTimer += PM_irand_timesync(200, 1000);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		case BLOCKED_TOP:
 			PM_SetAnim(SETANIM_BOTH, BOTH_P1_S1_T_, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-			pm->ps->legsTimer += Q_irand(200, 1000);
+			pm->ps->legsTimer += PM_irand_timesync(200, 1000);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		case BLOCKED_TOP_PROJ:
 			PM_SetAnim(SETANIM_BOTH, BOTH_P1_S1_T_, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-			pm->ps->legsTimer += Q_irand(200, 1000);
+			pm->ps->legsTimer += PM_irand_timesync(200, 1000);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		case BLOCKED_FRONT:
 			PM_SetAnim(SETANIM_BOTH, BOTH_P1_S1_T1_, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-			pm->ps->legsTimer += Q_irand(200, 1000);
+			pm->ps->legsTimer += PM_irand_timesync(200, 1000);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		case BLOCKED_FRONT_PROJ:
 			PM_SetAnim(SETANIM_BOTH, BOTH_P1_S1_T1_, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-			pm->ps->legsTimer += Q_irand(200, 1000);
+			pm->ps->legsTimer += PM_irand_timesync(200, 1000);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		case BLOCKED_BLOCKATTACK_LEFT:
 			PM_SetAnim(SETANIM_BOTH, BOTH_BLOCKATTACK_LEFT, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-			pm->ps->legsTimer += Q_irand(200, 1000);
+			pm->ps->legsTimer += PM_irand_timesync(200, 1000);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		case BLOCKED_BLOCKATTACK_RIGHT:
 			PM_SetAnim(SETANIM_BOTH, BOTH_BLOCKATTACK_RIGHT, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-			pm->ps->legsTimer += Q_irand(200, 1000);
+			pm->ps->legsTimer += PM_irand_timesync(200, 1000);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		case BLOCKED_BLOCKATTACK_FRONT:
 			PM_SetAnim(SETANIM_BOTH, BOTH_P7_S7_T_, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-			pm->ps->legsTimer += Q_irand(200, 1000);
+			pm->ps->legsTimer += PM_irand_timesync(200, 1000);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		case BLOCKED_BACK:
 			PM_SetAnim(SETANIM_BOTH, BOTH_P1_S1_B1_, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-			pm->ps->legsTimer += Q_irand(200, 1000);
+			pm->ps->legsTimer += PM_irand_timesync(200, 1000);
 			pm->ps->weaponTime = pm->ps->legsTimer;
 			break;
 		default:
@@ -4936,7 +4946,7 @@ static qboolean PM_SaberBlocking(void)
 						while (newQuad == saberMoveData[pm->ps->saberMove].startQuad)
 						{
 							//player is still in same attack quad, don't repeat that attack because it looks bad,
-							newQuad = Q_irand(Q_BR, Q_BL);
+							newQuad = PM_irand_timesync(Q_BR, Q_BL);
 						}
 						next_move = transitionMove[saberMoveData[pm->ps->saberMove].startQuad][newQuad];
 					}
@@ -4999,7 +5009,7 @@ static qboolean PM_SaberBlocking(void)
 				|| saber1->type == SABER_SINGLE_ASBACKHAND))
 			{
 				PM_SetAnim(SETANIM_TORSO, BOTH_BLOCK_BACK_HAND, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-				pm->ps->torsoTimer += Q_irand(200, 1000);
+				pm->ps->torsoTimer += PM_irand_timesync(200, 1000);
 				pm->ps->weaponTime = pm->ps->torsoTimer;
 			}
 			else
@@ -5031,7 +5041,7 @@ static qboolean PM_SaberBlocking(void)
 				|| saber1->type == SABER_SINGLE_ASBACKHAND))
 			{
 				PM_SetAnim(SETANIM_TORSO, BOTH_BLOCK_BACK_HAND, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-				pm->ps->torsoTimer += Q_irand(200, 1000);
+				pm->ps->torsoTimer += PM_irand_timesync(200, 1000);
 				pm->ps->weaponTime = pm->ps->torsoTimer;
 			}
 			else
@@ -5093,7 +5103,7 @@ static qboolean PM_SaberBlocking(void)
 				|| saber1->type == SABER_SINGLE_ASBACKHAND))
 			{
 				PM_SetAnim(SETANIM_TORSO, BOTH_BLOCK_BACK_HAND, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-				pm->ps->torsoTimer += Q_irand(200, 1000);
+				pm->ps->torsoTimer += PM_irand_timesync(200, 1000);
 				pm->ps->weaponTime = pm->ps->torsoTimer;
 			}
 			else
@@ -5115,7 +5125,7 @@ static qboolean PM_SaberBlocking(void)
 				|| saber1->type == SABER_SINGLE_ASBACKHAND))
 			{
 				PM_SetAnim(SETANIM_TORSO, BOTH_BLOCK_BACK_HAND, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-				pm->ps->torsoTimer += Q_irand(200, 1000);
+				pm->ps->torsoTimer += PM_irand_timesync(200, 1000);
 				pm->ps->weaponTime = pm->ps->torsoTimer;
 			}
 			else if (saber1 && saber1->type == SABER_SINGLE_DOOKU
@@ -5151,7 +5161,7 @@ static qboolean PM_SaberBlocking(void)
 				|| saber1->type == SABER_SINGLE_ASBACKHAND))
 			{
 				PM_SetAnim(SETANIM_TORSO, BOTH_BLOCK_BACK_HAND, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
-				pm->ps->torsoTimer += Q_irand(200, 1000);
+				pm->ps->torsoTimer += PM_irand_timesync(200, 1000);
 				pm->ps->weaponTime = pm->ps->torsoTimer;
 			}
 			else if (saber1 && saber1->type == SABER_SINGLE_DOOKU
@@ -5378,7 +5388,7 @@ static qboolean PM_CanDoSmashdown(const pmove_t* pm)
 	}
 
 	// Difficulty chance
-	int roll = Q_irand(0, 99);
+	int roll = PM_irand_timesync(0, 99);
 	int chanceThreshold = 0;
 
 	switch (pm->ps->fd.saberAnimLevel)
@@ -7073,8 +7083,8 @@ weapChecks:
 #ifdef _GAME
 					if (((g_entities[pm->ps->clientNum].r.svFlags & SVF_BOT) ||
 						(pm_entSelf->s.eType == ET_NPC)) &&
-						(Q_irand(0, pm->ps->fd.forcePowerLevel[FP_SABER_OFFENSE] - 1) ||
-							(pm->ps->saberAnimLevel == SS_FAST && Q_irand(0, 1))))
+						(PM_irand_timesync(0, pm->ps->fd.forcePowerLevel[FP_SABER_OFFENSE] - 1) ||
+							(pm->ps->saberAnimLevel == SS_FAST && PM_irand_timesync(0, 1))))
 					{
 						// Bots/NPCs: use more randomized attacks the more skilled they are.
 						newmove = PM_NPCSaberAttackFromQuad(saberMoveData[curmove].endQuad);
@@ -7161,7 +7171,7 @@ weapChecks:
 						break;
 
 					case BOTH_ARIAL_F1:        // random L/R attack
-						if (Q_irand(0, 1))
+						if (PM_irand_timesync(0, 1))
 						{
 							newmove = LS_A_L2R;
 						}
@@ -7804,7 +7814,7 @@ void PM_SetSaberMove(saberMoveName_t new_move)
 	//different styles use different animations for the DFA move.
 	else if (new_move == LS_A_JUMP_T__B_ && pm->ps->fd.saberAnimLevel == SS_DESANN)
 	{
-		anim = Q_irand(BOTH_FJSS_TR_BL, BOTH_FJSS_TL_BR);
+		anim = PM_irand_timesync(BOTH_FJSS_TR_BL, BOTH_FJSS_TL_BR);
 	}
 	else if (new_move == LS_A_JUMP_T__B_ && pm->ps->fd.saberAnimLevel == SS_BLASTER) // SS_BLASTER
 	{
@@ -7932,100 +7942,49 @@ void PM_SetSaberMove(saberMoveName_t new_move)
 
 	if (PM_InSaberStandAnim(anim) || BG_UnstyleAnim(anim) == BOTH_STAND1)
 	{
-		anim = pm->ps->legsAnim;
+		// SP (AMD mode) LS_READY torso (batch 3, 2026-11-02): SP PM_SetSaberMove's ready switch + PM_TorsoAnimLightsaber.
+		// The torso plays the legs' anim while they walk (not while holding block), run / sprint, jump, land, cartwheel,
+		// flip, or crouch with the saber; otherwise the ready pose (ducked: the ready crouch), or the blocking pose while
+		// holding block. MP showed the ready pose while walking (WALK1 / WALKBACK1 / WALKBACK2) and the legs' anim on
+		// every other legs anim (turns, pains...).
+		const int legs_anim = pm->ps->legsAnim;
+		const int legs_base = BG_UnstyleAnim(legs_anim);
 
-		if ((anim >= BOTH_STAND1 && anim <= BOTH_STAND4TOATTACK2) ||
-			(anim >= TORSO_DROPWEAP1 && anim <= TORSO_WEAPONIDLE10))
+		if (!PM_InSlopeAnim(legs_anim)
+			&& (PM_WalkingAnim(legs_anim) && !is_holding_block_button
+				|| PM_RunningAnim(legs_anim)
+				|| PM_JumpingAnim(legs_anim)
+				|| PM_LandingAnim(legs_anim)
+				|| PM_InCartwheel(legs_anim)
+				|| PM_FlippingAnim(legs_anim)
+				|| legs_base == BOTH_SABERSINGLECROUCH
+				|| legs_base == BOTH_SABERDUALCROUCH
+				|| legs_base == BOTH_SABERSTAFFCROUCH))
 		{
-			if (is_walking_and_blocking == qtrue)
+			anim = legs_anim;
+		}
+		else if (is_walking_and_blocking == qtrue)
+		{
+			if (pm->ps->fd.saberAnimLevel == SS_DUAL)
 			{
-				if (pm->ps->fd.saberAnimLevel == SS_DUAL)
-				{
-					anim = PM_BlockingPoseForsaber_anim_levelDual();
-				}
-				else if (pm->ps->fd.saberAnimLevel == SS_STAFF)
-				{
-					anim = PM_BlockingPoseForsaber_anim_levelStaff();
-				}
-				else
-				{
-					anim = PM_BlockingPoseForsaber_anim_levelSingle();
-				}
+				anim = PM_BlockingPoseForsaber_anim_levelDual();
+			}
+			else if (pm->ps->fd.saberAnimLevel == SS_STAFF)
+			{
+				anim = PM_BlockingPoseForsaber_anim_levelStaff();
 			}
 			else
 			{
-				anim = PM_IdlePoseForsaber_anim_level();
+				anim = PM_BlockingPoseForsaber_anim_levelSingle();
 			}
 		}
-
-		if (pm->ps->pm_flags & PMF_DUCKED)
+		else if (pm->ps->pm_flags & PMF_DUCKED)
 		{
-			if (is_walking_and_blocking == qtrue)
-			{
-				if (pm->ps->fd.saberAnimLevel == SS_DUAL)
-				{
-					PM_SetAnim(SETANIM_TORSO, PM_BlockingPoseForsaber_anim_levelDual(), SETANIM_FLAG_OVERRIDE);
-				}
-				else if (pm->ps->fd.saberAnimLevel == SS_STAFF)
-				{
-					PM_SetAnim(SETANIM_TORSO, PM_BlockingPoseForsaber_anim_levelStaff(), SETANIM_FLAG_OVERRIDE);
-				}
-				else
-				{
-					PM_SetAnim(SETANIM_TORSO, PM_BlockingPoseForsaber_anim_levelSingle(), SETANIM_FLAG_OVERRIDE);
-				}
-			}
-			else
-			{
-				anim = PM_ReadyPoseForsaber_anim_levelDucked();
-			}
+			anim = PM_ReadyPoseForsaber_anim_levelDucked();
 		}
-
-		if (BG_UnstyleAnim(anim) == BOTH_WALKBACK1 || BG_UnstyleAnim(anim) == BOTH_WALKBACK2 ||
-			BG_UnstyleAnim(anim) == BOTH_WALK1 || anim == BOTH_MENUIDLE1)
+		else
 		{
-			if (is_walking_and_blocking == qtrue)
-			{
-				if (pm->ps->fd.saberAnimLevel == SS_DUAL)
-				{
-					anim = PM_BlockingPoseForsaber_anim_levelDual();
-				}
-				else if (pm->ps->fd.saberAnimLevel == SS_STAFF)
-				{
-					anim = PM_BlockingPoseForsaber_anim_levelStaff();
-				}
-				else
-				{
-					anim = PM_BlockingPoseForsaber_anim_levelSingle();
-				}
-			}
-			else
-			{
-				anim = PM_IdlePoseForsaber_anim_level();
-			}
-		}
-
-		if (PM_InSlopeAnim(anim))
-		{
-			if (is_walking_and_blocking == qtrue)
-			{
-				if (pm->ps->fd.saberAnimLevel == SS_DUAL)
-				{
-					anim = PM_BlockingPoseForsaber_anim_levelDual();
-				}
-				else if (pm->ps->fd.saberAnimLevel == SS_STAFF)
-				{
-					anim = PM_BlockingPoseForsaber_anim_levelStaff();
-				}
-				else
-				{
-					anim = PM_BlockingPoseForsaber_anim_levelSingle();
-				}
-			}
-			else
-			{
-				anim = PM_IdlePoseForsaber_anim_level();
-			}
+			anim = PM_IdlePoseForsaber_anim_level();
 		}
 
 		parts = SETANIM_TORSO;

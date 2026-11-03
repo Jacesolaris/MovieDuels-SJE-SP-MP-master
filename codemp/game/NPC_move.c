@@ -1084,6 +1084,8 @@ NPC_GetMoveDirectionAltRoute
 -------------------------
 */
 extern int NAVNEW_MoveToGoal(gentity_t* self, navInfo_t* info);
+// no SP nav route: follow the bot route instead (NPC_AI_Path.c, Warzone port)
+extern qboolean NPC_WPRoute_Direction(gentity_t* self, const vec3_t goal, vec3_t dir);
 extern qboolean NAVNEW_AvoidCollision(gentity_t* self, gentity_t* goal, navInfo_t* info, qboolean setBlockedInfo,
 	int blockedMovesLimit);
 
@@ -1118,7 +1120,8 @@ static qboolean NPC_GetMoveDirectionAltRoute(vec3_t out, float* distance, const 
 	{
 		//blocked
 		//Can't get straight to goal, use macro nav
-		if (NAVNEW_MoveToGoal(NPCS.NPC, &frameNavInfo) == WAYPOINT_NONE)
+		if (NAVNEW_MoveToGoal(NPCS.NPC, &frameNavInfo) == WAYPOINT_NONE
+			&& !NPC_WPRoute_Direction(NPCS.NPC, NPCS.NPCInfo->goalEntity->r.currentOrigin, frameNavInfo.direction))
 		{
 			//Can't reach goal, just face
 			vectoangles(frameNavInfo.direction, angles);
@@ -1143,7 +1146,8 @@ static qboolean NPC_GetMoveDirectionAltRoute(vec3_t out, float* distance, const 
 			{
 				//revert to macro nav
 				//Can't get straight to goal, dump tempInfo and use macro nav
-				if (NAVNEW_MoveToGoal(NPCS.NPC, &frameNavInfo) == WAYPOINT_NONE)
+				if (NAVNEW_MoveToGoal(NPCS.NPC, &frameNavInfo) == WAYPOINT_NONE
+					&& !NPC_WPRoute_Direction(NPCS.NPC, NPCS.NPCInfo->goalEntity->r.currentOrigin, frameNavInfo.direction))
 				{
 					//Can't reach goal, just face
 					vectoangles(frameNavInfo.direction, angles);

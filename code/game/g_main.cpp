@@ -280,6 +280,8 @@ cvar_t* g_update9firststartup;
 cvar_t* g_totgfirststartup;
 
 cvar_t* g_allowgunnerbash;
+cvar_t* g_aiReload; // AI clips and reloads (2026-11-02, from SJE): gunner NPCs stop to reload when their clip is empty
+cvar_t* g_aiClipScale; // x every AI clip size
 
 cvar_t* g_noAutoFollow;
 
@@ -913,6 +915,10 @@ static void G_InitCvars()
 	g_totgfirststartup = gi.cvar("g_totgfirststartup", "1", 0);
 
 	g_allowgunnerbash = gi.cvar("g_allowgunnerbash", "1", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
+	// gunner NPCs count their shots and stop to reload when the clip is empty: reload anim + sound, duck or run to
+	// cover, a callout (DH 2026-11-02, the SJE AI port). 0 = the old endless fire
+	g_aiReload = gi.cvar("g_aiReload", "1", CVAR_ARCHIVE | CVAR_NORESTART);
+	g_aiClipScale = gi.cvar("g_aiClipScale", "1", CVAR_ARCHIVE | CVAR_NORESTART);
 
 	g_noAutoFollow = gi.cvar("g_noAutoFollow", "0", CVAR_ARCHIVE);
 
@@ -2601,8 +2607,30 @@ static void G_RestartAnimsAfterLoad()
 		g_ActivateAnimationStyle->integer == 1 ? "Master" : "Classic", changed);
 }
 
+// The player's animation style (DH 2026-11-02): with the Master style a style picked in the menu
+// (g_PlayerAnimationStyle other than "default"); otherwise his own model's style, from its NPC file
+// (client->parsedAnimationStyle, set by NPC_ParseParms and G_ChangePlayerModel).
+Animationstyles_t G_PlayerAnimationStyleFor(const gentity_t* ent)
+{
+	if (!ent || !ent->client)
+	{
+		return CS_DEFAULT;
+	}
+	if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1 && g_PlayerAnimationStyle)
+	{
+		const int chosen = GetIDForString(AnimationstylesTable, g_PlayerAnimationStyle->string);
+		if (chosen > CS_DEFAULT && chosen < CS_NUM_ANIMATION_STYLES)
+		{
+			return static_cast<Animationstyles_t>(chosen);
+		}
+	}
+	const int own = ent->client->parsedAnimationStyle;
+	return own > CS_DEFAULT && own < CS_NUM_ANIMATION_STYLES ? static_cast<Animationstyles_t>(own) : CS_DEFAULT;
+}
+
 // With the Master style the player picks which character's animations they use ("Select Animation Style"
-// in the setup menus, or the "animationstyle" console command, which also sets g_PlayerAnimationStyle).
+// in the setup menus, or the "animationstyle" console command, which also sets g_PlayerAnimationStyle);
+// "default" = his own model's style (G_PlayerAnimationStyleFor).
 // Given to the player once they are in the map, and again every time the choice changes.
 static void G_ApplyPlayerAnimationStyle()
 {
@@ -2631,7 +2659,7 @@ static void G_ApplyPlayerAnimationStyle()
 			g_PlayerAnimationStyle->string);
 		return;
 	}
-	player_ent->client->animationstyle = static_cast<Animationstyles_t>(style);
+	player_ent->client->animationstyle = style == CS_DEFAULT ? G_PlayerAnimationStyleFor(player_ent) : static_cast<Animationstyles_t>(style);
 }
 
 void G_RunFrame(const int level_time)

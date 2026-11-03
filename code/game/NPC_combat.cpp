@@ -1856,6 +1856,7 @@ extern qboolean PM_SpinningAnim(int anim);
 
 extern void BubbleShield_TurnOn();
 extern qboolean droideka_npc(const gentity_t* ent);
+extern cvar_t* g_aiReload;
 
 void WeaponThink()
 {
@@ -1946,7 +1947,15 @@ void WeaponThink()
 	const int primaryCost = weaponData[ps->weapon].energyPerShot;
 	const int altCost = weaponData[ps->weapon].altEnergyPerShot;
 
-	if (ps->ammo[ammoIndex] < primaryCost)
+	const int mostPerShot = altCost > primaryCost ? altCost : primaryCost;
+
+	if (g_aiReload->integer && mostPerShot > 0 && ps->ammo[ammoIndex] < mostPerShot * 2)
+	{
+		// AI clips and reloads (2026-11-02, from SJE): the clip decides when to reload (G_AIClipShot); the reserve is
+		// topped up quietly
+		Add_Ammo(NPC, ps->weapon, mostPerShot * 20);
+	}
+	else if (ps->ammo[ammoIndex] < primaryCost)
 	{
 		Add_Ammo(NPC, ps->weapon, primaryCost * 10);
 		NPC_SetAnim(NPC, SETANIM_TORSO, BOTH_RELOAD,

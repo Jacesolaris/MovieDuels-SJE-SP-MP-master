@@ -187,13 +187,13 @@ XCVAR_DEF(g_debugviewlock, "0", NULL, CVAR_NONE, qfalse)
 XCVAR_DEF(g_saberAnimSpeed, "1.0", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_RealisticBlockingMode, "1", NULL, CVAR_ARCHIVE | CVAR_LATCH, qtrue) // as SP: the player's menu choice (used when hosting a local game)
 // Animation style (SP g_ActivateAnimationStyle, g_main.c G_LatchAnimationStyle). The host's setting: 0 = Classic (every
-// model its own dedicated animation set), 1 = Master (the master _humanoid set + the player's g_PlayerAnimationStyle).
-// Master is only used in a solo game (local listen server, no other human): server games always run Classic.
+// model its own dedicated animation set), 1 = Master (the master _humanoid set; each player's own style from his
+// userinfo md_animstyle). Used in every game, solo or online (DH 2026-11-02); Update 9 clients only with Master.
 XCVAR_DEF(g_ActivateAnimationStyle, "0", NULL, CVAR_ARCHIVE, qtrue)
-XCVAR_DEF(g_PlayerAnimationStyle, "default", NULL, CVAR_ARCHIVE, qfalse) // as SP: the solo player's own style with Master ("default", "yoda"...)
+XCVAR_DEF(g_PlayerAnimationStyle, "default", NULL, CVAR_ARCHIVE, qfalse) // the host's console style ("animationstyle" command) when his userinfo md_animstyle is "default"
 XCVAR_DEF(g_animationStyleActive, "0", NULL, CVAR_SYSTEMINFO | CVAR_ROM, qfalse) // the style in force for this map (set at map load), sent to every client: renderer, cgame and ui follow it
 XCVAR_DEF(md_soloGame, "0", NULL, CVAR_SYSTEMINFO | CVAR_ROM, qfalse) // 1 while the game is solo (the menus show the animation style options only then)
-XCVAR_DEF(md_soloMasterStyle, "0", NULL, CVAR_SYSTEMINFO | CVAR_ROM, qfalse) // 1 while solo and g_ActivateAnimationStyle is 1 (the menus show "Select Animation Style" only then)
+XCVAR_DEF(md_soloMasterStyle, "0", NULL, CVAR_SYSTEMINFO | CVAR_ROM, qfalse) // 1 while the Master style is in force (online too since 2026-11-02; the name is kept for the menus)
 XCVAR_DEF(g_animStyleRemoteHumans, "0", NULL, CVAR_ROM, qfalse) // other humans connected (kept over map loads: decides the style of the next map)
 XCVAR_DEF(bg_realisticBlocking, "1", NULL, CVAR_SYSTEMINFO, qfalse) // the value in force, set by the server at map start (G_InitGame) and sent to every client
 XCVAR_DEF(bot_thinklevel, "3", NULL, CVAR_ARCHIVE, qtrue)
@@ -219,6 +219,7 @@ XCVAR_DEF(g_dodgemulti, "10.0", NULL, CVAR_LATCH, qfalse)
 XCVAR_DEF(g_ffaRespawnTimer, "1", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_deathfx, "1", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_droidBodyVanish, "1", NULL, CVAR_ARCHIVE, qtrue)
+XCVAR_DEF(g_muzzleFromWeapon, "1", NULL, CVAR_ARCHIVE, qtrue) // shots come from the gun's "*flash" tag, not the eyes (0 = old)
 XCVAR_DEF(g_monsterGrab, "1", NULL, CVAR_ARCHIVE, qtrue) // wampa / rancor players and bots grab, hold and eat like SP (0 = off)
 XCVAR_DEF(g_rancorPit, "1", NULL, CVAR_ARCHIVE, qtrue) // a rancor always lives on g_rancorPitMap and respawns after it dies (0 = off)
 XCVAR_DEF(g_rancorPitMap, "mp/duel7", NULL, CVAR_ARCHIVE, qfalse)
@@ -301,6 +302,8 @@ XCVAR_DEF(g_AllowMawKick, "0", NULL, CVAR_ARCHIVE, qfalse) // Maw (no legs) may 
 XCVAR_DEF(g_saberNewControlScheme, "0", NULL, CVAR_ARCHIVE, qfalse) // SP g_saberNewControlScheme (DH 2026-10-24 SP NPC port)
 XCVAR_DEF(g_npcSpecialAttackFreq, "1.0", NULL, CVAR_ARCHIVE, qfalse) // how often NPCs use special saber attacks (SP g_npcSpecialAttackFreq) (DH 2026-10-24 SP NPC port)
 
+XCVAR_DEF(g_aiReload, "1", NULL, CVAR_ARCHIVE, qtrue) // gunner bots and NPCs count their shots and stop to reload when the clip is empty: reload anim + sound, NPCs duck or run to cover and call out (DH 2026-11-02, from SJE); 0 = the old endless fire
+XCVAR_DEF(g_aiClipScale, "1", NULL, CVAR_ARCHIVE, qtrue) // x every bot / NPC clip size (g_aiReload)
 XCVAR_DEF(g_allowgunnerbash, "1", NULL, CVAR_ARCHIVE, qfalse) // gunner NPCs bash/kick enemies who get close (SP g_allowgunnerbash) (DH 2026-10-24 SP NPC port)
 XCVAR_DEF(g_tuskenWeapons, "1", NULL, CVAR_ARCHIVE, qfalse) // tusken raiders get the tusken staff (no saber), tusken snipers the tusken rifle (SP weapons ported 2026-10-25); 0: the old saber / disruptor loadouts
 XCVAR_DEF(g_awardStreaks, "1", NULL, CVAR_ARCHIVE, qfalse) // award sounds for kill / death / saber-3 kill streaks of 4 (0: the old awards) (DH 2026-10-25)
@@ -308,4 +311,5 @@ XCVAR_DEF(g_duelWinSound, "1", NULL, CVAR_ARCHIVE, qfalse) // play sound/player/
 XCVAR_DEF(g_Advancedaitalk, "1", NULL, CVAR_ARCHIVE, qfalse) // NPCs taunt/talk in combat (SP g_Advancedaitalk) (DH 2026-10-24 SP NPC port)
 XCVAR_DEF(g_SaberAttackSpeedMD, "1", NULL, CVAR_ARCHIVE, qtrue)
 
+XCVAR_DEF(g_lightningDrainRate, "8", NULL, CVAR_ARCHIVE, qtrue) // force points a second while force lightning is held (DH 2026-11-02); 0 = the old cost (2 / 5 / 8 points every 50 ms)
 #undef XCVAR_DEF

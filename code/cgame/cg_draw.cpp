@@ -4793,7 +4793,7 @@ static void CG_DrawHUD(const centity_t* cent)
 			|| cg.snap->ps.forcePowersActive & 1 << FP_RAGE
 			|| cg.snap->ps.forcePowersActive & 1 << FP_DESTRUCTION
 			|| cg.snap->ps.forcePowersActive & 1 << FP_DEADLYSIGHT
-			|| cg.snap->ps.forcePowersActive & 1 << FP_LIGHTNING_STRIKE
+			|| cg.snap->ps.forcePowersActive & 1 << FP_STASIS
 			|| cg.snap->ps.forcePowersActive & 1 << FP_FEAR)
 		{
 			hudTintColor = redhudtint;
@@ -4802,10 +4802,9 @@ static void CG_DrawHUD(const centity_t* cent)
 			|| cg.snap->ps.forcePowersActive & 1 << FP_HEAL
 			|| cg.snap->ps.forcePowersActive & 1 << FP_PROTECT
 			|| cg.snap->ps.forcePowersActive & 1 << FP_TELEPATHY
-			|| cg.snap->ps.forcePowersActive & 1 << FP_STASIS
 			|| cg.snap->ps.forcePowersActive & 1 << FP_REPULSE
-			|| cg.snap->ps.forcePowersActive & 1 << FP_GRASP
 			|| cg.snap->ps.forcePowersActive & 1 << FP_PROJECTION
+			|| cg.snap->ps.forcePowersActive & 1 << FP_LIGHTNING_STRIKE
 			|| cg.snap->ps.forcePowersActive & 1 << FP_BLAST)
 		{
 			hudTintColor = bluehudtint;

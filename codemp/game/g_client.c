@@ -4371,6 +4371,7 @@ extern qboolean g_dontPenalizeTeam; //g_cmds.c
 void SetTeamQuick(const gentity_t* ent, const int team, const qboolean doBegin);
 
 #include "ai_main.h"
+extern qboolean BG_SaberIsCrossguard(const saberInfo_t* saber); // bg_saberLoad.c
 extern bot_state_t* botstates[MAX_CLIENTS];
 extern void Bot_GiveStartingCredits(bot_state_t* bs);
 
@@ -5035,7 +5036,7 @@ static void AI_SetBotSaberStyle(gentity_t* ent)
 	// -------------------------------
 	// SINGLE SABER
 	// -------------------------------
-	if (saber1->model[0] && saber1->numBlades == 1)
+	if (saber1->model[0] && (saber1->numBlades == 1 || BG_SaberIsCrossguard(saber1))) // (crossguard = single, 2026-11-04)
 	{
 		// SS_BLASTER bot class style set: Kyle Katarn - Medium and Blaster (as his NPC files)
 		if (ent->client->pers.botclass == BCLASS_KYLE)
@@ -5417,7 +5418,7 @@ void ClientSpawn(gentity_t* ent)
 	if (level.gametype == GT_SINGLE_PLAYER)
 	{
 		// a player who came along from the last map starts at its spawn target (g_target.c G_MissionSpawnPoint)
-		extern gentity_t* G_MissionSpawnPoint(const gentity_t* ent, vec3_t origin, vec3_t angles);
+		extern gentity_t* G_MissionSpawnPoint(const gentity_t * ent, vec3_t origin, vec3_t angles);
 		spawnPoint = G_MissionSpawnPoint(ent, spawn_origin, spawn_angles);
 		if (!spawnPoint && ent->r.svFlags & SVF_BOT)
 		{
@@ -5433,7 +5434,7 @@ void ClientSpawn(gentity_t* ent)
 		if (!spawnPoint)
 		{
 			// (several players at the one SP start: a free spot around it, g_target.c G_MissionSpreadSpawn)
-			extern void G_MissionSpreadSpawn(const gentity_t* ent, const gentity_t* spot, vec3_t origin);
+			extern void G_MissionSpreadSpawn(const gentity_t * ent, const gentity_t * spot, vec3_t origin);
 			spawnPoint = SelectSPSpawnPoint(spawn_origin, spawn_angles);
 			G_MissionSpreadSpawn(ent, spawnPoint, spawn_origin);
 		}
@@ -8040,7 +8041,7 @@ spawn_done:
 	if (level.gametype == GT_SINGLE_PLAYER)
 	{
 		// Missions: the loadout he brought from the last map, on his first spawn here (g_target.c G_MissionApplyLoadout)
-		extern void G_MissionApplyLoadout(gentity_t* ent);
+		extern void G_MissionApplyLoadout(gentity_t * ent);
 		G_MissionApplyLoadout(ent);
 	}
 

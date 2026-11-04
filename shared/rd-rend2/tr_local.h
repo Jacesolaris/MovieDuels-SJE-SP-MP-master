@@ -189,6 +189,11 @@ extern cvar_t* r_forceSunAmbientScale;
 extern cvar_t* r_sunlightMode;
 extern cvar_t* r_drawSunRays;
 extern cvar_t* r_sharpen;		// Warzone port: contrast-adaptive sharpening, 0 = off .. 1 = strongest
+extern cvar_t* r_ssr;			// screen space reflections: 0 = off, 1 = floors, 2 = all surfaces
+extern cvar_t* r_ssrStrength;	// r_ssr blend strength 0..1
+extern cvar_t* r_ssrMaxDistance;	// r_ssr max ray length in world units
+extern cvar_t* r_godRays;			// screen space light shafts from bright sky towards the sun: 0 = off, 1 = on
+extern cvar_t* r_godRaysStrength;	// r_godRays brightness
 extern cvar_t* r_sunShadows;
 extern cvar_t* r_shadowFilter;
 extern cvar_t* r_shadowMapSize;
@@ -1673,6 +1678,12 @@ typedef enum
 	UNIFORM_SLICECAPSMAP,
 	UNIFORM_SLICEBLOODMAP,
 	UNIFORM_SLICEGLOWMAP,
+	UNIFORM_SSRPROJECTION,
+	UNIFORM_SSRPARAMS,
+	UNIFORM_SSRVIEWPORT,
+	UNIFORM_SSRUP,
+	UNIFORM_GODRAYSUN,
+	UNIFORM_GODRAYPARAMS,
 
 	UNIFORM_COUNT
 } uniform_t;
@@ -2863,6 +2874,8 @@ typedef struct trGlobals_s {
 	shaderProgram_t ssaoShader;
 	shaderProgram_t highpassShader;
 	shaderProgram_t sharpenShader;	// r_sharpen (glsl/sharpen.glsl)
+	shaderProgram_t ssrShader;		// r_ssr (glsl/ssr.glsl)
+	shaderProgram_t godRaysShader;	// r_godRays (glsl/godrays.glsl)
 	shaderProgram_t depthBlurShader[2];
 #ifndef REND2_SP
 	shaderProgram_t testcubeShader;
@@ -4198,7 +4211,7 @@ struct gpuFrame_t
 
 // all of the information needed by the back end must be
 // contained in a backEndData_t.
-#define PER_FRAME_MEMORY_BYTES (32 * 1024 * 1024)
+#define PER_FRAME_MEMORY_BYTES (64 * 1024 * 1024) // was 32 MB: a view of the whole map (no vis, e.g. from outside the world) ran out (2026-11-03)
 class Allocator;
 struct Pass;
 typedef struct backEndData_s {

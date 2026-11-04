@@ -251,7 +251,10 @@ static QINLINE void G_PlayReaction(
 
 	const int anim = anims[idx];
 
-	G_SetAnim(ent, &ent->client->pers.cmd, SETANIM_TORSO, anim, SETANIM_AFLAG_PACE, 0);
+	// SP G_PlayStaggerAnim: a stagger / stumble during a kata plays on the whole body (2026-11-03, parity batch 5); the
+	// stagger / stumble callers are the ones passing slowDual (SabBeh_AnimateMassiveDualSlowBounce only looks the anim up)
+	G_SetAnim(ent, &ent->client->pers.cmd, slowDual && PM_SaberInKata(ent->client->ps.saberMove) ? SETANIM_BOTH : SETANIM_TORSO, anim,
+		SETANIM_AFLAG_PACE, 0);
 
 	if (PM_SaberInMassiveBounce(ent->client->ps.torsoAnim))
 	{
@@ -396,9 +399,15 @@ void G_BounceAttacker(gentity_t* atk)
 	G_PlayReaction(atk, &REACT_BOUNCE, qfalse, qfalse);
 }
 
+// SP G_StaggerAttacker: the same stagger anims as a hit victim (BOTH_BASHED1 / BOTH_H1_S1_*; MP played the broken parry
+// sets BOTH_V1 / V6 / V7 per style), not while the saber is thrown (2026-11-03, parity batch 5)
 void G_StaggerAttacker(gentity_t* atk)
 {
-	G_PlayReaction(atk, &REACT_STAGGER_ATTACK, qtrue, qtrue);
+	if (atk->client->ps.saberInFlight)
+	{
+		return;
+	}
+	G_PlayReaction(atk, &REACT_STAGGER_HIT, qtrue, qtrue);
 }
 
 void g_fatigue_bp_knockaway(gentity_t* blocker)
@@ -408,12 +417,20 @@ void g_fatigue_bp_knockaway(gentity_t* blocker)
 
 void G_Stagger(gentity_t* hit_ent)
 {
+	if (hit_ent->client->ps.saberInFlight)
+	{
+		return; // SP G_Stagger: not while the saber is thrown
+	}
 	G_PlayReaction(hit_ent, &REACT_STAGGER_HIT, qtrue, qtrue);
 }
 
 static void G_Stumble(gentity_t* hit_ent)
 {
-	G_PlayReaction(hit_ent, &REACT_STUMBLE, qfalse, qfalse);
+	if (PM_SaberInBashedAnim(hit_ent->client->ps.torsoAnim))
+	{
+		return; // SP G_Stumble: not again while a bashed anim plays
+	}
+	G_PlayReaction(hit_ent, &REACT_STUMBLE, qtrue, qfalse);
 }
 
 void bg_reduce_blaster_mishap_level_advanced(playerState_t* ps)
@@ -6603,6 +6620,118 @@ static qboolean WP_SaberStuckInBody(const gentity_t* saberEnt);
 static qboolean WP_SaberBodyCanStick(const gentity_t* owner, const gentity_t* victim);
 static void WP_SaberBodyNoCutThisHit(const gentity_t* victim);
 
+// ------------------------------------------------------------
+// SP's saber damage rules on MP's scale (2026-11-03, parity batch 6, DH option A). MP keeps one damage value per hit at
+// its own level (normal 35 / 50 / 70 by g_saberRealisticCombat 0 / 1 / 2, kill moves 200); on top of that, as SP's
+// WP_SaberApplyDamageMD: a stab-down kills (the victim's health + armor), and a special attack that isn't a kill move
+// does SP's per-style damage range for it, scaled by how close the hit is to the attack anim's peak (SP
+// G_GetAttackDamageMD) and rescaled from SP's level to MP's by MP normal hit / SP normal hit (35/10, 50/25, 70/30),
+// never more than a kill move. g_saberRealisticCombat 3+ stays MP's own.
+// ------------------------------------------------------------
+static qboolean G_SPStabDownAnim(const int anim)
+{
+	switch (anim)
+	{
+	case BOTH_STABDOWN:
+	case BOTH_STABDOWN_STAFF:
+	case BOTH_STABDOWN_DUAL:
+		return qtrue;
+	default:
+		return qfalse;
+	}
+}
+
+// SP G_GetAttackDamageMD: max_dmg at the attack anim's peak (mult_point of the way through), less before and after it
+static int G_GetAttackDamageMD(const gentity_t* self, const int min_dmg, const int max_dmg, const float mult_point)
+{
+	float attack_anim_length = (float)BG_AnimLength(self->localAnimIndex, (animNumber_t)self->client->ps.torsoAnim);
+	float anim_speed_factor = 1.0f;
+
+	PM_SaberStartTransAnim(self->s.number, self->client->ps.fd.saberAnimLevel, self->client->ps.weapon,
+		self->client->ps.torsoAnim, &anim_speed_factor, self->client->ps.userInt3);
+	attack_anim_length += attack_anim_length - attack_anim_length * anim_speed_factor;
+
+	const float peak_point = attack_anim_length - attack_anim_length * mult_point;
+	// the torso timer is the point in the anim (the closer to the anim length, the closer to its start)
+	float damage_factor = peak_point > 0.0f ? (float)self->client->ps.torsoTimer / peak_point : 0.0f;
+	if (damage_factor > 1.0f)
+	{
+		damage_factor = 2.0f - damage_factor;
+	}
+	int total_damage = (int)(max_dmg * damage_factor);
+	if (total_damage < min_dmg)
+	{
+		total_damage = min_dmg;
+	}
+	if (total_damage > max_dmg)
+	{
+		total_damage = max_dmg;
+	}
+	return total_damage;
+}
+
+// SP's damage range (realistic 0 / 1 / 2: min, max) for the special attack self is doing, on MP's scale
+static int G_SPSpecialAttackDamage(const gentity_t* self)
+{
+	static const float toMP[3] = { 35.0f / 10.0f, 50.0f / 25.0f, 70.0f / 30.0f };
+	static const int leap[3][2] = { { 23, 45 },{ 30, 60 },{ 60, 100 } };
+	static const int kataStrong[3][2] = { { 30, 60 },{ 40, 80 },{ 50, 100 } };
+	static const int kataMedium[3][2] = { { 20, 40 },{ 25, 50 },{ 30, 60 } };
+	static const int kataFast[3][2] = { { 11, 30 },{ 15, 35 },{ 20, 40 } };
+	static const int kataStaff[3][2] = { { 26, 45 },{ 35, 60 },{ 50, 70 } };
+	static const int backStrong[3][2] = { { 30, 56 },{ 40, 75 },{ 50, 100 } };
+	static const int backStaff[3][2] = { { 26, 40 },{ 35, 50 },{ 50, 70 } };
+	static const int overMedium[3][2] = { { 20, 60 },{ 20, 70 },{ 20, 80 } };
+	static const int overFast[3][2] = { { 10, 50 },{ 10, 50 },{ 10, 50 } };
+	static const int overStaff[3][2] = { { 30, 50 },{ 35, 60 },{ 40, 70 } };
+	static const int rollStab[3][2] = { { 23, 45 },{ 30, 60 },{ 50, 80 } };
+	static const int lungeStab[3][2] = { { 10, 30 },{ 30, 60 },{ 40, 80 } };
+	static const int other[3][2] = { { 20, 40 },{ 50, 120 },{ 75, 180 } };
+	const int level = g_saberRealisticCombat.integer < 0 ? 0 : g_saberRealisticCombat.integer > 2 ? 2 : g_saberRealisticCombat.integer;
+	const int style = self->client->ps.fd.saberAnimLevel;
+	const int anim = self->client->ps.torsoAnim;
+	const int move = self->client->ps.saberMove;
+	const qboolean strong = style == SS_STRONG || style == SS_DESANN ? qtrue : qfalse;
+	const qboolean fast = style == SS_FAST || style == SS_TAVION ? qtrue : qfalse;
+	const int(*range)[2] = other;
+	float mult = 0.5f;
+
+	if (anim == BOTH_FORCELONGLEAP_ATTACK || anim == BOTH_FORCEJUMPDASH_ATTACK)
+	{
+		range = leap;
+	}
+	else if (PM_SaberInKata((saberMoveName_t)move))
+	{
+		range = strong ? kataStrong : style == SS_MEDIUM ? kataMedium : fast ? kataFast : kataStaff;
+	}
+	else if (PM_SaberInBackAttack((saberMoveName_t)move))
+	{
+		range = strong || style == SS_BLASTER ? backStrong : style == SS_MEDIUM ? kataMedium : fast ? kataFast : backStaff;
+	}
+	else if (PM_SaberInOverHeadSlash((saberMoveName_t)move))
+	{
+		range = strong || style == SS_BLASTER ? backStrong : style == SS_MEDIUM ? overMedium : fast ? overFast : overStaff;
+	}
+	else if (move == LS_ROLL_STAB)
+	{
+		range = rollStab;
+	}
+	else if (move == LS_A_LUNGE)
+	{
+		range = lungeStab;
+	}
+	else
+	{
+		mult = 0.65f;
+	}
+
+	const int dmg = G_GetAttackDamageMD(self, (int)(range[level][0] * toMP[level]), (int)(range[level][1] * toMP[level]), mult);
+	return dmg > SABER_MAXHITDAMAGE ? SABER_MAXHITDAMAGE : dmg;
+}
+
+static qboolean WP_SPThrownSaberKnockawayTarget(const gentity_t* ent);
+static void WP_SPThrownSaberKnockaway(gentity_t* saberent, gentity_t* saber_owner, const gentity_t* boss, vec3_t pos, vec3_t normal);
+
 static QINLINE qboolean CheckSaberDamage(gentity_t* self, const int rSaberNum, const int rBladeNum, vec3_t saber_start, vec3_t saber_end, const int trMask)
 {
 	trace_t tr;
@@ -6934,6 +7063,41 @@ static QINLINE qboolean CheckSaberDamage(gentity_t* self, const int rSaberNum, c
 		}
 
 		return qfalse;
+	}
+
+	// SP WP_SaberDamageForTrace: a thrown saber hitting one of SP's bosses, or its saber, is knocked away (parity batch 8)
+	if (self->client->ps.saberInFlight && rSaberNum == 0 && self->client->ps.saberEntityNum > 0
+		&& self->client->ps.saberEntityNum < ENTITYNUM_WORLD && tr.entityNum < ENTITYNUM_WORLD)
+	{
+		const gentity_t* hit = &g_entities[tr.entityNum];
+		const gentity_t* boss = hit->client ? hit
+			: hit->r.contents & CONTENTS_LIGHTSABER && hit->r.ownerNum < ENTITYNUM_WORLD ? &g_entities[hit->r.ownerNum] : NULL;
+		if (boss && boss != self && WP_SPThrownSaberKnockawayTarget(boss))
+		{
+			WP_SPThrownSaberKnockaway(&g_entities[self->client->ps.saberEntityNum], self, boss, tr.endpos, tr.plane.normal);
+			return qfalse;
+		}
+	}
+
+	// SP's damage rules on MP's scale (G_SPSpecialAttackDamage above): a stab-down kills, a special attack that isn't a
+	// kill move does SP's per-style, peak-timed damage (realistic 0-2; kicks, the pull stab and debug damage untouched)
+	if (dmg > SABER_NONATTACK_DAMAGE && g_saberRealisticCombat.integer <= 2 && !g_saberdebug.integer
+		&& PM_SaberInFullDamageMove(&self->client->ps, self->localAnimIndex)
+		&& !PM_KickMove(self->client->ps.saberMove) && self->client->ps.saberMove != LS_PULL_ATTACK_STAB)
+	{
+		const gentity_t* victim = tr.entityNum < ENTITYNUM_WORLD ? &g_entities[tr.entityNum] : NULL;
+		if (G_SPStabDownAnim(self->client->ps.torsoAnim))
+		{
+			if (victim && victim->client && victim->health > 0)
+			{
+				const int kill_dmg = victim->health + victim->client->ps.stats[STAT_ARMOR];
+				dmg = kill_dmg > SABER_MAXHITDAMAGE ? kill_dmg : SABER_MAXHITDAMAGE;
+			}
+		}
+		else if (!saber_in_kill_move && PM_SaberInSpecialAttack(self->client->ps.torsoAnim))
+		{
+			dmg = G_SPSpecialAttackDamage(self);
+		}
 	}
 
 	// ------------------------------------------------------------
@@ -8159,6 +8323,63 @@ void wp_saber_start_missile_block_check(gentity_t* self, usercmd_t* ucmd)
 
 #define MIN_SABER_SLICE_RETURN_DISTANCE 30
 
+// SP (WP_SaberDamageForTrace): a thrown saber that hits one of these living bosses, or a shielded target, is knocked
+// away (dropped) instead of hurting or being blocked. MP: NPCs only (players and bots keep MP's block / knockdown rules).
+extern void Jedi_PlayDeflectSound(const gentity_t* self);
+static void WP_saberKnockDown(gentity_t* saberent, gentity_t* saber_owner, const gentity_t* other);
+static qboolean WP_SPThrownSaberKnockawayTarget(const gentity_t* ent)
+{
+	if (!ent || !ent->client || ent->health <= 0 || ent->s.eType != ET_NPC)
+	{
+		return qfalse;
+	}
+	switch (ent->client->NPC_class)
+	{
+	case CLASS_DESANN:
+	case CLASS_SITHLORD:
+	case CLASS_VADER:
+	case CLASS_LUKE:
+	case CLASS_BOBAFETT:
+	case CLASS_JANGO:
+	case CLASS_JANGODUAL:
+		return qtrue;
+	default:
+		break;
+	}
+	if (ent->NPC_type && !Q_stricmp("Yoda", ent->NPC_type))
+	{
+		return qtrue;
+	}
+	return ent->client->ps.powerups[PW_GALAK_SHIELD] > 0 ? qtrue : qfalse;
+}
+
+// SP WP_SaberKnockaway: the thrown saber is knocked away (block effect, the boss's deflect sound) and falls; the thrower
+// has to get it back
+static void WP_SPThrownSaberKnockaway(gentity_t* saberent, gentity_t* saber_owner, const gentity_t* boss,
+	vec3_t pos, vec3_t normal)
+{
+	gentity_t* te = G_TempEntity(pos, EV_SABER_BLOCK);
+	VectorCopy(pos, te->s.origin);
+	VectorCopy(normal, te->s.angles);
+
+	if (!te->s.angles[0] && !te->s.angles[1] && !te->s.angles[2])
+		te->s.angles[1] = 1;
+
+	te->s.eventParm = SABERBLOCK_EVPARM_BLOCK;
+	te->s.weapon = 0; // saberNum
+	te->s.legsAnim = 0; // bladeNum
+	te->s.otherEntityNum = ENTITYNUM_NONE;
+	te->s.otherentityNum2 = saber_owner->s.number;
+
+	if (d_saberCombat.integer)
+	{
+		Com_Printf(S_COLOR_MAGENTA "WP_SaberKnockaway: thrown saber of %d knocked away by %d\n", saber_owner->s.number, boss->s.number);
+	}
+	Jedi_PlayDeflectSound(boss);
+	WP_saberKnockDown(saberent, saber_owner, boss);
+	saber_owner->client->ps.saberAttackWound = level.time + 500;
+}
+
 #define SABER_THROWN_HIT_DAMAGE 30
 #define SABER_THROWN_RETURN_HIT_DAMAGE 5
 
@@ -8229,6 +8450,12 @@ static QINLINE qboolean WP_CheckThrownSaberDamaged(gentity_t* saberent,
 
 			if (tr.fraction == 1.0f || tr.entityNum == ent->s.number)
 			{
+				if (WP_SPThrownSaberKnockawayTarget(ent))
+				{
+					WP_SPThrownSaberKnockaway(saberent, saber_owner, ent, tr.endpos, tr.plane.normal);
+					return qfalse;
+				}
+
 				// Try to block
 				if (WP_SaberCanBlockThrownSaber(ent, tr.endpos, qtrue))
 				{
@@ -13921,6 +14148,11 @@ qboolean IsAnimRequiresResponce(const gentity_t* self)
 
 // SP WP_SaberMBlockDirection (wp_saber.cpp): the pose by where the hit comes from (behind, then top / middle / bottom and right /
 // middle / left), the saber style and the animation style. Generated from SP's code (work\stylemap\posechain.pl).
+// SP's SETANIM_AFLAG_BLOCKPACE for the parry / block / bounce poses: a repeated pose restarts (MP's SETANIM_AFLAG_PACE
+// held it). (2026-11-03, parity batch 5)
+#ifndef SETANIM_AFLAG_BLOCKPACE
+#define SETANIM_AFLAG_BLOCKPACE (SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART)
+#endif
 static void WP_SaberPoseAnim_MBlock(gentity_t* self, const float zdiff, const float rightdot, const qboolean in_front)
 {
 	const animFlags_t flags = BG_AnimStyleFlags(self->client->ps.animStyle);
@@ -13935,16 +14167,16 @@ static void WP_SaberPoseAnim_MBlock(gentity_t* self, const float zdiff, const fl
 			{
 				if (flags.isGalenMarek == qtrue)
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B__GALEN, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B__GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 			}
 			else
 			{
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 			}
 			break;
 		case SS_DUAL:
@@ -13952,16 +14184,16 @@ static void WP_SaberPoseAnim_MBlock(gentity_t* self, const float zdiff, const fl
 			{
 				if (flags.isGalenMarek == qtrue)
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B__GALEN, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B__GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 			}
 			else
 			{
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 			}
 			break;
 		default:
@@ -13969,16 +14201,16 @@ static void WP_SaberPoseAnim_MBlock(gentity_t* self, const float zdiff, const fl
 			{
 				if (flags.isGalenMarek == qtrue)
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B__GALEN, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B__GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 			}
 			else
 			{
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 			}
 			break;
 		}
@@ -13992,26 +14224,26 @@ static void WP_SaberPoseAnim_MBlock(gentity_t* self, const float zdiff, const fl
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TR___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TR___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TR___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TR___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
 				if (qtrue)
 				{
 					if (flags.isGalenMarek == qtrue)
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD_GALEN, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD_GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 					else
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				break;
 			}
@@ -14023,26 +14255,26 @@ static void WP_SaberPoseAnim_MBlock(gentity_t* self, const float zdiff, const fl
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TL___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TL___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TL___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TL___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
 				if (qtrue)
 				{
 					if (flags.isGalenMarek == qtrue)
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD_GALEN, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD_GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 					else
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				break;
 			}
@@ -14054,13 +14286,13 @@ static void WP_SaberPoseAnim_MBlock(gentity_t* self, const float zdiff, const fl
 			{
 				//TOP
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_T____, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_T____, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_T____, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_T____, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B1_T____, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B1_T____, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -14078,26 +14310,26 @@ static void WP_SaberPoseAnim_MBlock(gentity_t* self, const float zdiff, const fl
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TR___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TR___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TR___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TR___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
 				if (qtrue)
 				{
 					if (flags.isGalenMarek == qtrue)
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD_GALEN, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD_GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 					else
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				break;
 			}
@@ -14109,26 +14341,26 @@ static void WP_SaberPoseAnim_MBlock(gentity_t* self, const float zdiff, const fl
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TL___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TL___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TL___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TL___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
 				if (qtrue)
 				{
 					if (flags.isGalenMarek == qtrue)
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD_GALEN, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD_GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 					else
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				break;
 			}
@@ -14140,13 +14372,13 @@ static void WP_SaberPoseAnim_MBlock(gentity_t* self, const float zdiff, const fl
 			{
 				//TOP
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_T____, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_T____, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_T____, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_T____, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B1_T____, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B1_T____, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -14160,13 +14392,13 @@ static void WP_SaberPoseAnim_MBlock(gentity_t* self, const float zdiff, const fl
 			{
 				//BOTTOM RIGHT
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_BR___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_BR___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_BR___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_BR___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B1_BR___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B1_BR___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -14177,13 +14409,13 @@ static void WP_SaberPoseAnim_MBlock(gentity_t* self, const float zdiff, const fl
 			{
 				//BOTTOM LEFT
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_BL___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_BL___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_BL___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_BL___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B1_BL___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B1_BL___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -14207,16 +14439,16 @@ static void WP_SaberPoseAnim_MBlockNPC(gentity_t* self, const float zdiff, const
 			{
 				if (flags.isGalenMarek == qtrue)
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B__GALEN, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B__GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 			}
 			else
 			{
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 			}
 			break;
 		case SS_DUAL:
@@ -14224,16 +14456,16 @@ static void WP_SaberPoseAnim_MBlockNPC(gentity_t* self, const float zdiff, const
 			{
 				if (flags.isGalenMarek == qtrue)
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B__GALEN, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B__GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 			}
 			else
 			{
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 			}
 			break;
 		default:
@@ -14241,16 +14473,16 @@ static void WP_SaberPoseAnim_MBlockNPC(gentity_t* self, const float zdiff, const
 			{
 				if (flags.isGalenMarek == qtrue)
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B__GALEN, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B__GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 			}
 			else
 			{
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 			}
 			break;
 		}
@@ -14264,26 +14496,26 @@ static void WP_SaberPoseAnim_MBlockNPC(gentity_t* self, const float zdiff, const
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TR___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TR___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TR___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TR___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
 				if (qtrue)
 				{
 					if (flags.isGalenMarek == qtrue)
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD_GALEN, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD_GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 					else
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				break;
 			}
@@ -14295,26 +14527,26 @@ static void WP_SaberPoseAnim_MBlockNPC(gentity_t* self, const float zdiff, const
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TL___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TL___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TL___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TL___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
 				if (qtrue)
 				{
 					if (flags.isGalenMarek == qtrue)
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD_GALEN, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD_GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 					else
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				break;
 			}
@@ -14329,23 +14561,23 @@ static void WP_SaberPoseAnim_MBlockNPC(gentity_t* self, const float zdiff, const
 				{
 					if (flags.isGalenMarek == qtrue)
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T__MD_GALEN, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T__MD_GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 					else
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T__MD, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T__MD, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T__MD, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T__MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_T__MD, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_T__MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_T__MD, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_T__MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -14363,26 +14595,26 @@ static void WP_SaberPoseAnim_MBlockNPC(gentity_t* self, const float zdiff, const
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TR___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TR___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TR___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TR___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
 				if (qtrue)
 				{
 					if (flags.isGalenMarek == qtrue)
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD_GALEN, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD_GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 					else
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				break;
 			}
@@ -14394,26 +14626,26 @@ static void WP_SaberPoseAnim_MBlockNPC(gentity_t* self, const float zdiff, const
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TL___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_TL___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TL___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_TL___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
 				if (qtrue)
 				{
 					if (flags.isGalenMarek == qtrue)
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD_GALEN, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD_GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 					else
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_K1_S1_TL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				break;
 			}
@@ -14428,23 +14660,23 @@ static void WP_SaberPoseAnim_MBlockNPC(gentity_t* self, const float zdiff, const
 				{
 					if (flags.isGalenMarek == qtrue)
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T__MD_GALEN, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T__MD_GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 					else
 					{
-						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T__MD, SETANIM_AFLAG_PACE, 0);
+						G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T__MD, SETANIM_AFLAG_BLOCKPACE, 0);
 					}
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T__MD, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T__MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_T__MD, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_T__MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_T__MD, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_T__MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -14458,13 +14690,13 @@ static void WP_SaberPoseAnim_MBlockNPC(gentity_t* self, const float zdiff, const
 			{
 				//BOTTOM RIGHT
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_BR___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_BR___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_BR___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_BR___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B1_BR___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B1_BR___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -14475,13 +14707,13 @@ static void WP_SaberPoseAnim_MBlockNPC(gentity_t* self, const float zdiff, const
 			{
 				//BOTTOM LEFT
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_BL___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B7_BL___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_BL___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B6_BL___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B1_BL___, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_B1_BL___, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -14600,6 +14832,9 @@ qboolean WP_SaberMBlockDirectionNPC(gentity_t* self, vec3_t hitloc, const qboole
 
 // SP WP_SaberBlockNonRandom (wp_saber.cpp): the pose by where the hit comes from (behind, then top / middle / bottom and right /
 // middle / left), the saber style and the animation style. Generated from SP's code (work\stylemap\posechain.pl).
+// SP WP_SaberBlockNonRandom_MD (2026-11-03, parity batch 5): MD's own _MD parry anims (MP played the plain JKA ones),
+// SETANIM_AFLAG_BLOCKPACE (a repeated parry restarts), NPC parry time + 500-900 ms (was 500-1000), the middle band from
+// zdiff -22 (was -20)
 static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const float rightdot, const qboolean in_front)
 {
 	const animFlags_t flags = BG_AnimStyleFlags(self->client->ps.animStyle);
@@ -14613,16 +14848,16 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			{
 				if (flags.isGalenMarek == qtrue)
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B__GALEN, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B__GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 			}
 			else
 			{
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 			}
 			break;
 		case SS_DUAL:
@@ -14630,16 +14865,16 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			{
 				if (flags.isGalenMarek == qtrue)
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B__GALEN, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B__GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 			}
 			else
 			{
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 			}
 			break;
 		default:
@@ -14647,16 +14882,16 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			{
 				if (flags.isGalenMarek == qtrue)
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B__GALEN, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B__GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 			}
 			else
 			{
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 			}
 			break;
 		}
@@ -14669,13 +14904,13 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_TR, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_TR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_TR, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_TR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_TR, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_TR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			if (self->s.number < MAX_CLIENTS || G_ControlledByPlayer(self))
@@ -14684,7 +14919,7 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			}
 			else
 			{
-				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 1000);
+				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 900);
 			}
 		}
 		else if (rightdot < -0.3)
@@ -14692,13 +14927,13 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_TL, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_TL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_TL, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_TL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_TL, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_TL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			if (self->s.number < MAX_CLIENTS || G_ControlledByPlayer(self))
@@ -14707,7 +14942,7 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			}
 			else
 			{
-				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 1000);
+				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 900);
 			}
 		}
 		else
@@ -14715,13 +14950,13 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T__MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_T_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_T__MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_T_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_T__MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			if (self->s.number < MAX_CLIENTS || G_ControlledByPlayer(self))
@@ -14730,11 +14965,11 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			}
 			else
 			{
-				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 1000);
+				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 900);
 			}
 		}
 	}
-	else if (zdiff > -20)
+	else if (zdiff > -22)
 	{
 		if (zdiff < -10)
 		{
@@ -14745,13 +14980,13 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_TR, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_TR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_TR, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_TR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_TR, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_TR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			if (self->s.number < MAX_CLIENTS || G_ControlledByPlayer(self))
@@ -14760,7 +14995,7 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			}
 			else
 			{
-				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 1000);
+				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 900);
 			}
 		}
 		else if (rightdot < -0.1)
@@ -14768,13 +15003,13 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_TL, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_TL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_TL, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_TL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_TL, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_TL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			if (self->s.number < MAX_CLIENTS || G_ControlledByPlayer(self))
@@ -14783,7 +15018,7 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			}
 			else
 			{
-				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 1000);
+				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 900);
 			}
 		}
 		else
@@ -14791,13 +15026,13 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_T__MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_T_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_T__MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_T_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_T__MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			if (self->s.number < MAX_CLIENTS || G_ControlledByPlayer(self))
@@ -14806,7 +15041,7 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			}
 			else
 			{
-				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 1000);
+				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 900);
 			}
 		}
 	}
@@ -14817,13 +15052,13 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_BR, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_BR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_BR, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_BR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_BR, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_BR_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			if (self->s.number < MAX_CLIENTS || G_ControlledByPlayer(self))
@@ -14832,7 +15067,7 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			}
 			else
 			{
-				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 1000);
+				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 900);
 			}
 		}
 		else
@@ -14840,13 +15075,13 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_BL, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S7_BL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_BL, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S6_BL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_BL, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_BL_MD, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			if (self->s.number < MAX_CLIENTS || G_ControlledByPlayer(self))
@@ -14855,7 +15090,7 @@ static void WP_SaberPoseAnim_NonRandom(gentity_t* self, const float zdiff, const
 			}
 			else
 			{
-				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 1000);
+				self->client->ps.weaponTime = self->client->ps.torsoTimer + Q_irand(500, 900);
 			}
 		}
 	}
@@ -15459,16 +15694,16 @@ static void WP_SaberPoseAnim_Bounce(gentity_t* self, const float zdiff, const fl
 			{
 				if (flags.isGalenMarek == qtrue)
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B__GALEN, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B__GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 			}
 			else
 			{
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 			}
 			break;
 		case SS_DUAL:
@@ -15476,16 +15711,16 @@ static void WP_SaberPoseAnim_Bounce(gentity_t* self, const float zdiff, const fl
 			{
 				if (flags.isGalenMarek == qtrue)
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B__GALEN, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B__GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 			}
 			else
 			{
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 			}
 			break;
 		default:
@@ -15493,16 +15728,16 @@ static void WP_SaberPoseAnim_Bounce(gentity_t* self, const float zdiff, const fl
 			{
 				if (flags.isGalenMarek == qtrue)
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B__GALEN, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B__GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 			}
 			else
 			{
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 			}
 			break;
 		}
@@ -15515,13 +15750,13 @@ static void WP_SaberPoseAnim_Bounce(gentity_t* self, const float zdiff, const fl
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_TR_S7, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_TR_S7, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_TR_S6, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_TR_S6, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TR_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TR_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -15531,13 +15766,13 @@ static void WP_SaberPoseAnim_Bounce(gentity_t* self, const float zdiff, const fl
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -15547,13 +15782,13 @@ static void WP_SaberPoseAnim_Bounce(gentity_t* self, const float zdiff, const fl
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_T__S7, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_T__S7, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_T__S6, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_T__S6, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_T__S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_T__S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -15570,13 +15805,13 @@ static void WP_SaberPoseAnim_Bounce(gentity_t* self, const float zdiff, const fl
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_TR_S7, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_TR_S7, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_TR_S6, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_TR_S6, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TR_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TR_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -15586,13 +15821,13 @@ static void WP_SaberPoseAnim_Bounce(gentity_t* self, const float zdiff, const fl
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -15602,13 +15837,13 @@ static void WP_SaberPoseAnim_Bounce(gentity_t* self, const float zdiff, const fl
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_T__S7, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_T__S7, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_T__S6, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_T__S6, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_T__S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_T__S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -15621,13 +15856,13 @@ static void WP_SaberPoseAnim_Bounce(gentity_t* self, const float zdiff, const fl
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_BR_S7, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_BR_S7, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_BR_S6, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_BR_S6, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_BR_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_BR_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -15637,13 +15872,13 @@ static void WP_SaberPoseAnim_Bounce(gentity_t* self, const float zdiff, const fl
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_BL_S7, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_BL_S7, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_BL_S6, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_BL_S6, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_BL_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_BL_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -15756,16 +15991,16 @@ static void WP_SaberPoseAnim_FatiguedParry(gentity_t* self, const float zdiff, c
 			{
 				if (flags.isGalenMarek == qtrue)
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B__GALEN, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B__GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 			}
 			else
 			{
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P7_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 			}
 			break;
 		case SS_DUAL:
@@ -15773,16 +16008,16 @@ static void WP_SaberPoseAnim_FatiguedParry(gentity_t* self, const float zdiff, c
 			{
 				if (flags.isGalenMarek == qtrue)
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B__GALEN, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B__GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 			}
 			else
 			{
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P6_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 			}
 			break;
 		default:
@@ -15790,16 +16025,16 @@ static void WP_SaberPoseAnim_FatiguedParry(gentity_t* self, const float zdiff, c
 			{
 				if (flags.isGalenMarek == qtrue)
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B__GALEN, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B__GALEN, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 				else
 				{
-					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_PACE, 0);
+					G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 				}
 			}
 			else
 			{
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_P1_S1_B_, SETANIM_AFLAG_BLOCKPACE, 0);
 			}
 			break;
 		}
@@ -15812,13 +16047,13 @@ static void WP_SaberPoseAnim_FatiguedParry(gentity_t* self, const float zdiff, c
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_TR_S7, SETANIM_AFLAG_PACE, 0); //TOP RIGHT
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_TR_S7, SETANIM_AFLAG_BLOCKPACE, 0); //TOP RIGHT
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_TR_S6, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_TR_S6, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TR_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TR_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -15828,13 +16063,13 @@ static void WP_SaberPoseAnim_FatiguedParry(gentity_t* self, const float zdiff, c
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_TL_S7, SETANIM_AFLAG_PACE, 0); //TOP LEFT
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_TL_S7, SETANIM_AFLAG_BLOCKPACE, 0); //TOP LEFT
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_TL_S6, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_TL_S6, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -15844,13 +16079,13 @@ static void WP_SaberPoseAnim_FatiguedParry(gentity_t* self, const float zdiff, c
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_T__S7, SETANIM_AFLAG_PACE, 0); //TOP TOP
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_T__S7, SETANIM_AFLAG_BLOCKPACE, 0); //TOP TOP
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_T__S6, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_T__S6, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_T__S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_T__S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -15867,13 +16102,13 @@ static void WP_SaberPoseAnim_FatiguedParry(gentity_t* self, const float zdiff, c
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7__R_S7, SETANIM_AFLAG_PACE, 0); //TOP RIGHT
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7__R_S7, SETANIM_AFLAG_BLOCKPACE, 0); //TOP RIGHT
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6__R_S6, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6__R_S6, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1__R_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1__R_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -15883,13 +16118,13 @@ static void WP_SaberPoseAnim_FatiguedParry(gentity_t* self, const float zdiff, c
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7__L_S7, SETANIM_AFLAG_PACE, 0); //TOP LEFT
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7__L_S7, SETANIM_AFLAG_BLOCKPACE, 0); //TOP LEFT
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6__L_S6, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6__L_S6, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_TL_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -15899,13 +16134,13 @@ static void WP_SaberPoseAnim_FatiguedParry(gentity_t* self, const float zdiff, c
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_T__S7, SETANIM_AFLAG_PACE, 0); //TOP TOP
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_T__S7, SETANIM_AFLAG_BLOCKPACE, 0); //TOP TOP
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_T__S6, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_T__S6, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_T__S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_T__S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -15918,13 +16153,13 @@ static void WP_SaberPoseAnim_FatiguedParry(gentity_t* self, const float zdiff, c
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_BR_S7, SETANIM_AFLAG_PACE, 0); //BOTTOM RIGHT
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_BR_S7, SETANIM_AFLAG_BLOCKPACE, 0); //BOTTOM RIGHT
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_BR_S6, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_BR_S6, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_BR_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_BR_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -15934,13 +16169,13 @@ static void WP_SaberPoseAnim_FatiguedParry(gentity_t* self, const float zdiff, c
 			switch (self->client->ps.fd.saberAnimLevel)
 			{
 			case SS_STAFF:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_BL_S7, SETANIM_AFLAG_PACE, 0); //BOTTOM LEFT
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V7_BL_S7, SETANIM_AFLAG_BLOCKPACE, 0); //BOTTOM LEFT
 				break;
 			case SS_DUAL:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_BL_S6, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V6_BL_S6, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			default:
-				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_BL_S1, SETANIM_AFLAG_PACE, 0);
+				G_SetAnim(self, &self->client->pers.cmd, SETANIM_TORSO, BOTH_V1_BL_S1, SETANIM_AFLAG_BLOCKPACE, 0);
 				break;
 			}
 			self->client->ps.weaponTime = Q_irand(300, 600);
@@ -19380,4 +19615,4 @@ void G_Beskar_Attack_Bounce(const gentity_t* self, gentity_t* other)
 			}
 		}
 	}
-}
+}

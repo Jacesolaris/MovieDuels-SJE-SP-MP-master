@@ -4305,8 +4305,8 @@ block. Returns false when this model isn't cut.
 */
 #include "tr_saberslice.h"
 
-static bool RB_SliceFillBoneModes(const trRefEntity_t* ent, CGhoul2Info_v& ghoul2, CGhoul2Info& g2Info,
-	int currentFrameNum, SkeletonBoneMatricesBlock& block)
+static bool RB_SliceFillBoneModes(const trRefEntity_t * ent, CGhoul2Info_v & ghoul2, CGhoul2Info & g2Info,
+	int currentFrameNum, SkeletonBoneMatricesBlock & block)
 {
 	if (!R_SliceActive(ent->e) || ghoul2.size() < 1 || !ghoul2[0].mValid || !ghoul2[0].mBoneCache || !ghoul2[0].aHeader)
 		return false;
@@ -7205,4 +7205,4 @@ qboolean R_LoadMDXA(model_t* mod, void* buffer, const char* mod_name, qboolean& 
 	}
 
 	return qtrue;
-}
+}

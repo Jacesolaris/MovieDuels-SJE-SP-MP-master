@@ -167,6 +167,12 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_SliceCapsMap",		GLSL_INT, 1 },
 	{ "u_SliceBloodMap",		GLSL_INT, 1 },
 	{ "u_SliceGlowMap",		GLSL_INT, 1 },
+	{ "u_SsrProjection",	GLSL_VEC4, 1 },
+	{ "u_SsrParams",		GLSL_VEC4, 1 },
+	{ "u_SsrViewport",		GLSL_VEC4, 1 },
+	{ "u_SsrUp",			GLSL_VEC4, 1 },
+	{ "u_GodRaySun",		GLSL_VEC4, 1 },
+	{ "u_GodRayParams",	GLSL_VEC4, 1 },
 };
 
 static void GLSL_PrintProgramInfoLog(GLuint object, qboolean developerOnly)
@@ -2730,8 +2736,8 @@ static int GLSL_LoadGPUProgramHighPass(
 
 // r_sharpen (Warzone port): contrast-adaptive sharpening of the finished 3D view
 static int GLSL_LoadGPUProgramSharpen(
-	ShaderProgramBuilder& builder,
-	Allocator& scratchAlloc)
+	ShaderProgramBuilder & builder,
+	Allocator & scratchAlloc)
 {
 	GLSL_LoadGPUProgramBasic(
 		builder,
@@ -2747,6 +2753,54 @@ static int GLSL_LoadGPUProgramSharpen(
 	qglUseProgram(0);
 
 	GLSL_FinishGPUShader(&tr.sharpenShader);
+
+	return 1;
+}
+
+// r_ssr: screen space reflections of the finished 3D view
+static int GLSL_LoadGPUProgramSSR(
+	ShaderProgramBuilder & builder,
+	Allocator & scratchAlloc)
+{
+	GLSL_LoadGPUProgramBasic(
+		builder,
+		scratchAlloc,
+		&tr.ssrShader,
+		"ssr",
+		fallback_ssrProgram);
+
+	GLSL_InitUniforms(&tr.ssrShader);
+
+	qglUseProgram(tr.ssrShader.program);
+	GLSL_SetUniformInt(&tr.ssrShader, UNIFORM_SCREENIMAGEMAP, TB_COLORMAP);
+	GLSL_SetUniformInt(&tr.ssrShader, UNIFORM_SCREENDEPTHMAP, TB_LIGHTMAP);
+	qglUseProgram(0);
+
+	GLSL_FinishGPUShader(&tr.ssrShader);
+
+	return 1;
+}
+
+// r_godRays: screen space light shafts
+static int GLSL_LoadGPUProgramGodRays(
+	ShaderProgramBuilder & builder,
+	Allocator & scratchAlloc)
+{
+	GLSL_LoadGPUProgramBasic(
+		builder,
+		scratchAlloc,
+		&tr.godRaysShader,
+		"godrays",
+		fallback_godraysProgram);
+
+	GLSL_InitUniforms(&tr.godRaysShader);
+
+	qglUseProgram(tr.godRaysShader.program);
+	GLSL_SetUniformInt(&tr.godRaysShader, UNIFORM_SCREENIMAGEMAP, TB_COLORMAP);
+	GLSL_SetUniformInt(&tr.godRaysShader, UNIFORM_SCREENDEPTHMAP, TB_LIGHTMAP);
+	qglUseProgram(0);
+
+	GLSL_FinishGPUShader(&tr.godRaysShader);
 
 	return 1;
 }
@@ -3355,7 +3409,9 @@ static int GLSL_LoadGPUProgramSurfaceSprites(
 		numEtcShaders += GLSL_LoadGPUProgramTonemap(builder, allocator);
 		numEtcShaders += GLSL_LoadGPUProgramCalcLuminanceLevel(builder, allocator);
 		numEtcShaders += GLSL_LoadGPUProgramHighPass(builder, allocator);
-	numEtcShaders += GLSL_LoadGPUProgramSharpen(builder, allocator);
+		numEtcShaders += GLSL_LoadGPUProgramSharpen(builder, allocator);
+		numEtcShaders += GLSL_LoadGPUProgramSSR(builder, allocator);
+		numEtcShaders += GLSL_LoadGPUProgramGodRays(builder, allocator);
 		numEtcShaders += GLSL_LoadGPUProgramSSAO(builder, allocator);
 		if (r_cubeMapping->integer)
 			numEtcShaders += GLSL_LoadGPUProgramPrefilterEnvMap(builder, allocator);
@@ -3446,7 +3502,9 @@ static int GLSL_LoadGPUProgramSurfaceSprites(
 		GLSL_DeleteGPUShader(&tr.highpassShader);
 #endif // REND2_SP
 		GLSL_DeleteGPUShader(&tr.ssaoShader);
-	GLSL_DeleteGPUShader(&tr.sharpenShader);
+		GLSL_DeleteGPUShader(&tr.sharpenShader);
+		GLSL_DeleteGPUShader(&tr.ssrShader);
+		GLSL_DeleteGPUShader(&tr.godRaysShader);
 
 		for (i = 0; i < 2; i++)
 			GLSL_DeleteGPUShader(&tr.depthBlurShader[i]);

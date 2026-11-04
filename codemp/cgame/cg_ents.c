@@ -4742,4 +4742,4 @@ void CG_CubeOutline(vec3_t mins, vec3_t maxs, const int time, const unsigned int
 		CG_TestLine(point1, point4, time, color, 1);
 		CG_TestLine(point4, point1, time, color, 1);
 	}
-}
+}

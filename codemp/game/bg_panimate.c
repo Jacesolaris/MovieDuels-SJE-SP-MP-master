@@ -6923,6 +6923,20 @@ LEGS Animations
 Base animation for overall body
 ===================
 */
+#if defined(_GAME) && defined(_DEBUG)
+// d_animLog 1 (Debug builds only, 2026-11-03): the anims the player (client 0) and entity d_animLogEnt start on the
+// legs / torso, server side, in the same lines as SP's d_animLog (bg_panimate.cpp PM_SetAnimFinal), to compare them
+static void BG_AnimLog(const playerState_t* ps, const char* part, const int anim, const qboolean restart)
+{
+	if (d_animLog.integer && (ps->clientNum == 0 || ps->clientNum == d_animLogEnt.integer) && anim >= 0
+		&& anim < MAX_ANIMATIONS)
+	{
+		Com_Printf("ANIMLOG %8d ent %3d %-5s %4d %s%s\n", level.time, ps->clientNum, part, anim, animTable[anim].name,
+			restart ? " (restart)" : "");
+	}
+}
+#endif
+
 static void BG_StartLegsAnim(playerState_t* ps, const int anim)
 {
 	if (ps->pm_type >= PM_DEAD)
@@ -6937,6 +6951,9 @@ static void BG_StartLegsAnim(playerState_t* ps, const int anim)
 	{
 		return; // a high priority animation is running
 	}
+#if defined(_GAME) && defined(_DEBUG)
+	BG_AnimLog(ps, "LEGS", anim, ps->legsAnim == anim ? qtrue : qfalse);
+#endif
 
 	if (ps->legsAnim == anim)
 	{
@@ -7039,6 +7056,9 @@ static void BG_StartTorsoAnim(playerState_t* ps, int anim)
 	{
 		return;
 	}
+#if defined(_GAME) && defined(_DEBUG)
+	BG_AnimLog(ps, "TORSO", anim, ps->torsoAnim == anim ? qtrue : qfalse);
+#endif
 
 	if (ps->torsoAnim == anim)
 	{

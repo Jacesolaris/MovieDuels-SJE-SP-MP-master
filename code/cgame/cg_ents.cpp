@@ -3365,4 +3365,4 @@ static void CG_ROFF_NotetrackCallback(const centity_t* cent, const char* notetra
 
 functionend:
 	Com_Printf("^3Type-specific notetrack error: %s\n", err_msg);
-}
+}

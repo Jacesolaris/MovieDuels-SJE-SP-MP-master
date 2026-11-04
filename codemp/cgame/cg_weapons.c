@@ -3592,7 +3592,7 @@ qboolean CG_CalcmuzzlePoint(const int entityNum, vec3_t muzzle)
 
 	AngleVectors(cent->currentState.apos.trBase, forward, NULL, NULL);
 	const int anim = cent->currentState.legsAnim;
-	if (anim == BOTH_CROUCH1WALK || anim == BOTH_CROUCH1IDLE)
+	if (anim == BOTH_CROUCH1WALK || anim == BOTH_CROUCH1IDLE || anim == BOTH_CROUCH1) // BOTH_CROUCH1: MP's crouch as SP's (parity batch 9)
 	{
 		muzzle[2] += CROUCH_VIEWHEIGHT;
 	}

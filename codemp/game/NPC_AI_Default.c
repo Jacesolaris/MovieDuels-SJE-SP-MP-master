@@ -207,6 +207,8 @@ void NPC_BSRun(void)
 	NPC_UpdateAngles(qtrue, qtrue);
 }
 
+extern void npc_check_speak(gentity_t* speaker_npc); // NPC_AI_Stormtrooper.c (SP: idle combat chatter, g_Advancedaitalk)
+
 void NPC_BSStandGuard(void)
 {
 	//FIXME: Use Snapshot info
@@ -228,6 +230,8 @@ void NPC_BSStandGuard(void)
 			}
 		}
 	}
+
+	npc_check_speak(NPCS.NPC); // (SP)
 
 	if (NPCS.NPC->enemy != NULL)
 	{
@@ -384,6 +388,8 @@ void NPC_BSRunAndShoot(void)
 	}
 
 	NPC_CheckEnemy(qtrue, qfalse, qtrue);
+
+	npc_check_speak(NPCS.NPC); // (SP)
 
 	if (NPCS.NPCInfo->duckDebounceTime > level.time) // && NPCInfo->hidingGoal )
 	{
@@ -735,6 +741,7 @@ void NPC_BSDefault(void)
 			NPC_ClearGoal();
 		}
 		NPC_BSST_Attack();
+		npc_check_speak(NPCS.NPC); // (SP)
 		return;
 	}
 

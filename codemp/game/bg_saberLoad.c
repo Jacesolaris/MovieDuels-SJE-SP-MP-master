@@ -47,6 +47,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "ui/ui_local.h"
 #endif
 #include <stdlib.h>
+qboolean BG_SaberIsCrossguard(const saberInfo_t* saber);
 
 extern stringID_table_t animTable[MAX_ANIMATIONS + 1];
 
@@ -833,7 +834,7 @@ qboolean WP_SaberBladeDoTransitionDamage(const saberInfo_t* saber, const int bla
 		{
 			saber1Active = qfalse;
 		}
-		else if (saber1->numBlades > 1) // staff
+		else if (saber1->numBlades > 1 && !BG_SaberIsCrossguard(saber1)) // staff
 		{
 			saber1Active = (saberHolstered <= 1);
 		}
@@ -968,7 +969,7 @@ qboolean WP_SaberStyleValidForSaber(
 		{
 			saber1Active = qfalse;
 		}
-		else if (saber1->numBlades > 1) // staff
+		else if (saber1->numBlades > 1 && !BG_SaberIsCrossguard(saber1)) // staff
 		{
 			saber1Active = (saberHolstered <= 1);
 		}
@@ -986,7 +987,7 @@ qboolean WP_SaberStyleValidForSaber(
 		saber1Active &&
 		saber1 &&
 		saber1->model[0] &&
-		saber1->numBlades == 1)
+		(saber1->numBlades == 1 || BG_SaberIsCrossguard(saber1)))
 	{
 		return qtrue;
 	}
@@ -1041,8 +1042,30 @@ qboolean WP_SaberStyleValidForSaber(
 	return qtrue;
 }
 
+// MD 9 (Jace 2026-11-04): a crossguard saber (Kylo Ren's: one main blade plus short side blades, every other blade
+// under half the main one's length) is a single saber, not a staff: single blade styles, its side blades always on
+qboolean BG_SaberIsCrossguard(const saberInfo_t* saber)
+{
+	if (!saber || !saber->model[0] || saber->numBlades < 2)
+	{
+		return qfalse;
+	}
+	for (int i = 1; i < saber->numBlades; i++)
+	{
+		if (saber->blade[i].lengthMax * 2.0f >= saber->blade[0].lengthMax)
+		{
+			return qfalse;
+		}
+	}
+	return qtrue;
+}
+
 qboolean WP_SaberCanTurnOffSomeBlades(const saberInfo_t* saber)
 {
+	if (BG_SaberIsCrossguard(saber))
+	{
+		return qfalse; // its side blades stay on with the main one
+	}
 	if (saber->bladeStyle2Start > 0 && saber->numBlades > saber->bladeStyle2Start)
 	{
 		// check if all blades are always on

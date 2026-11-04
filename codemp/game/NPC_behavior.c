@@ -29,6 +29,7 @@ we need it...
 */
 
 #include "b_local.h"
+#include "NPC_steer.h"
 #include "g_nav.h"
 #include "icarus/Q3_Interface.h"
 
@@ -1446,6 +1447,13 @@ void NPC_Surrender(void)
 
 qboolean NPC_CheckSurrender(void)
 {
+	if (!g_AIsurrender.integer
+		&& NPCS.NPC->client->NPC_class != CLASS_UGNAUGHT
+		&& NPCS.NPC->client->NPC_class != CLASS_JAWA)
+	{
+		//not enabled (SP: g_AIsurrender)
+		return qfalse;
+	}
 	if (!trap->ICARUS_TaskIDPending((sharedEntity_t*)NPCS.NPC, TID_MOVE_NAV)
 		&& NPCS.NPC->client->ps.groundEntityNum != ENTITYNUM_NONE
 		&& !NPCS.NPC->client->ps.weaponTime && !PM_InKnockDown(&NPCS.NPC->client->ps)
@@ -1589,111 +1597,215 @@ void NPC_JawaFleeSound(void)
 	}
 }
 
+extern gentity_t* NPC_SearchForWeapons(void);
+extern qboolean G_CanPickUpWeapons(const gentity_t* other);
+
+/*
+SP's NPC_BSFlee (DH 2026-11-03, NPC parity batch C): flee on the steering layer (NPC_steer.c). Run straight away from
+an enemy that is too close, else to the escape point (a combat point away from the enemy, re-chosen every 2.5 s once
+reached) or, failing that, to the waypoint farthest from the enemy; on the way pick up a dropped weapon there is a safe
+way to; give up (surrender) when it has not got anywhere for 3 s once the panic is over. MP keeps its NPC_CheckGetNewWeapon
+at the end.
+*/
 void NPC_BSFlee(void)
 {
-	//FIXME: keep checking for danger
+	float enemyTooCloseDist = 50.0f;
+	qboolean reachedEscapePoint = qfalse;
+	const qboolean inSurrender = level.time < NPCS.NPCInfo->surrenderTime ? qtrue : qfalse;
 
-	if (TIMER_Done(NPCS.NPC, "flee") && NPCS.NPCInfo->tempBehavior == BS_FLEE)
+	// Check For Enemies And Alert Events
+	//------------------------------------
+	NPC_CheckEnemy(qtrue, qfalse, qtrue);
+	NPC_CheckAlertEvents(qtrue, qtrue, -1, qfalse, AEL_DANGER);
+	if (NPCS.NPC->enemy && NPC_ClearLOS4(NPCS.NPC->enemy))
+	{
+		NPCS.NPCInfo->enemyLastSeenTime = level.time;
+	}
+	const qboolean enemyRecentlySeen = NPCS.NPC->enemy && level.time - NPCS.NPCInfo->enemyLastSeenTime < 3000
+		? qtrue
+		: qfalse;
+	if (enemyRecentlySeen)
+	{
+		if (NPCS.NPC->enemy->client && NPCS.NPC->enemy->client->NPC_class == CLASS_RANCOR)
+		{
+			enemyTooCloseDist = 400.0f;
+		}
+		enemyTooCloseDist += NPCS.NPC->r.maxs[0] + NPCS.NPC->enemy->r.maxs[0];
+	}
+
+	// Look For Weapons To Pick Up
+	//-----------------------------
+	if (enemyRecentlySeen && // Is There An Enemy Near?
+		NPCS.NPC->client->NPC_class != CLASS_PRISONER && // Prisoners can't pickup weapons
+		NPCS.NPCInfo->rank > RANK_CIVILIAN && // Neither can civilians
+		TIMER_Done(NPCS.NPC, "panic") && // Panic causes him to run for a bit, don't pickup weapons
+		TIMER_Done(NPCS.NPC, "CheckForWeaponToPickup") &&
+		G_CanPickUpWeapons(NPCS.NPC) //Allowed To Pick Up Dropped Weapons
+		)
+	{
+		gentity_t* foundWeap = NPC_SearchForWeapons();
+
+		// Ok, There Is A Weapon!  Try Going To It!
+		//------------------------------------------
+		if (foundWeap && NAV_SafePathExists(NPCS.NPC->r.currentOrigin, foundWeap->r.currentOrigin,
+			NPCS.NPC->enemy->r.currentOrigin, 150.0f))
+		{
+			NPCS.NPCInfo->goalEntity = foundWeap; // Change Our Target Goal
+			NPCS.NPCInfo->goalRadius = 30.0f; // 30 good enough?
+
+			TIMER_Set(NPCS.NPC, "CheckForWeaponToPickup", Q_irand(1000, 5000) * 10);
+		}
+
+		// Look Again Soon
+		//-----------------
+		else
+		{
+			TIMER_Set(NPCS.NPC, "CheckForWeaponToPickup", Q_irand(1000, 5000));
+		}
+	}
+
+	// If Attempting To Get To An Entity That Is Gone, Clear The Pointer
+	//-------------------------------------------------------------------
+	if (NPCS.NPCInfo->goalEntity
+		&& !trap->ICARUS_TaskIDPending((sharedEntity_t*)NPCS.NPC, TID_MOVE_NAV)
+		&& NPCS.NPC->enemy
+		&& Distance(NPCS.NPCInfo->goalEntity->r.currentOrigin, NPCS.NPC->enemy->r.currentOrigin) < enemyTooCloseDist)
+	{
+		//our goal is too close to our enemy, dump it...
+		NPCS.NPCInfo->goalEntity = NULL;
+	}
+	if (NPCS.NPCInfo->goalEntity && !NPCS.NPCInfo->goalEntity->inuse)
+	{
+		NPCS.NPCInfo->goalEntity = NULL;
+	}
+	const qboolean hasEscapePoint = NPCS.NPCInfo->goalEntity && NPCS.NPCInfo->goalRadius != 0.0f ? qtrue : qfalse;
+
+	STEER_Activate(NPCS.NPC);
+	{
+		// Have We Reached The Escape Point?
+		//-----------------------------------
+		if (hasEscapePoint && STEER_Reached(NPCS.NPC, NPCS.NPCInfo->goalEntity->r.currentOrigin, NPCS.NPCInfo->goalRadius))
+		{
+			if (trap->ICARUS_TaskIDPending((sharedEntity_t*)NPCS.NPC, TID_MOVE_NAV))
+			{
+				trap->ICARUS_TaskIDComplete((sharedEntity_t*)NPCS.NPC, TID_MOVE_NAV);
+			}
+			reachedEscapePoint = qtrue;
+		}
+
+		// If Super Close To The Enemy, Run In The Other Direction
+		//---------------------------------------------------------
+		if (enemyRecentlySeen &&
+			Distance(NPCS.NPC->enemy->r.currentOrigin, NPCS.NPC->r.currentOrigin) < enemyTooCloseDist)
+		{
+			STEER_Evade(NPCS.NPC, NPCS.NPC->enemy);
+			STEER_AvoidCollisions(NPCS.NPC, NULL);
+		}
+
+		// If Already At The Escape Point, Or Surrendering, Don't Move
+		//-------------------------------------------------------------
+		else if (reachedEscapePoint || inSurrender)
+		{
+			STEER_Stop(NPCS.NPC);
+		}
+		else
+		{
+			qboolean moveSuccess = qfalse;
+			// Try To Get To The Escape Point
+			//--------------------------------
+			if (hasEscapePoint)
+			{
+				moveSuccess = STEER_GoToEnt(NPCS.NPC, NPCS.NPCInfo->goalEntity, 1.0f, qtrue); // (SP: GoTo(NPC, goal, true))
+				if (!moveSuccess)
+				{
+					moveSuccess = NAV_GoToPos(NPCS.NPC, NPCS.NPCInfo->goalEntity->r.currentOrigin, NPCS.NPCInfo->goalRadius);
+				}
+			}
+
+			// Cant Get To The Escape Point, So If There Is An Enemy
+			//-------------------------------------------------------
+			if (!moveSuccess && enemyRecentlySeen)
+			{
+				// Try To Get To The Farthest Combat Point From Him
+				//--------------------------------------------------
+				const int nbr = NAV_ChooseFarthestNeighbor(NPCS.NPC, NPCS.NPC->enemy->r.currentOrigin, 0.25f);
+				vec3_t nbrPos;
+				if (nbr > 0 && NAV_NodePosition(nbr, nbrPos))
+				{
+					moveSuccess = STEER_GoToPos(NPCS.NPC, nbrPos, 1.0f, qtrue);
+					if (!moveSuccess)
+					{
+						moveSuccess = NAV_GoToPos(NPCS.NPC, nbrPos, 16.0f);
+					}
+				}
+			}
+
+			// If We Still Can't (Or Don't Need To) Move, Just Stop
+			//------------------------------------------------------
+			if (!moveSuccess)
+			{
+				STEER_Stop(NPCS.NPC);
+			}
+		}
+	}
+	STEER_DeActivate(NPCS.NPC, &NPCS.ucmd);
+
+	// Is There An Enemy Around?
+	//---------------------------
+	if (enemyRecentlySeen && NPCS.NPC->enemy) // (MP: still there after the move)
+	{
+		// Time To Surrender?
+		//--------------------
+		if (TIMER_Done(NPCS.NPC, "panic"))
+		{
+			//done panicking, time to realize we're dogmeat, if we haven't been able to flee for a few seconds
+			if (level.time - STEER_LastMoveTime(NPCS.NPC) > 3000
+				&& level.time - NPCS.NPCInfo->surrenderTime > 3000) //and haven't just finished surrendering
+			{
+				NPC_FaceEnemy(qtrue);
+				NPC_Surrender();
+			}
+		}
+
+		// Time To Choose A New Escape Point?
+		//------------------------------------
+		if ((!hasEscapePoint || reachedEscapePoint) && TIMER_Done(NPCS.NPC, "FindNewEscapePointDebounce"))
+		{
+			TIMER_Set(NPCS.NPC, "FindNewEscapePointDebounce", 2500);
+
+			const int escapePoint = NPC_FindCombatPoint(
+				NPCS.NPC->r.currentOrigin,
+				NPCS.NPC->enemy->r.currentOrigin,
+				NPCS.NPC->r.currentOrigin,
+				CP_COVER | CP_AVOID_ENEMY | CP_HAS_ROUTE,
+				128, -1);
+			if (escapePoint != -1)
+			{
+				NPC_JawaFleeSound();
+				NPC_SetCombatPoint(escapePoint);
+				NPC_SetMoveGoal(NPCS.NPC, level.combatPoints[escapePoint].origin, 8, qtrue, escapePoint, NULL);
+			}
+		}
+	}
+
+	// If Only Temporarly In Flee, Think About Perhaps Returning To Combat
+	//---------------------------------------------------------------------
+	if (NPCS.NPCInfo->tempBehavior == BS_FLEE &&
+		TIMER_Done(NPCS.NPC, "flee") &&
+		NPCS.NPC->s.weapon != WP_NONE &&
+		NPCS.NPC->s.weapon != WP_MELEE
+		)
 	{
 		NPCS.NPCInfo->tempBehavior = BS_DEFAULT;
-		NPCS.NPCInfo->squadState = SQUAD_IDLE;
-		//FIXME: should we set some timer to make him stay in this spot for a bit,
-		//so he doesn't just suddenly turn around and come back at the enemy?
-		//OR, just stop running toward goal for last second or so of flee?
 	}
-	if (NPC_CheckSurrender())
+
+	// Always Update Angles
+	//----------------------
+	NPC_UpdateAngles(qtrue, qtrue);
+	if (reachedEscapePoint)
 	{
 		return;
 	}
-	const gentity_t* goal = NPCS.NPCInfo->goalEntity;
-	if (!goal)
-	{
-		goal = NPCS.NPCInfo->lastGoalEntity;
-		if (!goal)
-		{
-			//???!!!
-			goal = NPCS.NPCInfo->tempGoal;
-		}
-	}
-
-	if (goal)
-	{
-		qboolean reverseCourse = qtrue;
-
-		//FIXME: if no weapon, find one and run to pick it up?
-
-		//Let's try to find a waypoint that gets me away from this thing
-		if (NPCS.NPC->waypoint == WAYPOINT_NONE)
-		{
-			NPCS.NPC->waypoint = NAV_GetNearestNode(NPCS.NPC, NPCS.NPC->lastWaypoint);
-		}
-		if (NPCS.NPC->waypoint != WAYPOINT_NONE)
-		{
-			const int numEdges = trap->Nav_GetNodeNumEdges(NPCS.NPC->waypoint);
-
-			if (numEdges != WAYPOINT_NONE)
-			{
-				vec3_t dangerDir;
-
-				VectorSubtract(NPCS.NPCInfo->investigateGoal, NPCS.NPC->r.currentOrigin, dangerDir);
-				VectorNormalize(dangerDir);
-
-				for (int branchNum = 0; branchNum < numEdges; branchNum++)
-				{
-					vec3_t branchPos, runDir;
-
-					const int nextWp = trap->Nav_GetNodeEdge(NPCS.NPC->waypoint, branchNum);
-					trap->Nav_GetNodePosition(nextWp, branchPos);
-
-					VectorSubtract(branchPos, NPCS.NPC->r.currentOrigin, runDir);
-					VectorNormalize(runDir);
-					if (DotProduct(runDir, dangerDir) > flrand(0, 0.5))
-					{
-						//don't run toward danger
-						continue;
-					}
-					//FIXME: don't want to ping-pong back and forth
-					NPC_SetMoveGoal(NPCS.NPC, branchPos, 0, qtrue, -1, NULL);
-					reverseCourse = qfalse;
-					break;
-				}
-			}
-		}
-
-		const qboolean moved = NPC_MoveToGoal(qfalse); //qtrue? (do try to move straight to (away from) goal)
-
-		if (NPCS.NPC->s.weapon == WP_NONE && (moved == qfalse || reverseCourse))
-		{
-			//No weapon and no escape route... Just cower?  Need anim.
-			NPC_Surrender();
-			NPC_UpdateAngles(qtrue, qtrue);
-			return;
-		}
-		//If our move failed, then just run straight away from our goal
-		//FIXME: We really shouldn't do this.
-		if (moved == qfalse)
-		{
-			vec3_t dir;
-			if (reverseCourse)
-			{
-				VectorSubtract(NPCS.NPC->r.currentOrigin, goal->r.currentOrigin, dir);
-			}
-			else
-			{
-				VectorSubtract(goal->r.currentOrigin, NPCS.NPC->r.currentOrigin, dir);
-			}
-			NPCS.NPCInfo->distToGoal = VectorNormalize(dir);
-			NPCS.NPCInfo->desiredYaw = vectoyaw(dir);
-			NPCS.NPCInfo->desiredPitch = 0;
-			NPCS.ucmd.forwardmove = 127;
-		}
-		else if (reverseCourse)
-		{
-			NPCS.NPCInfo->desiredYaw *= -1;
-		}
-		NPCS.ucmd.buttons &= ~BUTTON_WALKING;
-	}
-	NPC_UpdateAngles(qtrue, qtrue);
 
 	NPC_CheckGetNewWeapon();
 }

@@ -404,7 +404,7 @@ static void G_AttackDelay(const gentity_t* self, const gentity_t* enemy)
 			return;
 		case WP_EMPLACED_GUN:
 			return;
-		// (DH 2026-11-03: SP NPC_combat.cpp G_AttackDelay for the weapons MP had no case for)
+			// (DH 2026-11-03: SP NPC_combat.cpp G_AttackDelay for the weapons MP had no case for)
 		case WP_NOGHRI_STICK:
 			attDelay += Q_irand(0, 500);
 			break;
@@ -811,6 +811,8 @@ void G_SetEnemy(gentity_t* self, gentity_t* enemy)
 	self->enemy = enemy;
 }
 
+extern void npc_check_speak(gentity_t* speaker_npc); // NPC_AI_Stormtrooper.c (SP: idle combat chatter, g_Advancedaitalk)
+
 void ChangeWeapon(const gentity_t* ent, int new_weapon)
 {
 	if (!ent || !ent->client || !ent->NPC)
@@ -1085,7 +1087,7 @@ void ChangeWeapon(const gentity_t* ent, int new_weapon)
 		}
 		break;
 
-	// (DH 2026-11-03: SP NPC_combat.cpp ChangeWeapon for the weapons MP had no case for: their fire rate / bursts)
+		// (DH 2026-11-03: SP NPC_combat.cpp ChangeWeapon for the weapons MP had no case for: their fire rate / bursts)
 	case WP_TUSKEN_RIFLE:
 		ent->NPC->aiFlags &= ~NPCAI_BURST_WEAPON;
 		if (ent->NPC->scriptFlags & SCF_ALT_FIRE)
@@ -1138,7 +1140,7 @@ void ChangeWeapon(const gentity_t* ent, int new_weapon)
 		break;
 
 	case WP_BATTLEDROID:
- 		if (ent->NPC->scriptFlags & SCF_ALT_FIRE)
+		if (ent->NPC->scriptFlags & SCF_ALT_FIRE)
 		{
 			ent->NPC->aiFlags |= NPCAI_BURST_WEAPON;
 			ent->NPC->burstMin = 3;
@@ -1170,7 +1172,7 @@ void ChangeWeapon(const gentity_t* ent, int new_weapon)
 	case WP_CLONECOMMANDO:
 	case WP_REBELRIFLE:
 	case WP_BOBA:
- 		if (ent->NPC->scriptFlags & SCF_ALT_FIRE)
+		if (ent->NPC->scriptFlags & SCF_ALT_FIRE)
 		{
 			ent->NPC->aiFlags |= NPCAI_BURST_WEAPON;
 			ent->NPC->burstMin = 3;
@@ -1207,7 +1209,7 @@ void ChangeWeapon(const gentity_t* ent, int new_weapon)
 		break;
 
 	case WP_JANGO:
- 		if (ent->NPC->scriptFlags & SCF_ALT_FIRE)
+		if (ent->NPC->scriptFlags & SCF_ALT_FIRE)
 		{
 			ent->NPC->aiFlags |= NPCAI_BURST_WEAPON;
 			ent->NPC->burstMin = 2;
@@ -2543,6 +2545,9 @@ gentity_t* NPC_CheckEnemy(const qboolean find_new, const qboolean too_far_ok, co
 			}
 		}
 	}
+
+	npc_check_speak(NPCS.NPC); // (SP)
+
 	return newEnemy;
 }
 
@@ -3564,7 +3569,7 @@ qboolean NPC_SetCombatPoint(const int combatPointID)
 
 extern qboolean CheckItemCanBePickedUpByNPC(const gentity_t* item, const gentity_t* pickerupper);
 
-static gentity_t* NPC_SearchForWeapons(void)
+gentity_t* NPC_SearchForWeapons(void)
 {
 	gentity_t* bestFound = NULL;
 	float bestDist = Q3_INFINITE;

@@ -523,7 +523,7 @@ qboolean NPC_TryJump(void)
 	return qfalse;
 }
 
-static qboolean NPC_TryJump_Pos(const vec3_t pos, const float max_xy_dist, const float max_z_diff)
+qboolean NPC_TryJump_Pos(const vec3_t pos, const float max_xy_dist, const float max_z_diff)
 {
 	if (NPC_CanTryJump())
 	{
@@ -597,9 +597,17 @@ qboolean NPC_TryJump_Gent(gentity_t* goal, const float max_xy_dist, const float 
 void NPC_JumpAnimation()
 {
 	int jumpAnim = BOTH_JUMP1;
+	// MD SP (DH 2026-11-03, NPC parity batch D): the other styled jumps / flips / landings come from BG_SetAnim's style
+	// remap (bg_panimate.c); these styles always jump with their own BOTH_JUMP1 in SP, flips or not
+	const animFlags_t flags = BG_AnimStyleFlags(NPCS.NPC->client->ps.animStyle);
+	const qboolean styledJump = flags.isAnakin || flags.isYoda || flags.isVader || flags.isGalenMarek || flags.isMaul
+		? qtrue
+		: qfalse;
 
-	if (NPCS.NPC->client->NPC_class == CLASS_BOBAFETT
+	if (NPCS.NPC->client->NPC_class == CLASS_BOBAFETT || NPCS.NPC->client->NPC_class == CLASS_MANDO
+		|| NPCS.NPC->client->NPC_class == CLASS_JANGO || NPCS.NPC->client->NPC_class == CLASS_JANGODUAL
 		|| NPCS.NPC->client->NPC_class == CLASS_REBORN && NPCS.NPC->s.weapon != WP_SABER
+		|| NPCS.NPC->client->NPC_class == CLASS_CALONORD && NPCS.NPC->s.weapon != WP_SABER
 		|| NPCS.NPC->client->NPC_class == CLASS_ROCKETTROOPER
 		|| NPCS.NPCInfo->rank != RANK_CREWMAN && NPCS.NPCInfo->rank <= RANK_LT_JG)
 	{
@@ -617,11 +625,14 @@ void NPC_JumpAnimation()
 			jumpAnim = BOTH_FLIP_F;
 		}
 	}
+	if (styledJump)
+	{
+		jumpAnim = BOTH_JUMP1; // (the style remap plays BOTH_JUMP1_ANI / _YODA / _VADER / _GALEN / _MAUL)
+	}
 	NPC_SetAnim(NPCS.NPC, SETANIM_BOTH, jumpAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 }
 
-//make sound for jump
-extern void G_SoundOnEnt(gentity_t* ent, soundChannel_t channel, const char* sound_path);
+//make sound for jumpextern void G_SoundOnEnt(gentity_t* ent, soundChannel_t channel, const char* sound_path);
 extern void JET_FlyStart(gentity_t* self);
 
 void NPC_JumpSound()
@@ -632,6 +643,7 @@ void NPC_JumpSound()
 	}
 	else if (NPCS.NPC->client->NPC_class == CLASS_BOBAFETT
 		|| NPCS.NPC->client->NPC_class == CLASS_MANDO
+		|| NPCS.NPC->client->NPC_class == CLASS_JANGO || NPCS.NPC->client->NPC_class == CLASS_JANGODUAL // (MD SP)
 		|| NPCS.NPC->client->NPC_class == CLASS_ROCKETTROOPER)
 	{
 		JET_FlyStart(NPCS.NPC);

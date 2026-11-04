@@ -541,6 +541,7 @@ vmCvar_t cg_saberLockCinematicCamera;
 
 vmCvar_t cg_AimingCinematicCamera;
 vmCvar_t cg_aimShoulder;
+vmCvar_t cg_aimCamHorzOffset;
 
 vmCvar_t cg_allowcallout;
 
@@ -697,7 +698,7 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_saberLightRadius, "cg_saberLightRadius", "0.703125", CVAR_ARCHIVE }, // saber light reach (1 = as before)
 	{ &cg_lightningFxInterval, "cg_lightningFxInterval", "50", CVAR_ARCHIVE }, // ms between new copies of the force lightning bolt effect (16 = as before)
 	{ &cg_lightningMarks, "cg_lightningMarks", "1", CVAR_ARCHIVE }, // force lightning scorch / burn marks that fade (0 = off)
-	{ &cg_lightningMarkInterval, "cg_lightningMarkInterval", "150", CVAR_ARCHIVE }, // ms between lightning marks per caster
+	{ &cg_lightningMarkInterval, "cg_lightningMarkInterval", "100", CVAR_ARCHIVE }, // ms between lightning marks per caster
 	{ &cg_saberLightIntensity, "cg_saberLightIntensity", "1.070312", CVAR_ARCHIVE }, // saber light strength (1 = as before)
 	{ &cg_fovViewmodel, "cg_fovViewmodel", "0", CVAR_ARCHIVE },
 	{ &cg_fovViewmodelAdjust, "cg_fovViewmodelAdjust", "1", CVAR_ARCHIVE },
@@ -813,6 +814,7 @@ static cvarTable_t cvarTable[] = {
 
 	{ &cg_AimingCinematicCamera, "g_AimingCinematicCamera", "1", CVAR_ARCHIVE },
 	{ &cg_aimShoulder, "cg_aimShoulder", "1", CVAR_ARCHIVE }, // aiming camera over the right shoulder (x model size); 0 = centred
+	{ &cg_aimCamHorzOffset, "cg_aimCamHorzOffset", "0", CVAR_ARCHIVE }, // aiming camera's side offset, used instead of cg_thirdPersonHorzOffset (same on every camera preset)
 
 	{ &cg_jumpSounds, "cg_jumpSounds", "1", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART },
 
@@ -2462,6 +2464,9 @@ static void CG_RegisterGraphics()
 	cgs.media.batteryChargeShader = cgi_R_RegisterShader("gfx/2d/battery");
 	cgi_R_RegisterShader("gfx/2d/droid_view");
 	cgs.media.useableHint = cgi_R_RegisterShader("gfx/hud/useableHint");
+	cgs.media.npcBarBack = cgi_R_RegisterShaderNoMip("gfx/2d/npcbar_back");
+	cgs.media.npcBarFill = cgi_R_RegisterShaderNoMip("gfx/2d/npcbar_fill");
+	cgs.media.npcBarFrame = cgi_R_RegisterShaderNoMip("gfx/2d/npcbar_frame");
 
 	cgs.media.hackerIconShader = cgi_R_RegisterShader("gfx/mp/c_icon_tech");
 

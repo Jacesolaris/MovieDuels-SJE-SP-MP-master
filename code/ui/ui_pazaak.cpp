@@ -2572,7 +2572,8 @@ static void Shop_LoadItems(void)
 			Q_strncpyz(it->name, shopHoldNames[h][0], sizeof(it->name));
 			Q_strncpyz(it->icon, shopHoldNames[h][1], sizeof(it->icon));
 		}
-	}}
+	}
+}
 
 static int Shop_CatCount(const int cat)
 {

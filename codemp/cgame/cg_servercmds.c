@@ -1888,4 +1888,4 @@ void CG_ExecuteNewServerCommands(int latestSequence) {
 			CG_ServerCommand();
 		}
 	}
-}
+}

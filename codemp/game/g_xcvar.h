@@ -68,7 +68,9 @@ XCVAR_DEF(fraglimit, "20", NULL, CVAR_SERVERINFO | CVAR_ARCHIVE | CVAR_NORESTART
 XCVAR_DEF(g_adaptRespawn, "1", NULL, CVAR_NONE, qtrue)
 XCVAR_DEF(g_allowDuelSuicide, "1", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_allowHighPingDuelist, "1", NULL, CVAR_NONE, qtrue)
+XCVAR_DEF(g_AIsurrender, "0", NULL, CVAR_CHEAT, qfalse) // non-jawa / ugnaught NPCs surrender (SP)
 XCVAR_DEF(g_allowNPC, "1", NULL, CVAR_ARCHIVE, qtrue)
+XCVAR_DEF(g_missionSkipIntro, "1", NULL, CVAR_ARCHIVE, qfalse) // Missions: each map's intro is skipped from the start (ext_data/mission_intros.dat; 0 = it plays out unseen)
 XCVAR_DEF(g_allowTeamVote, "1", NULL, CVAR_ARCHIVE, qfalse)
 XCVAR_DEF(g_allowVote, "1", NULL, CVAR_ARCHIVE, qfalse)
 XCVAR_DEF(g_antiFakePlayer, "1", NULL, CVAR_ARCHIVE, qfalse)
@@ -135,11 +137,19 @@ XCVAR_DEF(g_saberBreaking, "2", NULL, CVAR_ARCHIVE, qtrue)
 #ifndef FINAL_BUILD
 XCVAR_DEF(g_saberDebugPrint, "0", NULL, CVAR_CHEAT, qfalse)
 #endif
+#ifdef _DEBUG
+XCVAR_DEF(d_animLog, "0", NULL, CVAR_CHEAT, qfalse) // Debug builds: print the player's (and d_animLogEnt's) anim starts, as SP (bg_panimate.c BG_AnimLog, 2026-11-03)
+XCVAR_DEF(d_animLogEnt, "-1", NULL, CVAR_CHEAT, qfalse)
+#endif
 XCVAR_DEF(g_saberDmgDelay_Idle, "350", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_saberDmgDelay_Wound, "100", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_saberDmgVelocityScale, "0", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_saberLockFactor, "2", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_saberLocking, "1", NULL, CVAR_ARCHIVE, qtrue)
+// SP's perfect block windows (ms after pressing block, by g_npcspskill 0 / 1 / 2+), SP's defaults (2026-11-03, parity batch 5)
+XCVAR_DEF(g_SaberPerfectBlockingTimerEasy, "250", NULL, CVAR_ARCHIVE, qtrue)
+XCVAR_DEF(g_SaberPerfectBlockingTimerNormal, "150", NULL, CVAR_ARCHIVE, qtrue)
+XCVAR_DEF(g_SaberPerfectBlockingTimerHard, "50", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_saberBlasterAimArc, "30", NULL, CVAR_ARCHIVE, qtrue) // SS_BLASTER: pistol auto aim half angle (degrees)
 XCVAR_DEF(g_saberBlasterAimRange, "4096", NULL, CVAR_ARCHIVE, qtrue) // SS_BLASTER: pistol auto aim range
 XCVAR_DEF(g_saberBlasterAIFire, "2000", NULL, CVAR_ARCHIVE, qtrue) // SS_BLASTER: bots / NPCs fire the pistol out of saber reach: average ms between bursts (0 = off)
@@ -207,7 +217,7 @@ XCVAR_DEF(storyhead, "", NULL, CVAR_NONE, qfalse)
 XCVAR_DEF(tier_storyinfo, "0", NULL, CVAR_ARCHIVE, qfalse)
 XCVAR_DEF(tiers_complete, "", NULL, CVAR_ARCHIVE, qfalse)
 
-XCVAR_DEF(g_skipcutscenes, "0", NULL, CVAR_SERVERINFO | CVAR_ARCHIVE, qtrue)
+XCVAR_DEF(g_skipcutscenes, "1", NULL, CVAR_SERVERINFO | CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_spmodel, "jan", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_spmodelrgb, "255 255 255", NULL, CVAR_ARCHIVE, qtrue)
 
@@ -311,5 +321,5 @@ XCVAR_DEF(g_duelWinSound, "1", NULL, CVAR_ARCHIVE, qfalse) // play sound/player/
 XCVAR_DEF(g_Advancedaitalk, "1", NULL, CVAR_ARCHIVE, qfalse) // NPCs taunt/talk in combat (SP g_Advancedaitalk) (DH 2026-10-24 SP NPC port)
 XCVAR_DEF(g_SaberAttackSpeedMD, "1", NULL, CVAR_ARCHIVE, qtrue)
 
-XCVAR_DEF(g_lightningDrainRate, "8", NULL, CVAR_ARCHIVE, qtrue) // force points a second while force lightning is held (DH 2026-11-02); 0 = the old cost (2 / 5 / 8 points every 50 ms)
+XCVAR_DEF(g_lightningDrainRate, "25", NULL, CVAR_ARCHIVE, qtrue) // force points a second while force lightning is held (DH 2026-11-02); 0 = the old cost (2 / 5 / 8 points every 50 ms)
 #undef XCVAR_DEF

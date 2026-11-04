@@ -1811,6 +1811,9 @@ static void CG_RegisterGraphics(void)
 	cgs.media.binocularStatic = trap->R_RegisterShader("gfx/2d/binocularWindow");
 	cgs.media.binocularOverlay = trap->R_RegisterShader("gfx/2d/binocularNumOverlay");
 	cgs.media.useableHint = trap->R_RegisterShader("gfx/hud/useableHint");
+	cgs.media.npcBarBack = trap->R_RegisterShaderNoMip("gfx/2d/npcbar_back");
+	cgs.media.npcBarFill = trap->R_RegisterShaderNoMip("gfx/2d/npcbar_fill");
+	cgs.media.npcBarFrame = trap->R_RegisterShaderNoMip("gfx/2d/npcbar_frame");
 
 	cg.loadLCARSStage = 5;
 
@@ -3905,4 +3908,4 @@ Q_EXPORT intptr_t vmMain(const int command, const intptr_t arg0, const intptr_t 
 		break;
 	}
 	return -1;
-}
+}

@@ -576,7 +576,7 @@ typedef struct centity_s {
 	int				saberSliceInvert;					// bit i: this is the cut-off piece of cut i
 	int				saberSliceFxTime;					// next ember puff
 	int				saberSliceSpawnTime;				// piece: cg.time it was first drawn
-	void*			saberSliceGhoul2;					// the ghoul2 instance the cuts belong to
+	void* saberSliceGhoul2;					// the ghoul2 instance the cuts belong to
 } centity_t;
 
 //======================================================================
@@ -1514,6 +1514,9 @@ typedef struct cgMedia_s {
 	qhandle_t	binocularStatic;
 	qhandle_t	binocularOverlay;
 	qhandle_t	useableHint;
+	qhandle_t	npcBarBack;	// the bars over the heads (cg_draw.c CG_DrawOverheadBars)
+	qhandle_t	npcBarFill;
+	qhandle_t	npcBarFrame;
 
 	// weapon effect models
 	qhandle_t	lightningExplosionModel;

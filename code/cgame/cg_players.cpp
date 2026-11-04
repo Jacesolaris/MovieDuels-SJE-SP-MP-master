@@ -14468,18 +14468,61 @@ void CG_CheckSaberInWater(const centity_t* cent,
 	client->ps.saberEventFlags &= ~SEF_INWATER;
 }
 
+// Grass cutting smoke (2026-11-03, DH, cg_grassCutSmoke): thin lines of smoke rise from the cut grass ends along the
+// blade's low end from last frame (from) to now (to), one every 8 units (at most 4), each six light puffs that grow as
+// they rise at different speeds (a thin column that clears the grass, 40+ units tall) and fade within 2-3 s
+// (gfx/effects/jk_smoke5). At most 64 lines live at a time.
+static void CG_GrassCutSmoke(const vec3_t from, const vec3_t to, const qhandle_t shader)
+{
+	static int lineTimes[64];
+	vec3_t d;
+	VectorSubtract(to, from, d);
+	int n = static_cast<int>(VectorLength(d) / 8.0f) + 1;
+	n = n > 4 ? 4 : n;
+	for (int i = 0; i < n; i++)
+	{
+		int slot = -1;
+		for (int k = 0; k < 64 && slot < 0; k++)
+		{
+			slot = cg.time - lineTimes[k] >= 2400 || cg.time < lineTimes[k] ? k : -1;
+		}
+		if (slot < 0)
+		{
+			return;
+		}
+		lineTimes[slot] = cg.time;
+		vec3_t org;
+		VectorMA(from, (i + 0.5f) / n, d, org);
+		org[0] += Q_flrand(-2.0f, 2.0f);
+		org[1] += Q_flrand(-2.0f, 2.0f);
+		for (int k = 0; k < 6; k++)
+		{
+			const vec3_t vel = { Q_flrand(-1.0f, 1.0f), Q_flrand(-1.0f, 1.0f), 6.0f + k * 3.0f };
+			const vec3_t accel = { 0.0f, 0.0f, 1.5f };
+			const vec3_t light = { 0.8f, 0.8f, 0.77f };
+			FX_AddParticle(-1, org, vel, accel, 0.0f, 1.5f + k * 0.25f, 4.0f + k * 0.6f, 0.0f, 0.4f - k * 0.04f, 0.0f, 0.0f, light, light,
+				0.0f, Q_flrand(0.0f, 360.0f), Q_flrand(-20.0f, 20.0f), vec3_origin, vec3_origin, 0.0f, 0, 0, 2200 + k * 150, shader,
+				FX_ALPHA_LINEAR | FX_SIZE_LINEAR | FX_USE_ALPHA);
+		}
+	}
+}
 // Grass cutting (2026-11-02): a blade that swings low through the grass (within 48 units above its owner's feet) tells
 // the renderer (grass_wave type 3, rd-common tr_grasscut.h), which cuts the grass it went through down to stubble.
 // cg_grassCutFx 1: the cut tips glow for 2 s and the cut-off tops fall and lie for cg_grassCutDebrisTime seconds.
 // r_grassCut / r_grassCutRegrow are the renderer's. One command a frame while a blade moves through the grass.
-// cg_grassCutSound 1: the grass fizzles under the blade (a random rainfizz1-3 where it cuts, over ground of grass
-// material or where the renderer saw the cut land in grass or a plant model, r_grassCutHit; at most every 150 ms per
-// cutter).
+// cg_grassCutSound 1: the saber strikes the grass (2026-11-03, DH: a random saber_strike_grass1-8, never the same one
+// twice in a row, where it cuts, over ground of grass material or where the renderer saw the cut land in grass or a
+// plant model, r_grassCutHit). The sounds are about 6 s long, so one plays per stroke: a new one starts when the blade
+// comes back into the grass after 400 ms out of it, or when the last one has run out, on CHAN_MUSIC (no other sound
+// uses it) for that cutter, so a new stroke replaces the one before instead of piling up (checked every 100 ms). cg_grassCutSmoke 1: thin lines of smoke rise from the cut ends there (CG_GrassCutSmoke).
 static void CG_GrassCut(const centity_t* cent, const int saberNum, const int bladeNum, const vec3_t base, const vec3_t tip)
 {
-	static vmCvar_t cg_grassCutFx, cg_grassCutDebrisTime, cg_grassCutSound, r_grassCutHit;
-	static sfxHandle_t fizzSounds[3];
-	static int lastSound[MAX_GENTITIES];
+	static vmCvar_t cg_grassCutFx, cg_grassCutDebrisTime, cg_grassCutSound, cg_grassCutSmoke, r_grassCutHit;
+	static qhandle_t smokeShader;
+	static int lastSmoke[MAX_GENTITIES];
+	static sfxHandle_t strikeSounds[8];
+	static int lastSound[MAX_GENTITIES], lastSoundCheck[MAX_GENTITIES], lastGrass[MAX_GENTITIES];
+	static int lastStrike = -1;
 	static int registerTime = 0;
 	static qboolean registered = qfalse;
 	static float last[MAX_GENTITIES][MAX_SABERS][MAX_BLADES][6];
@@ -14488,15 +14531,21 @@ static void CG_GrassCut(const centity_t* cent, const int saberNum, const int bla
 
 	if (!registered || cg.time < registerTime - 1000)
 	{	// once, and again on a new map (SP: the clock starts again)
-		fizzSounds[0] = cgi_S_RegisterSound("sound/weapons/saber/rainfizz1.wav");
-		fizzSounds[1] = cgi_S_RegisterSound("sound/weapons/saber/rainfizz2.wav");
-		fizzSounds[2] = cgi_S_RegisterSound("sound/weapons/saber/rainfizz3.wav");
+		for (int i = 0; i < 8; i++)
+		{
+			strikeSounds[i] = cgi_S_RegisterSound(va("sound/weapons/saber/saber_strike_grass%d.mp3", i + 1));
+		}
 		memset(lastSound, 0, sizeof(lastSound));
+		memset(lastSoundCheck, 0, sizeof(lastSoundCheck));
+		memset(lastGrass, 0, sizeof(lastGrass));
 		registerTime = cg.time;
 		cgi_Cvar_Register(&cg_grassCutFx, "cg_grassCutFx", "1", CVAR_ARCHIVE);
 		cgi_Cvar_Register(&cg_grassCutDebrisTime, "cg_grassCutDebrisTime", "10", CVAR_ARCHIVE);
 		cgi_Cvar_Register(&cg_grassCutSound, "cg_grassCutSound", "1", CVAR_ARCHIVE);
 		cgi_Cvar_Register(&r_grassCutHit, "r_grassCutHit", "0", 0);
+		cgi_Cvar_Register(&cg_grassCutSmoke, "cg_grassCutSmoke", "1", CVAR_ARCHIVE);
+		smokeShader = cgi_R_RegisterShader("gfx/effects/jk_smoke5");
+		memset(lastSmoke, 0, sizeof(lastSmoke));
 		registered = qtrue;
 	}
 	if (cg.time > registerTime)
@@ -14538,8 +14587,16 @@ static void CG_GrassCut(const centity_t* cent, const int saberNum, const int bla
 	cgi_Cvar_Update(&cg_grassCutFx);
 	cgi_Cvar_Update(&cg_grassCutDebrisTime);
 	cgi_Cvar_Update(&cg_grassCutSound);
-	if (cg_grassCutSound.integer && (cg.time - lastSound[num] >= 150 || cg.time < lastSound[num]))
+	cgi_Cvar_Update(&cg_grassCutSmoke);
+	const bool soundDue = cg_grassCutSound.integer && (cg.time - lastSoundCheck[num] >= 100 || cg.time < lastSoundCheck[num]) ? true : false;
+	const bool smokeDue = cg_grassCutSmoke.integer && smokeShader && (cg.time - lastSmoke[num] >= 100 || cg.time < lastSmoke[num])
+		? true : false;
+	if (soundDue || smokeDue)
 	{
+		if (soundDue)
+		{
+			lastSoundCheck[num] = cg.time;
+		}
 		vec3_t from, down;
 		trace_t tr;
 		VectorCopy(base[2] < tip[2] ? base : tip, from);
@@ -14557,12 +14614,32 @@ static void CG_GrassCut(const centity_t* cent, const int saberNum, const int bla
 			&& fabs(atof(hitY + 1) - from[1]) < 64.0f ? true : false;
 		if (!tr.startsolid && (grassHit || (tr.fraction < 0.8f && (material == MATERIAL_SHORTGRASS || material == MATERIAL_LONGGRASS))))
 		{	// the blade is in the grass (32 units above grass ground)
-			const sfxHandle_t fizz = fizzSounds[rand() % 3];
-			if (fizz)
-			{
-				cgi_S_StartSound(tr.fraction < 1.0f ? tr.endpos : from, num, CHAN_AUTO, fizz);
+			if (soundDue)
+			{	// a new stroke (back in the grass after 400 ms out of it), or the last sound has run out
+				if (cg.time - lastGrass[num] > 400 || cg.time < lastGrass[num] || cg.time - lastSound[num] >= 6000
+					|| cg.time < lastSound[num])
+				{
+					int pick = rand() % 8;
+					if (pick == lastStrike)
+					{
+						pick = (pick + 1 + rand() % 7) % 8;
+					}
+					lastStrike = pick;
+					if (strikeSounds[pick])
+					{
+						cgi_S_StartSound(tr.fraction < 1.0f ? tr.endpos : from, num, CHAN_MUSIC, strikeSounds[pick]);
+					}
+					lastSound[num] = cg.time;
+				}
+				lastGrass[num] = cg.time;
 			}
-			lastSound[num] = cg.time;
+			if (smokeDue)
+			{	// smoke from the cut ends along the blade's low end since last frame
+				vec3_t lastLow;
+				VectorCopy(pb[2] < pt[2] ? pb : pt, lastLow);
+				CG_GrassCutSmoke(lastLow, from, smokeShader);
+				lastSmoke[num] = cg.time;
+			}
 		}
 	}
 	cgi_SendConsoleCommand(va("grass_wave %d %.1f %.1f %.1f 0 0 3 0 %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %d %.1f 3\n", cg.time,

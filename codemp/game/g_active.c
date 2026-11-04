@@ -2319,6 +2319,10 @@ static void G_CheckClientIdleSabers(gentity_t* ent, usercmd_t* ucmd)
 			case BOTH_STAND3IDLE1:
 			case BOTH_STAND5IDLE1:
 			case BOTH_MENUIDLE1:
+			case BOTH_STAND9IDLE1: // SP's saber idles (parity batch 9)
+			case BOTH_STAND_SABER_ON_IDLE:
+			case BOTH_STAND_SABER_ON_IDLE_DUELS:
+			case BOTH_STAND_SABER_ON_IDLE_STAFF:
 				ent->client->ps.legsTimer = 0;
 				broke_out = qtrue;
 				break;
@@ -2332,6 +2336,10 @@ static void G_CheckClientIdleSabers(gentity_t* ent, usercmd_t* ucmd)
 			case BOTH_STAND3IDLE1:
 			case BOTH_STAND5IDLE1:
 			case BOTH_MENUIDLE1:
+			case BOTH_STAND9IDLE1:
+			case BOTH_STAND_SABER_ON_IDLE:
+			case BOTH_STAND_SABER_ON_IDLE_DUELS:
+			case BOTH_STAND_SABER_ON_IDLE_STAFF:
 				ent->client->ps.torsoTimer = 0;
 				break;
 			default:;
@@ -2357,15 +2365,38 @@ static void G_CheckClientIdleSabers(gentity_t* ent, usercmd_t* ucmd)
 			idleAnim = BOTH_STAND1IDLE1;
 			break;
 		case BOTH_STAND2: //single-saber, medium style
+		case BOTH_STAND2_JKA:
 			idleAnim = BOTH_STAND2IDLE2;
 			break;
+		case BOTH_STAND9: // SP G_CheckClientIdleSabers (AMD mode) from here to the staff stances (parity batch 9)
+			idleAnim = BOTH_STAND9IDLE1;
+			break;
 		case BOTH_SABERFAST_STANCE: //single-saber, fast style
+		case BOTH_SABERFAST_STANCE_JKA:
 		case BOTH_SABERSLOW_STANCE: //single-saber, strong style
-		case BOTH_SABERSTAFF_STANCE: //saber staff style
-		case BOTH_SABERDUAL_STANCE: //dual saber style
-		case BOTH_SABERDUAL_STANCE_GRIEVOUS: //dual saber style
+		case BOTH_SABERSLOW_STANCE_JKA:
 		case BOTH_SABERTAVION_STANCE: //tavion saberstyle
+		case BOTH_SABERTAVION_STANCE_JKA:
 		case BOTH_SABERDESANN_STANCE: //desann saber style
+		case BOTH_SABERDESANN_STANCE_JKA:
+		case BOTH_SABERSINGLECROUCH:
+		case BOTH_STAND_SABER_ON:
+			idleAnim = BOTH_STAND_SABER_ON_IDLE; // the style table gives Grievous / MovieDuels their own
+			break;
+		case BOTH_SABERDUAL_STANCE: //dual saber style
+		case BOTH_SABERDUAL_STANCE_JKA:
+		case BOTH_SABERDUALCROUCH:
+		case BOTH_STAND_SABER_ON_DUELS:
+			idleAnim = BOTH_STAND_SABER_ON_IDLE_DUELS;
+			break;
+		case BOTH_SABERSTAFF_STANCE: //saber staff style
+		case BOTH_SABERSTAFF_STANCE_JKA:
+		case BOTH_SABERSTAFF_STANCE_BEN:
+		case BOTH_SABERSTAFFCROUCH:
+		case BOTH_STAND_SABER_ON_STAFF:
+			idleAnim = BOTH_STAND_SABER_ON_IDLE_STAFF;
+			break;
+		case BOTH_SABERDUAL_STANCE_GRIEVOUS: //dual saber style (MP's own stances from here: MP's idles)
 		case BOTH_SABERSTANCE_STANCE: //similar to stand2
 		case BOTH_SABERYODA_STANCE: //YODA saber style
 		case BOTH_SABERBACKHAND_STANCE: //BACKHAND saber style
@@ -2405,9 +2436,12 @@ static void G_CheckClientIdleSabers(gentity_t* ent, usercmd_t* ucmd)
 			break;
 		default:;
 		}
-		if (idleAnim != -1 && idleAnim > 0 && idleAnim < MAX_ANIMATIONS)
+		if (idleAnim != -1 && idleAnim > 0 && idleAnim < MAX_ANIMATIONS
+			&& BG_HasAnimation(ent->localAnimIndex, idleAnim))
 		{
 			G_SetAnim(ent, ucmd, SETANIM_BOTH, idleAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
+			// SP: don't idle again after this anim for a while
+			ent->client->idleTime = level.time + BG_AnimLength(ent->localAnimIndex, (animNumber_t)idleAnim) + Q_irand(0, 4000);
 		}
 	}
 }
@@ -2432,7 +2466,6 @@ static qboolean GunisShort(const gentity_t* ent)
 	case WP_BRYAR_OLD:
 	case WP_REY:
 	case WP_JANGO:
-	case WP_BOBA:
 	case WP_CLONEPISTOL:
 	case WP_REBELBLASTER:
 		return qtrue;
@@ -2445,20 +2478,15 @@ static qboolean GunisLong(const gentity_t* ent)
 {
 	switch (ent->s.weapon)
 	{
-	case WP_NOGHRI_STICK:
-	case WP_TUSKEN_RIFLE:
-	case WP_BLASTER:
+	case WP_BLASTER: // SP's weapon groups (parity batch 9); Noghri / Tusken weapons: G_CheckClientIdleGuns
 	case WP_BOWCASTER:
-	case WP_REPEATER:
-	case WP_DEMP2:
-	case WP_FLECHETTE:
 	case WP_BATTLEDROID:
 	case WP_THEFIRSTORDER:
 	case WP_CLONECARBINE:
-	case WP_CLONERIFLE:
+	case WP_CONCUSSION:
 	case WP_CLONECOMMANDO:
-	case WP_Z6_ROTARY_CANNON:
 	case WP_REBELRIFLE:
+	case WP_BOBA:
 		return qtrue;
 	default:;
 	}
@@ -2470,8 +2498,12 @@ static qboolean GunisMassive(const gentity_t* ent)
 	switch (ent->s.weapon)
 	{
 	case WP_DISRUPTOR:
-	case WP_CONCUSSION:
+	case WP_CLONERIFLE:
+	case WP_Z6_ROTARY_CANNON:
+	case WP_FLECHETTE:
 	case WP_ROCKET_LAUNCHER:
+	case WP_REPEATER:
+	case WP_DEMP2:
 		return qtrue;
 	default:;
 	}
@@ -2564,6 +2596,10 @@ static void G_CheckClientIdleGuns(gentity_t* ent, usercmd_t* ucmd)
 			case TORSO_WEAPONIDLE2:
 			case TORSO_WEAPONIDLE3:
 			case TORSO_WEAPONIDLE4:
+			case TORSO_WEAPONREST2: // SP's gun idles (parity batch 9)
+			case TORSO_WEAPONREST3:
+			case TORSO_WEAPONREST4:
+			case BOTH_WEAPONREST2P:
 				ent->client->ps.legsTimer = 0;
 				broke_out = qtrue;
 				break;
@@ -2581,6 +2617,10 @@ static void G_CheckClientIdleGuns(gentity_t* ent, usercmd_t* ucmd)
 			case TORSO_WEAPONIDLE2:
 			case TORSO_WEAPONIDLE3:
 			case TORSO_WEAPONIDLE4:
+			case TORSO_WEAPONREST2:
+			case TORSO_WEAPONREST3:
+			case TORSO_WEAPONREST4:
+			case BOTH_WEAPONREST2P:
 				ent->client->ps.torsoTimer = 0;
 				//brokeOut = qtrue;
 				break;
@@ -2606,49 +2646,44 @@ static void G_CheckClientIdleGuns(gentity_t* ent, usercmd_t* ucmd)
 			G_SetAnim(ent, ucmd, SETANIM_BOTH, idleAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
 		}
 	}
-	else if (GunisShort(ent) && level.time - ent->client->idleTime > 5000)
+	// SP G_CheckClientIdleGuns from here to the grenades: pistols rest after 3 s (two pistols: BOTH_WEAPONREST2P),
+	// rifles and heavy weapons after 5 s, on the torso; grenades after 5 s on the torso (parity batch 9)
+	else if (GunisShort(ent) && level.time - ent->client->idleTime > 3000)
 	{
-		//been idle for 2 seconds
-
-		const int idleAnim = BOTH_STAND9IDLE1;
-
-		if (idleAnim < MAX_ANIMATIONS)
+		const int idleAnim = ent->client->ps.eFlags & EF3_DUAL_WEAPONS ? BOTH_WEAPONREST2P : TORSO_WEAPONREST2;
+		if (BG_HasAnimation(ent->localAnimIndex, idleAnim))
 		{
 			G_SetAnim(ent, ucmd, SETANIM_TORSO, idleAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
 		}
 	}
 	else if (GunisLong(ent) && level.time - ent->client->idleTime > 5000)
 	{
-		//been idle for 2 seconds
-
-		const int idleAnim = BOTH_STAND3IDLE1;
-
-		if (idleAnim < MAX_ANIMATIONS)
+		const int idleAnim = TORSO_WEAPONREST3;
+		if (BG_HasAnimation(ent->localAnimIndex, idleAnim))
 		{
 			G_SetAnim(ent, ucmd, SETANIM_TORSO, idleAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
 		}
 	}
 	else if (GunisMassive(ent) && level.time - ent->client->idleTime > 5000)
 	{
-		//been idle for 2 seconds
-
-		const int idleAnim = BOTH_STAND3IDLE1;
-
-		if (idleAnim < MAX_ANIMATIONS)
+		const int idleAnim = TORSO_WEAPONREST4;
+		if (BG_HasAnimation(ent->localAnimIndex, idleAnim))
 		{
 			G_SetAnim(ent, ucmd, SETANIM_TORSO, idleAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
 		}
 	}
-	else if (GunisBomb(ent) && level.time - ent->client->idleTime > 3000)
+	else if (GunisBomb(ent) && level.time - ent->client->idleTime > 5000)
 	{
-		//been idle for 2 seconds
-
 		const int idleAnim = BOTH_STAND9IDLE1;
-
-		if (idleAnim < MAX_ANIMATIONS)
+		if (BG_HasAnimation(ent->localAnimIndex, idleAnim))
 		{
-			G_SetAnim(ent, ucmd, SETANIM_BOTH, idleAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
+			G_SetAnim(ent, ucmd, SETANIM_TORSO, idleAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
 		}
+	}
+	else if ((ent->s.weapon == WP_NOGHRI_STICK || ent->s.weapon == WP_TUSKEN_RIFLE)
+		&& level.time - ent->client->idleTime > 5000)
+	{// MP's own (MP uses these as melee weapons)
+		G_SetAnim(ent, ucmd, SETANIM_TORSO, BOTH_STAND3IDLE1, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
 	}
 	else
 	{
@@ -4289,6 +4324,33 @@ static void G_NoJumpTaunt(gentity_t* ent, const usercmd_t* ucmd)
 
 extern void ForceDarkStasis(gentity_t* self); // w_force.c
 
+// SP G_SaberLockStrength (AMD mode), the part every push adds to: the saber's lockBonus, +1 for a two-handed saber, +1
+// and its lockBonus for a lit second saber, the rage level, or -1 while recovering from rage (2026-11-03, batch 4;
+// MP's lock pushes had only the saber offense / skill / button part)
+static int G_SaberLockBaseStrength(const gentity_t* ent)
+{
+	const gclient_t* cl = ent->client;
+	int strength = cl->saber[0].lockBonus;
+
+	if (cl->saber[0].saberFlags & SFL_TWO_HANDED)
+	{
+		strength += 1;
+	}
+	if (cl->saber[1].model[0] && cl->ps.saberHolstered == 0)
+	{
+		strength += 1 + cl->saber[1].lockBonus;
+	}
+	if (cl->ps.fd.forcePowersActive & 1 << FP_RAGE)
+	{
+		strength += cl->ps.fd.forcePowerLevel[FP_RAGE];
+	}
+	else if (cl->ps.fd.forceRageRecoveryTime > level.time)
+	{
+		strength--;
+	}
+	return strength;
+}
+
 static void ClientThink_real(gentity_t* ent)
 {
 	if (!ent || !ent->client)
@@ -5505,7 +5567,7 @@ static void ClientThink_real(gentity_t* ent)
 					else
 					{
 						if (client->ps.ManualBlockingFlags & 1 << MBF_PERFECTBLOCKING && level.time - client->ps.
-							ManualblockStartTime >= 500)
+							ManualblockStartTime >= g_SaberPerfectBlockingTimerEasy.integer) // SP's cvar (was 500)
 						{
 							// Been holding block for too long....Turn off
 							client->ps.ManualBlockingFlags &= ~(1 << MBF_PERFECTBLOCKING);
@@ -5527,7 +5589,7 @@ static void ClientThink_real(gentity_t* ent)
 					else
 					{
 						if (client->ps.ManualBlockingFlags & 1 << MBF_PERFECTBLOCKING && level.time - client->ps.
-							ManualblockStartTime >= 200)
+							ManualblockStartTime >= g_SaberPerfectBlockingTimerNormal.integer) // SP's cvar (was 200)
 						{
 							// Been holding block for too long....Turn off
 							client->ps.ManualBlockingFlags &= ~(1 << MBF_PERFECTBLOCKING);
@@ -5549,7 +5611,7 @@ static void ClientThink_real(gentity_t* ent)
 					else
 					{
 						if (client->ps.ManualBlockingFlags & 1 << MBF_PERFECTBLOCKING && level.time - client->ps.
-							ManualblockStartTime >= 80)
+							ManualblockStartTime >= g_SaberPerfectBlockingTimerHard.integer) // SP's cvar (was 80)
 						{
 							// Been holding block for too long....Turn off
 							client->ps.ManualBlockingFlags &= ~(1 << MBF_PERFECTBLOCKING);
@@ -6513,7 +6575,7 @@ static void ClientThink_real(gentity_t* ent)
 						}
 					}
 
-					ent->client->ps.saberLockHits += strength;
+					ent->client->ps.saberLockHits += strength > 0 ? strength + G_SaberLockBaseStrength(ent) : strength; // + SP's base (batch 4)
 				}
 
 				if (ent->client->ps.saberLockHits > 0)
@@ -6537,7 +6599,7 @@ static void ClientThink_real(gentity_t* ent)
 
 						strength += ent->client->ps.fd.forcePowerLevel[FP_SABER_OFFENSE] + Q_irand(1, g_attackskill.integer) + Q_irand(0, ent->client->buttons & BUTTON_ATTACK);
 
-						ent->client->ps.saberLockHits += strength;
+						ent->client->ps.saberLockHits += strength > 0 ? strength + G_SaberLockBaseStrength(ent) : strength; // + SP's base (batch 4)
 					}
 				}
 				else
@@ -6548,7 +6610,7 @@ static void ClientThink_real(gentity_t* ent)
 
 						strength = Q_irand(0, ent->client->buttons & BUTTON_ATTACK);
 
-						ent->client->ps.saberLockHits += strength;
+						ent->client->ps.saberLockHits += strength > 0 ? strength + G_SaberLockBaseStrength(ent) : strength; // + SP's base (batch 4)
 					}
 				}
 
@@ -7034,7 +7096,7 @@ static void ClientThink_real(gentity_t* ent)
 				if (ent->client->ps.eFlags2 & EF2_FLYING || ent->s.groundEntityNum == ENTITYNUM_NONE || PM_CrouchAnim(
 					ent->client->ps.legsAnim))
 				{
-					//Boba_FireWristMissile(ent, BOBA_MISSILE_VIBROBLADE);
+					Boba_FireWristMissile(ent, BOBA_MISSILE_VIBROBLADE); // (SP: the wrist vibroblade stab; DH 2026-11-03)
 				}
 				else
 				{
@@ -7076,7 +7138,7 @@ static void ClientThink_real(gentity_t* ent)
 				if (ent->client->ps.eFlags2 & EF2_FLYING || ent->s.groundEntityNum == ENTITYNUM_NONE || PM_CrouchAnim(
 					ent->client->ps.legsAnim))
 				{
-					//Boba_FireWristMissile(ent, BOBA_MISSILE_VIBROBLADE);
+					Boba_FireWristMissile(ent, BOBA_MISSILE_VIBROBLADE); // (SP: the wrist vibroblade stab; DH 2026-11-03)
 				}
 				else
 				{

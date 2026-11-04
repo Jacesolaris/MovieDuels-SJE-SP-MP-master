@@ -846,9 +846,9 @@ namespace
 		// the last pk3 wins, so look at them from the last one back (ordinal, ignoring case: as the game sorts them,
 		// '_' after the letters)
 		std::sort(pk3s.begin(), pk3s.end(), [](const std::wstring& a, const std::wstring& b)
-		{
-			return CompareStringOrdinal(a.c_str(), -1, b.c_str(), -1, TRUE) == CSTR_GREATER_THAN;
-		});
+			{
+				return CompareStringOrdinal(a.c_str(), -1, b.c_str(), -1, TRUE) == CSTR_GREATER_THAN;
+			});
 		for (const std::wstring& name : pk3s)
 		{
 			std::string menu;
@@ -1463,8 +1463,8 @@ namespace
 			{
 				// speaker: waves when the music is on, a cross when it is off
 				const Gdiplus::PointF speaker[] = {
-					{ x + 5.5f, y + 9.0f }, { x + 8.5f, y + 9.0f }, { x + 12.0f, y + 6.0f },
-					{ x + 12.0f, y + 16.0f }, { x + 8.5f, y + 13.0f }, { x + 5.5f, y + 13.0f } };
+					{ x + 5.5f, y + 9.0f },{ x + 8.5f, y + 9.0f },{ x + 12.0f, y + 6.0f },
+					{ x + 12.0f, y + 16.0f },{ x + 8.5f, y + 13.0f },{ x + 5.5f, y + 13.0f } };
 				g.DrawPolygon(&mark, speaker, 6);
 				if (g_launcher.settings.music)
 				{
@@ -1612,9 +1612,9 @@ namespace
 		const float want_single = !CardOpen() && g_launcher.hover == kHitSingle ? 1.0f : 0.0f;
 		const float want_multi = !CardOpen() && g_launcher.hover == kHitMulti ? 1.0f : 0.0f;
 		const auto approach = [step](float& value, const float target)
-		{
-			value = value < target ? (std::min)(target, value + step) : (std::max)(target, value - step);
-		};
+			{
+				value = value < target ? (std::min)(target, value + step) : (std::max)(target, value - step);
+			};
 		approach(g_launcher.single_glow, want_single);
 		approach(g_launcher.multi_glow, want_multi);
 		return g_launcher.single_glow != want_single || g_launcher.multi_glow != want_multi;

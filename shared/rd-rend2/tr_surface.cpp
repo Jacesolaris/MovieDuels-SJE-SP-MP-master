@@ -3456,7 +3456,7 @@ static int grassCutNumNearPlants = 0;
 
 // tr_bsp.cpp hands over the main world: its entity lump lists the plant models, and baked plants whose entities were
 // stripped come from its surfaces with a plant shader (tr_grasscut.h)
-void R_GrassCutWorldPlants(const char* entities, const int length, const world_t* world)
+void R_GrassCutWorldPlants(const char* entities, const int length, const world_t * world)
 {
 	R_GrassCutLoadPlants(entities, length);
 	for (int i = 0; i < world->numsurfaces; i++)
@@ -3476,9 +3476,11 @@ void R_GrassCutWorldPlants(const char* entities, const int length, const world_t
 		}
 	}
 	R_GrassCutFinishPlantSurfaces();
+#ifdef _DEBUG
 	GRASSCUT_RI Printf(PRINT_DEVELOPER, "grass cut: %d plant models, %d grass surfaces\n", grassCutNumPlants, grassCutNumGrass);
+#endif
 }
-bool RB_GrassCutPlantParams(vec4_t params, image_t** image, const float** centers, int* numCenters)
+bool RB_GrassCutPlantParams(vec4_t params, image_t * *image, const float** centers, int* numCenters)
 {
 	static int paramsTime = -1;
 	static bool active = false;

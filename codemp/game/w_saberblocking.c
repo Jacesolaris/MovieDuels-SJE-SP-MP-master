@@ -261,215 +261,126 @@ qboolean g_accurate_blocking(const gentity_t* blocker, const gentity_t* attacker
 	return qfalse;
 }
 
+// SP sab_beh_clamp_mishap: the mishap values never go below MISHAPLEVEL_NONE (2026-11-03, parity batch 5)
+static void sab_beh_clamp_mishap(const gentity_t* ent)
+{
+	if (ent->client->ps.fd.blockPoints < MISHAPLEVEL_NONE)
+	{
+		ent->client->ps.fd.blockPoints = MISHAPLEVEL_NONE;
+	}
+	if (ent->client->ps.fd.forcePower < MISHAPLEVEL_NONE)
+	{
+		ent->client->ps.fd.forcePower = MISHAPLEVEL_NONE;
+	}
+	if (ent->client->ps.saberFatigueChainCount < MISHAPLEVEL_NONE)
+	{
+		ent->client->ps.saberFatigueChainCount = MISHAPLEVEL_NONE;
+	}
+}
+
+// SP sab_beh_roll_mishap: the higher the fatigue (mishap level), the likelier a mishap - a roll of MISHAPLEVEL_MIN ..
+// MISHAPLEVEL_MAX at or below it (0 = never, 8 = 8 in 15, 15 = always). MP had no roll: any fatigue above 0 always
+// gave the mishap branches (a third of them nothing), and none at all at 0.
+static qboolean sab_beh_roll_mishap(const gentity_t* ent)
+{
+	return Q_irand(MISHAPLEVEL_MIN, MISHAPLEVEL_MAX) <= ent->client->ps.saberFatigueChainCount ? qtrue : qfalse;
+}
+
+// SP's "NPC && !G_ControlledByPlayer": AI controlled (a bot or an NPC)
+static qboolean sab_beh_ai_controlled(const gentity_t* ent)
+{
+	return ent->r.svFlags & SVF_BOT || ent->s.eType == ET_NPC ? qtrue : qfalse;
+}
+
+// SP sab_beh_add_mishap_attacker: on a mishap roll, a stagger or a disarm (an AI attacker: 20% stagger, 80% disarm)
 static void sab_beh_add_mishap_attacker(gentity_t* attacker, const gentity_t* blocker)
 {
-	// Clamp mishap values
-	if (attacker->client->ps.fd.blockPoints <= MISHAPLEVEL_NONE ||
-		attacker->client->ps.saberFatigueChainCount <= MISHAPLEVEL_NONE)
+	const int saberEntNum = attacker->client->ps.saberEntityNum;
+
+	sab_beh_clamp_mishap(attacker);
+
+	if (saberEntNum < 0 || saberEntNum >= ENTITYNUM_WORLD || !sab_beh_roll_mishap(attacker))
 	{
-		attacker->client->ps.fd.blockPoints = MISHAPLEVEL_NONE;
-		attacker->client->ps.saberFatigueChainCount = MISHAPLEVEL_NONE;
 		return;
 	}
 
-	// Validate saber entity
-	int saberEntNum = attacker->client->ps.saberEntityNum;
-	if (saberEntNum < 0 || saberEntNum >= ENTITYNUM_WORLD)
-		return;
-
-	static trace_t tr;
-	memset(&tr, 0, sizeof(tr));
-
-	// Random mishap branch (0,1,2)
-	const int rand_num = Q_irand(0, 2);
-
-	switch (rand_num)
+	if (!Q_irand(0, 1) || sab_beh_ai_controlled(attacker) && !Q_irand(0, 4))
 	{
-	case 0:
-	{
-		if (blocker->r.svFlags & SVF_BOT)
-		{
-			// NPC: 20% chance stagger, 80% disarm
-			if (!Q_irand(0, 4))
-			{
-				sab_beh_animate_heavy_slow_bounce_attacker(attacker);
-
-				if ((d_attackinfo.integer || g_DebugSaberCombat.integer))
-					Com_Printf(S_COLOR_YELLOW "NPC Attacker staggering\n");
-			}
-			else
-			{
-				sab_beh_saber_should_be_disarmed_attacker(attacker, blocker);
-
-				if ((d_attackinfo.integer || g_DebugSaberCombat.integer))
-					Com_Printf(S_COLOR_RED "NPC Attacker lost his saber\n");
-			}
-		}
-		else
-		{
-			// Player attacker always disarms on this branch
-			sab_beh_saber_should_be_disarmed_attacker(attacker, blocker);
-
-			if ((d_attackinfo.integer || g_DebugSaberCombat.integer))
-				Com_Printf(S_COLOR_RED "Player Attacker lost his saber\n");
-		}
-		break;
-	}
-
-	case 1:
-	{
-		// Heavy slow bounce
 		sab_beh_animate_heavy_slow_bounce_attacker(attacker);
-
-		if ((d_attackinfo.integer || g_DebugSaberCombat.integer) &&
-			!(attacker->r.svFlags & SVF_BOT))
+		if (d_attackinfo.integer || g_DebugSaberCombat.integer)
 		{
-			Com_Printf(S_COLOR_RED "Player Attacker staggering\n");
+			Com_Printf(S_COLOR_YELLOW "Attacker staggering\n");
 		}
-		break;
-	}
-
-	default:
-		// rand_num == 2 → no mishap
-		break;
-	}
-}
-
-static void sab_beh_add_mishap_Fake_attacker(gentity_t* attacker, const gentity_t* blocker)
-{
-	// Clamp mishap values
-	if (attacker->client->ps.fd.blockPoints <= MISHAPLEVEL_NONE ||
-		attacker->client->ps.saberFatigueChainCount <= MISHAPLEVEL_NONE)
-	{
-		attacker->client->ps.fd.blockPoints = MISHAPLEVEL_NONE;
-		attacker->client->ps.saberFatigueChainCount = MISHAPLEVEL_NONE;
-		return;
-	}
-
-	// Validate saber entity
-	int saberEntNum = attacker->client->ps.saberEntityNum;
-	if (saberEntNum < 0 || saberEntNum >= ENTITYNUM_WORLD)
-		return;
-
-	static trace_t tr;
-	memset(&tr, 0, sizeof(tr));
-
-	// Random mishap branch (0,1,2)
-	const int rand_num = Q_irand(0, 2);
-
-	switch (rand_num)
-	{
-	case 0:
-	{
-		if (blocker->r.svFlags & SVF_BOT)
-		{
-			// NPC: 20% chance disarm, 80% stagger
-			if (!Q_irand(0, 4))
-			{
-				sab_beh_saber_should_be_disarmed_attacker(attacker, blocker);
-
-				if ((d_attackinfo.integer || g_DebugSaberCombat.integer))
-					Com_Printf(S_COLOR_RED "NPC Attacker lost his saber\n");
-			}
-			else
-			{
-				sab_beh_animate_heavy_slow_bounce_attacker(attacker);
-
-				if ((d_attackinfo.integer || g_DebugSaberCombat.integer))
-					Com_Printf(S_COLOR_YELLOW "NPC Attacker staggering\n");
-			}
-		}
-		else
-		{
-			// Player attacker always disarms on this branch
-			sab_beh_saber_should_be_disarmed_attacker(attacker, blocker);
-
-			if ((d_attackinfo.integer || g_DebugSaberCombat.integer))
-				Com_Printf(S_COLOR_RED "Player Attacker lost his saber\n");
-		}
-		break;
-	}
-
-	case 1:
-	{
-		// Heavy slow bounce
-		sab_beh_animate_heavy_slow_bounce_attacker(attacker);
-
-		if ((d_attackinfo.integer || g_DebugSaberCombat.integer) &&
-			!(attacker->r.svFlags & SVF_BOT))
-		{
-			Com_Printf(S_COLOR_RED "Player Attacker staggering\n");
-		}
-		break;
-	}
-
-	default:
-		// rand_num == 2 → no mishap
-		break;
-	}
-}
-
-static void sab_beh_add_mishap_blocker(gentity_t* blocker, const gentity_t* attacker)
-{
-	if (blocker->client->ps.fd.blockPoints <= MISHAPLEVEL_NONE)
-	{
-		blocker->client->ps.fd.blockPoints = MISHAPLEVEL_NONE;
-	}
-	else if (blocker->client->ps.saberFatigueChainCount <= MISHAPLEVEL_NONE)
-	{
-		blocker->client->ps.saberFatigueChainCount = MISHAPLEVEL_NONE;
 	}
 	else
 	{
-		//overflowing causes a full mishap.
-		const int rand_num = Q_irand(0, 2);
-
-		switch (rand_num)
+		sab_beh_saber_should_be_disarmed_attacker(attacker, blocker);
+		if (d_attackinfo.integer || g_DebugSaberCombat.integer)
 		{
-		case 0:
-			G_Stagger(blocker);
-			if (d_blockinfo.integer || g_DebugSaberCombat.integer)
-				Com_Printf(S_COLOR_RED "blocker staggering\n");
-			break;
-		case 1:
-			if (blocker->r.svFlags & SVF_BOT)
-			{
-				// 75% chance to disarm, 25% chance to stagger
-				const int roll = Q_irand(0, 3);  // values: 0,1,2,3
+			Com_Printf(S_COLOR_RED "Attacker lost his saber\n");
+		}
+	}
+}
 
-				if (roll == 0)
-				{
-					// 25% chance
-					G_Stagger(blocker);
+// SP sab_beh_add_mishap_Fake_attacker: as above, the 20 / 80 split when the blocker is AI controlled (as SP)
+static void sab_beh_add_mishap_Fake_attacker(gentity_t* attacker, const gentity_t* blocker)
+{
+	const int saberEntNum = attacker->client->ps.saberEntityNum;
 
-					if (d_blockinfo.integer || g_DebugSaberCombat.integer)
-					{
-						Com_Printf(S_COLOR_RED "NPC blocker staggering\n");
-					}
-				}
-				else
-				{
-					// 75% chance
-					SabBeh_SaberShouldBeDisarmedBlocker(blocker, attacker);
-					WP_BlockPointsRegenerate_over_ride(blocker, BLOCKPOINTS_FATIGUE);
+	sab_beh_clamp_mishap(attacker);
 
-					if (d_blockinfo.integer || g_DebugSaberCombat.integer)
-					{
-						Com_Printf(S_COLOR_RED "NPC blocker lost his saber\n");
-					}
-				}
-			}
-			else
-			{
-				SabBeh_SaberShouldBeDisarmedBlocker(blocker, attacker);
+	if (saberEntNum < 0 || saberEntNum >= ENTITYNUM_WORLD || !sab_beh_roll_mishap(attacker))
+	{
+		return;
+	}
 
-				if (d_blockinfo.integer || g_DebugSaberCombat.integer)
-				{
-					Com_Printf(S_COLOR_RED "Player blocker lost his saber\n");
-				}
-			}
-			break;
-		default:;
+	if (!Q_irand(0, 1) || sab_beh_ai_controlled(blocker) && !Q_irand(0, 4))
+	{
+		sab_beh_animate_heavy_slow_bounce_attacker(attacker);
+		if (d_attackinfo.integer || g_DebugSaberCombat.integer)
+		{
+			Com_Printf(S_COLOR_YELLOW "Attacker staggering\n");
+		}
+	}
+	else
+	{
+		sab_beh_saber_should_be_disarmed_attacker(attacker, blocker);
+		if (d_attackinfo.integer || g_DebugSaberCombat.integer)
+		{
+			Com_Printf(S_COLOR_RED "Attacker lost his saber\n");
+		}
+	}
+}
+
+// SP sab_beh_add_mishap_blocker: on a mishap roll, a stagger or a disarm (an AI blocker: 25% stagger, 75% disarm and
+// its block points set to the fatigue level)
+static void sab_beh_add_mishap_blocker(gentity_t* blocker, const gentity_t* attacker)
+{
+	sab_beh_clamp_mishap(blocker);
+
+	if (!sab_beh_roll_mishap(blocker))
+	{
+		return;
+	}
+
+	if (!Q_irand(0, 1) || sab_beh_ai_controlled(blocker) && !Q_irand(0, 3))
+	{
+		G_Stagger(blocker);
+		if (d_blockinfo.integer || g_DebugSaberCombat.integer)
+		{
+			Com_Printf(S_COLOR_YELLOW "blocker staggering\n");
+		}
+	}
+	else
+	{
+		SabBeh_SaberShouldBeDisarmedBlocker(blocker, attacker);
+		if (sab_beh_ai_controlled(blocker))
+		{
+			WP_BlockPointsRegenerate_over_ride(blocker, BLOCKPOINTS_FATIGUE);
+		}
+		if (d_blockinfo.integer || g_DebugSaberCombat.integer)
+		{
+			Com_Printf(S_COLOR_RED "blocker lost his saber\n");
 		}
 	}
 }

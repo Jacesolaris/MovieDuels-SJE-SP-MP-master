@@ -1589,7 +1589,51 @@ static void PM_SetAnimFrame(playerState_t* gent, const int frame)
 	gent->saberLockFrame = frame;
 }
 
-static int PM_SaberLockWinAnim(const qboolean victory, const qboolean super_break)
+// SP saberLockResult_t (wp_saber.h): how a saber lock ends (2026-11-03, batch 4). MP had only "victory or not" and
+// played the draw anims for every lock nobody won.
+typedef enum
+{
+	LOCK_VICTORY = 0,	// one side won
+	LOCK_STALEMATE,		// neither side won
+	LOCK_DRAW			// both fall back
+} saberLockResult_t;
+
+#define SABERLOCK_SKILL	2	// SP adds Q_irand(0, g_spskill) to every push; g_spskill defaults to 2 and MP has no skill
+
+// SP G_SaberLockStrength (AMD mode), the part every push adds to: the saber's lockBonus, +1 for a two-handed saber,
+// +1 and its lockBonus for a lit second saber, the rage level, or -1 while recovering from rage
+static int PM_SaberLockBaseStrength(const playerState_t* ps)
+{
+	const saberInfo_t* saber1 = BG_MySaber(ps->clientNum, 0);
+	const saberInfo_t* saber2 = BG_MySaber(ps->clientNum, 1);
+	int strength = saber1 ? saber1->lockBonus : 0;
+
+	if (saber1 && saber1->saberFlags & SFL_TWO_HANDED)
+	{
+		strength += 1;
+	}
+	if (saber2 && saber2->model[0] && ps->saberHolstered == 0)
+	{
+		strength += 1 + saber2->lockBonus;
+	}
+	if (ps->fd.forcePowersActive & 1 << FP_RAGE)
+	{
+		strength += ps->fd.forcePowerLevel[FP_RAGE];
+	}
+	else if (ps->fd.forceRageRecoveryTime > pm->cmd.serverTime)
+	{
+		strength--;
+	}
+	return strength;
+}
+
+// SP G_SaberLockStrength for one push: the base, the saber offense level and Q_irand(0, g_spskill)
+static int PM_SaberLockPushStrength(const playerState_t* ps)
+{
+	return PM_SaberLockBaseStrength(ps) + ps->fd.forcePowerLevel[FP_SABER_OFFENSE] + PM_irand_timesync(0, SABERLOCK_SKILL);
+}
+
+static int PM_SaberLockWinAnim(const saberLockResult_t result, const qboolean super_break)
 {
 	int win_anim = -1;
 	switch (pm->ps->torsoAnim)
@@ -1599,7 +1643,7 @@ static int PM_SaberLockWinAnim(const qboolean victory, const qboolean super_brea
 		{
 			win_anim = BOTH_LK_S_S_T_SB_1_W;
 		}
-		else if (!victory)
+		else if (result == LOCK_DRAW)
 		{
 			win_anim = BOTH_BF1BREAK;
 		}
@@ -1614,7 +1658,7 @@ static int PM_SaberLockWinAnim(const qboolean victory, const qboolean super_brea
 		{
 			win_anim = BOTH_LK_S_S_T_SB_1_W;
 		}
-		else if (!victory)
+		else if (result == LOCK_DRAW)
 		{
 			win_anim = BOTH_KNOCKDOWN4;
 		}
@@ -1629,7 +1673,7 @@ static int PM_SaberLockWinAnim(const qboolean victory, const qboolean super_brea
 		{
 			win_anim = BOTH_LK_S_S_S_SB_1_W;
 		}
-		else if (!victory)
+		else if (result == LOCK_DRAW)
 		{
 			pm->ps->saberMove = pm->ps->saberBounceMove = LS_V1_BL;
 			pm->ps->saberBlocked = BLOCKED_PARRY_BROKEN;
@@ -1645,7 +1689,7 @@ static int PM_SaberLockWinAnim(const qboolean victory, const qboolean super_brea
 		{
 			win_anim = BOTH_LK_S_S_S_SB_1_W;
 		}
-		else if (!victory)
+		else if (result == LOCK_DRAW)
 		{
 			pm->ps->saberMove = pm->ps->saberBounceMove = LS_V1_BR;
 			pm->ps->saberBlocked = BLOCKED_PARRY_BROKEN;
@@ -1682,7 +1726,7 @@ extern gentity_t g_entities[];
 #include "g_public.h"
 #include <math.h>
 
-static int PM_SaberLockLoseAnim(playerState_t* genemy, const qboolean victory, const qboolean super_break)
+static int PM_SaberLockLoseAnim(playerState_t* genemy, const saberLockResult_t result, const qboolean super_break)
 {
 	int lose_anim = -1;
 
@@ -1693,13 +1737,13 @@ static int PM_SaberLockLoseAnim(playerState_t* genemy, const qboolean victory, c
 		{
 			lose_anim = BOTH_LK_S_S_T_SB_1_L;
 		}
-		else if (!victory)
+		else if (result == LOCK_DRAW)
 		{
 			lose_anim = BOTH_BF1BREAK;
 		}
 		else
 		{
-			if (!victory)
+			if (result == LOCK_STALEMATE)
 			{
 				//no-one won
 				genemy->saberMove = LS_K1_T_;
@@ -1717,13 +1761,13 @@ static int PM_SaberLockLoseAnim(playerState_t* genemy, const qboolean victory, c
 		{
 			lose_anim = BOTH_LK_S_S_T_SB_1_L;
 		}
-		else if (!victory)
+		else if (result == LOCK_DRAW)
 		{
 			lose_anim = BOTH_KNOCKDOWN4;
 		}
 		else
 		{
-			if (!victory)
+			if (result == LOCK_STALEMATE)
 			{
 				//no-one won
 				genemy->saberMove = LS_A_T2B;
@@ -1740,7 +1784,7 @@ static int PM_SaberLockLoseAnim(playerState_t* genemy, const qboolean victory, c
 		{
 			lose_anim = BOTH_LK_S_S_S_SB_1_L;
 		}
-		else if (!victory)
+		else if (result == LOCK_DRAW)
 		{
 			genemy->saberMove = genemy->saberBounceMove = LS_V1_BL;
 			genemy->saberBlocked = BLOCKED_PARRY_BROKEN;
@@ -1748,7 +1792,7 @@ static int PM_SaberLockLoseAnim(playerState_t* genemy, const qboolean victory, c
 		}
 		else
 		{
-			if (!victory)
+			if (result == LOCK_STALEMATE)
 			{
 				//no-one won
 				lose_anim = BOTH_CCWCIRCLEBREAK;
@@ -1766,7 +1810,7 @@ static int PM_SaberLockLoseAnim(playerState_t* genemy, const qboolean victory, c
 		{
 			lose_anim = BOTH_LK_S_S_S_SB_1_L;
 		}
-		else if (!victory)
+		else if (result == LOCK_DRAW)
 		{
 			genemy->saberMove = genemy->saberBounceMove = LS_V1_BR;
 			genemy->saberBlocked = BLOCKED_PARRY_BROKEN;
@@ -1774,7 +1818,7 @@ static int PM_SaberLockLoseAnim(playerState_t* genemy, const qboolean victory, c
 		}
 		else
 		{
-			if (!victory)
+			if (result == LOCK_STALEMATE)
 			{
 				//no-one won
 				lose_anim = BOTH_CWCIRCLEBREAK;
@@ -1895,21 +1939,21 @@ static int PM_SaberLockResultAnim(playerState_t* duelist, const qboolean super_b
 	return base_anim;
 }
 
-static void PM_SaberLockBreak(playerState_t* genemy, const qboolean victory, const int strength)
+static void PM_SaberLockBreak(playerState_t* genemy, const saberLockResult_t result, const int strength)
 {
 	// SP PM_SaberLockBreak (g_allowSuperSaberLockBreaks 1): a win with strength above 3 may be a super break. Was
 	// "strength + pm->cmd.buttons & BUTTON_ATTACK", which is (strength + buttons) & BUTTON_ATTACK
-	const qboolean super_break = victory && strength > 3 && PM_irand_timesync(0, 10) < strength ? qtrue : qfalse;
+	const qboolean super_break = result == LOCK_VICTORY && strength > 3 && PM_irand_timesync(0, 10) < strength ? qtrue : qfalse;
 
 	pm->ps->userInt3 &= ~(1 << FLAG_SABERLOCK_ATTACKER);
 	genemy->userInt3 &= ~(1 << FLAG_SABERLOCK_ATTACKER);
 
-	int win_anim = PM_SaberLockWinAnim(victory, super_break);
-	int loseAnim = PM_SaberLockLoseAnim(genemy, victory, super_break);
+	int win_anim = PM_SaberLockWinAnim(result, super_break);
+	int loseAnim = PM_SaberLockLoseAnim(genemy, result, super_break);
 
 	if (win_anim != -1)
 	{//a single vs. single break
-		loseAnim = PM_SaberLockLoseAnim(genemy, victory, super_break);
+		loseAnim = PM_SaberLockLoseAnim(genemy, result, super_break);
 	}
 	else
 	{//must be a saberlock that's not between single and single..
@@ -1920,7 +1964,7 @@ static void PM_SaberLockBreak(playerState_t* genemy, const qboolean victory, con
 		genemy->weaponstate = WEAPON_READY;
 	}
 
-	if (victory)
+	if (result == LOCK_VICTORY)
 	{//someone lost the lock, so punish them by knocking them down
 		if (!super_break)
 		{//if we're not in a superbreak, force the loser to mishap.
@@ -1950,7 +1994,7 @@ static void PM_SaberLockBreak(playerState_t* genemy, const qboolean victory, con
 	pm->ps->saberLockFrame = genemy->saberLockFrame = 0;
 	pm->ps->saberLockEnemy = genemy->saberLockEnemy = 0;
 
-	if (!victory)
+	if (result == LOCK_STALEMATE)
 	{
 		//no-one won
 		BG_AddPredictableEventToPlayerstate(EV_JUMP, 0, genemy);
@@ -2061,11 +2105,23 @@ static void PM_SaberLocked(void)
 				// second (charged) shot
 				pm->ps->weaponChargeTime = pm_saberBlasterAlt ? -1 : 0;
 				PM_AddEventWithParm(EV_SABERBLASTER, SBE_LOCKSHOT);
-				PM_SaberLockBreak(genemy, qtrue, 0);
+				PM_SaberLockBreak(genemy, LOCK_VICTORY, 0);
 				return;
 			}
 		}
 
+		if (pm->ps->saberLockTime <= pm->cmd.serverTime + 500)
+		{	// SP PM_SaberLocked: the lock runs out - both are knocked back (LOCK_DRAW) when both push hard and are about
+			// even, else a stalemate (2026-11-03, batch 4; MP let the lock time run out with nobody breaking it)
+			const int strength = PM_SaberLockPushStrength(pm->ps);
+			const int e_strength = PM_SaberLockPushStrength(genemy);
+			PM_SaberLockBreak(genemy, strength > 1 && e_strength > 1 && !PM_irand_timesync(0, abs(strength - e_strength) + 1)
+				? LOCK_DRAW : LOCK_STALEMATE, 0);
+#ifdef _GAME
+			G_Sound(&g_entities[pm->ps->clientNum], CHAN_BODY, G_SoundIndex(va("sound/weapons/saber/saber_locking_end%d.mp3", Q_irand(1, 5))));
+#endif
+			return;
+		}
 		pm->ps->torsoTimer = 0;
 		pm->ps->weaponTime = 0;
 		genemy->torsoTimer = 0;
@@ -2076,10 +2132,10 @@ static void PM_SaberLocked(void)
 		if (dist < 64 || dist > 6400)
 		{
 			//between 8 and 80 from each other
-			PM_SaberLockBreak(genemy, qfalse, 0);
+			PM_SaberLockBreak(genemy, LOCK_STALEMATE, 0);
 #ifdef _GAME
 			gentity_t* self = &g_entities[pm->ps->clientNum];
-			G_Sound(self, CHAN_BODY, G_SoundIndex("sound/weapons/saber/saberlockend.mp3"));
+			G_Sound(self, CHAN_BODY, G_SoundIndex(va("sound/weapons/saber/saber_locking_end%d.mp3", Q_irand(1, 5))));
 #endif
 			return;
 		}
@@ -2111,9 +2167,9 @@ static void PM_SaberLocked(void)
 						if (cur_frame <= anim->firstFrame)
 						{
 							//I won!  Break out
-							PM_SaberLockBreak(genemy, qtrue, strength);
+							PM_SaberLockBreak(genemy, LOCK_VICTORY, strength);
 							gentity_t* self = &g_entities[pm->ps->clientNum];
-							G_Sound(self, CHAN_BODY, G_SoundIndex("sound/weapons/saber/saberlockend.mp3"));
+							G_Sound(self, CHAN_BODY, G_SoundIndex(va("sound/weapons/saber/saber_locking_end%d.mp3", Q_irand(1, 5))));
 							return;
 						}
 						PM_SetAnimFrame(pm->ps, cur_frame);
@@ -2126,9 +2182,9 @@ static void PM_SaberLocked(void)
 						if (cur_frame >= anim->firstFrame + anim->numFrames)
 						{
 							//I won!  Break out
-							PM_SaberLockBreak(genemy, qtrue, strength);
+							PM_SaberLockBreak(genemy, LOCK_VICTORY, strength);
 							gentity_t* self = &g_entities[pm->ps->clientNum];
-							G_Sound(self, CHAN_BODY, G_SoundIndex("sound/weapons/saber/saberlockend.mp3"));
+							G_Sound(self, CHAN_BODY, G_SoundIndex(va("sound/weapons/saber/saber_locking_end%d.mp3", Q_irand(1, 5))));
 							return;
 						}
 						PM_SetAnimFrame(pm->ps, cur_frame);
@@ -2145,9 +2201,9 @@ static void PM_SaberLocked(void)
 						if (cur_frame >= anim->firstFrame + anim->numFrames)
 						{
 							//I won!  Break out
-							PM_SaberLockBreak(genemy, qtrue, strength);
+							PM_SaberLockBreak(genemy, LOCK_VICTORY, strength);
 							gentity_t* self = &g_entities[pm->ps->clientNum];
-							G_Sound(self, CHAN_BODY, G_SoundIndex("sound/weapons/saber/saberlockend.mp3"));
+							G_Sound(self, CHAN_BODY, G_SoundIndex(va("sound/weapons/saber/saber_locking_end%d.mp3", Q_irand(1, 5))));
 							return;
 						}
 						PM_SetAnimFrame(pm->ps, cur_frame);
@@ -2160,9 +2216,9 @@ static void PM_SaberLocked(void)
 						if (cur_frame <= anim->firstFrame)
 						{
 							//I won!  Break out
-							PM_SaberLockBreak(genemy, qtrue, strength);
+							PM_SaberLockBreak(genemy, LOCK_VICTORY, strength);
 							gentity_t* self = &g_entities[pm->ps->clientNum];
-							G_Sound(self, CHAN_BODY, G_SoundIndex("sound/weapons/saber/saberlockend.mp3"));
+							G_Sound(self, CHAN_BODY, G_SoundIndex(va("sound/weapons/saber/saber_locking_end%d.mp3", Q_irand(1, 5))));
 							return;
 						}
 						PM_SetAnimFrame(pm->ps, cur_frame);
@@ -2236,10 +2292,10 @@ static void PM_SaberLocked(void)
 							if (cur_frame <= anim->firstFrame)
 							{
 								//I won!  Break out
-								PM_SaberLockBreak(genemy, qtrue, strength);
+								PM_SaberLockBreak(genemy, LOCK_VICTORY, strength);
 #ifdef _GAME
 								gentity_t* self = &g_entities[pm->ps->clientNum];
-								G_Sound(self, CHAN_BODY, G_SoundIndex("sound/weapons/saber/saberlockend.mp3"));
+								G_Sound(self, CHAN_BODY, G_SoundIndex(va("sound/weapons/saber/saber_locking_end%d.mp3", Q_irand(1, 5))));
 #endif
 								return;
 							}
@@ -2253,10 +2309,10 @@ static void PM_SaberLocked(void)
 							if (cur_frame >= anim->firstFrame + anim->numFrames)
 							{
 								//I won!  Break out
-								PM_SaberLockBreak(genemy, qtrue, strength);
+								PM_SaberLockBreak(genemy, LOCK_VICTORY, strength);
 #ifdef _GAME
 								gentity_t* self = &g_entities[pm->ps->clientNum];
-								G_Sound(self, CHAN_BODY, G_SoundIndex("sound/weapons/saber/saberlockend.mp3"));
+								G_Sound(self, CHAN_BODY, G_SoundIndex(va("sound/weapons/saber/saber_locking_end%d.mp3", Q_irand(1, 5))));
 #endif
 								return;
 							}
@@ -2274,10 +2330,10 @@ static void PM_SaberLocked(void)
 							if (cur_frame >= anim->firstFrame + anim->numFrames)
 							{
 								//I won!  Break out
-								PM_SaberLockBreak(genemy, qtrue, strength);
+								PM_SaberLockBreak(genemy, LOCK_VICTORY, strength);
 #ifdef _GAME
 								gentity_t* self = &g_entities[pm->ps->clientNum];
-								G_Sound(self, CHAN_BODY, G_SoundIndex("sound/weapons/saber/saberlockend.mp3"));
+								G_Sound(self, CHAN_BODY, G_SoundIndex(va("sound/weapons/saber/saber_locking_end%d.mp3", Q_irand(1, 5))));
 #endif
 								return;
 							}
@@ -2291,10 +2347,10 @@ static void PM_SaberLocked(void)
 							if (cur_frame <= anim->firstFrame)
 							{
 								//I won!  Break out
-								PM_SaberLockBreak(genemy, qtrue, strength);
+								PM_SaberLockBreak(genemy, LOCK_VICTORY, strength);
 #ifdef _GAME
 								gentity_t* self = &g_entities[pm->ps->clientNum];
-								G_Sound(self, CHAN_BODY, G_SoundIndex("sound/weapons/saber/saberlockend.mp3"));
+								G_Sound(self, CHAN_BODY, G_SoundIndex(va("sound/weapons/saber/saber_locking_end%d.mp3", Q_irand(1, 5))));
 #endif
 								return;
 							}
@@ -2344,10 +2400,10 @@ static void PM_SaberLocked(void)
 	else
 	{
 		//something broke us out of it
-		PM_SaberLockBreak(genemy, qfalse, 0);
+		PM_SaberLockBreak(genemy, LOCK_STALEMATE, 0);
 #ifdef _GAME
 		gentity_t* self = &g_entities[pm->ps->clientNum];
-		G_Sound(self, CHAN_BODY, G_SoundIndex("sound/weapons/saber/saberlockend.mp3"));
+		G_Sound(self, CHAN_BODY, G_SoundIndex(va("sound/weapons/saber/saber_locking_end%d.mp3", Q_irand(1, 5))));
 #endif
 	}
 }
@@ -3517,12 +3573,9 @@ static saberMoveName_t PM_SaberAttackForMovement(const int curmove)
 				!PM_SaberInSpecialAttack(pm->ps->torsoAnim) &&
 				BG_EnoughForcePowerForMove(FATIGUE_JUMPATTACK, isPlayer))
 			{
-				//FLIP AND DOWNWARD ATTACK
+				//FLIP AND DOWNWARD ATTACK: PM_SaberFlipOverAttackMove drains SP's cost (SABER_ALT_ATTACK_POWER_FB) itself; the
+				// FATIGUE_JUMPATTACK drain here charged it twice (2026-11-03, parity batch 7, DH: only this one)
 				newmove = PM_SaberFlipOverAttackMove();
-				if (newmove != LS_A_T2B && newmove != LS_NONE)
-				{
-					WP_ForcePowerDrain(pm->ps, FP_GRIP, FATIGUE_JUMPATTACK);
-				}
 			}
 			else if (!noSpecials &&
 				(pm->ps->fd.saberAnimLevel == SS_STRONG

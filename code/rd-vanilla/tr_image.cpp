@@ -417,33 +417,33 @@ static void R_MipMap2(unsigned* in, const int inWidth, const int inHeight) {
 	// output rows are independent: a run of rows per job on the render workers (Warzone port)
 	R_ImageRows(outWidth, outHeight, [&](const int i0, const int i1)
 		{
-	for (int i = i0; i < i1; i++) {
-		for (int j = 0; j < outWidth; j++) {
-			byte* outpix = reinterpret_cast<byte*>(temp + i * outWidth + j);
-			for (int k = 0; k < 4; k++) {
-				const int total = 1 * reinterpret_cast<byte*>(&in[((i * 2 - 1) & inHeightMask) * inWidth + ((j * 2 - 1) & inWidthMask)])[k] +
-					2 * reinterpret_cast<byte*>(&in[((i * 2 - 1) & inHeightMask) * inWidth + ((j * 2) & inWidthMask)])[k] +
-					2 * reinterpret_cast<byte*>(&in[((i * 2 - 1) & inHeightMask) * inWidth + ((j * 2 + 1) & inWidthMask)])[k] +
-					1 * reinterpret_cast<byte*>(&in[((i * 2 - 1) & inHeightMask) * inWidth + ((j * 2 + 2) & inWidthMask)])[k] +
+			for (int i = i0; i < i1; i++) {
+				for (int j = 0; j < outWidth; j++) {
+					byte* outpix = reinterpret_cast<byte*>(temp + i * outWidth + j);
+					for (int k = 0; k < 4; k++) {
+						const int total = 1 * reinterpret_cast<byte*>(&in[((i * 2 - 1) & inHeightMask) * inWidth + ((j * 2 - 1) & inWidthMask)])[k] +
+							2 * reinterpret_cast<byte*>(&in[((i * 2 - 1) & inHeightMask) * inWidth + ((j * 2) & inWidthMask)])[k] +
+							2 * reinterpret_cast<byte*>(&in[((i * 2 - 1) & inHeightMask) * inWidth + ((j * 2 + 1) & inWidthMask)])[k] +
+							1 * reinterpret_cast<byte*>(&in[((i * 2 - 1) & inHeightMask) * inWidth + ((j * 2 + 2) & inWidthMask)])[k] +
 
-					2 * reinterpret_cast<byte*>(&in[((i * 2) & inHeightMask) * inWidth + ((j * 2 - 1) & inWidthMask)])[k] +
-					4 * reinterpret_cast<byte*>(&in[((i * 2) & inHeightMask) * inWidth + ((j * 2) & inWidthMask)])[k] +
-					4 * reinterpret_cast<byte*>(&in[((i * 2) & inHeightMask) * inWidth + ((j * 2 + 1) & inWidthMask)])[k] +
-					2 * reinterpret_cast<byte*>(&in[((i * 2) & inHeightMask) * inWidth + ((j * 2 + 2) & inWidthMask)])[k] +
+							2 * reinterpret_cast<byte*>(&in[((i * 2) & inHeightMask) * inWidth + ((j * 2 - 1) & inWidthMask)])[k] +
+							4 * reinterpret_cast<byte*>(&in[((i * 2) & inHeightMask) * inWidth + ((j * 2) & inWidthMask)])[k] +
+							4 * reinterpret_cast<byte*>(&in[((i * 2) & inHeightMask) * inWidth + ((j * 2 + 1) & inWidthMask)])[k] +
+							2 * reinterpret_cast<byte*>(&in[((i * 2) & inHeightMask) * inWidth + ((j * 2 + 2) & inWidthMask)])[k] +
 
-					2 * reinterpret_cast<byte*>(&in[((i * 2 + 1) & inHeightMask) * inWidth + ((j * 2 - 1) & inWidthMask)])[k] +
-					4 * reinterpret_cast<byte*>(&in[((i * 2 + 1) & inHeightMask) * inWidth + ((j * 2) & inWidthMask)])[k] +
-					4 * reinterpret_cast<byte*>(&in[((i * 2 + 1) & inHeightMask) * inWidth + ((j * 2 + 1) & inWidthMask)])[k] +
-					2 * reinterpret_cast<byte*>(&in[((i * 2 + 1) & inHeightMask) * inWidth + ((j * 2 + 2) & inWidthMask)])[k] +
+							2 * reinterpret_cast<byte*>(&in[((i * 2 + 1) & inHeightMask) * inWidth + ((j * 2 - 1) & inWidthMask)])[k] +
+							4 * reinterpret_cast<byte*>(&in[((i * 2 + 1) & inHeightMask) * inWidth + ((j * 2) & inWidthMask)])[k] +
+							4 * reinterpret_cast<byte*>(&in[((i * 2 + 1) & inHeightMask) * inWidth + ((j * 2 + 1) & inWidthMask)])[k] +
+							2 * reinterpret_cast<byte*>(&in[((i * 2 + 1) & inHeightMask) * inWidth + ((j * 2 + 2) & inWidthMask)])[k] +
 
-					1 * reinterpret_cast<byte*>(&in[((i * 2 + 2) & inHeightMask) * inWidth + ((j * 2 - 1) & inWidthMask)])[k] +
-					2 * reinterpret_cast<byte*>(&in[((i * 2 + 2) & inHeightMask) * inWidth + ((j * 2) & inWidthMask)])[k] +
-					2 * reinterpret_cast<byte*>(&in[((i * 2 + 2) & inHeightMask) * inWidth + ((j * 2 + 1) & inWidthMask)])[k] +
-					1 * reinterpret_cast<byte*>(&in[((i * 2 + 2) & inHeightMask) * inWidth + ((j * 2 + 2) & inWidthMask)])[k];
-				outpix[k] = total / 36;
+							1 * reinterpret_cast<byte*>(&in[((i * 2 + 2) & inHeightMask) * inWidth + ((j * 2 - 1) & inWidthMask)])[k] +
+							2 * reinterpret_cast<byte*>(&in[((i * 2 + 2) & inHeightMask) * inWidth + ((j * 2) & inWidthMask)])[k] +
+							2 * reinterpret_cast<byte*>(&in[((i * 2 + 2) & inHeightMask) * inWidth + ((j * 2 + 1) & inWidthMask)])[k] +
+							1 * reinterpret_cast<byte*>(&in[((i * 2 + 2) & inHeightMask) * inWidth + ((j * 2 + 2) & inWidthMask)])[k];
+						outpix[k] = total / 36;
+					}
+				}
 			}
-		}
-	}
 		});
 
 	memcpy(in, temp, outWidth * outHeight * 4);

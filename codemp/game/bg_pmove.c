@@ -15003,6 +15003,9 @@ static void PM_SetSPMoveAnim(const int anim, const int setAnimFlags, const qbool
 	}
 }
 
+static qboolean PM_SPGunWalkKeepsTorso(void);
+extern qboolean PM_StandingAnim(int anim);
+
 static void PM_Footsteps(void)
 {
 	float bobmove = 0.0f;
@@ -15155,14 +15158,14 @@ static void PM_Footsteps(void)
 				PM_SetAnim(SETANIM_LEGS, BOTH_RUN1STOP, setAnimFlags | SETANIM_FLAG_HOLD);
 			}
 			else if (pm->ps->pm_flags & PMF_DUCKED || pm->ps->pm_flags & PMF_ROLLING)
-			{
-				if (pm->ps->legsAnim != BOTH_CROUCH1IDLE)
+			{// SP PM_Footsteps: BOTH_CROUCH1 (drops into the crouch and holds it); MP played BOTH_CROUCH1IDLE (parity batch 9)
+				if (pm->ps->legsAnim != BOTH_CROUCH1)
 				{
-					PM_SetAnim(SETANIM_LEGS, BOTH_CROUCH1IDLE, setAnimFlags);
+					PM_SetAnim(SETANIM_LEGS, BOTH_CROUCH1, setAnimFlags);
 				}
 				else
 				{
-					PM_ContinueLegsAnim(BOTH_CROUCH1IDLE);
+					PM_ContinueLegsAnim(BOTH_CROUCH1);
 				}
 			}
 			else
@@ -15450,6 +15453,10 @@ static void PM_Footsteps(void)
 				else if (!pm->ps->weaponTime && (pm->ps->communicatingflags & (1 << CF_AIMINGGUN)) != 0)
 				{
 					PM_RemoveGunnerAimFlag(qtrue);
+				}
+				if (is_walking_and_blocking == qfalse && pm->ps->clientNum < MAX_CLIENTS && PM_SPGunWalkKeepsTorso())
+				{// SP: walking with a gun, the torso keeps its rest / aim pose (PM_Weapon PM_SPGunTorsoPose, batch 3)
+					torsoFollows = qfalse;
 				}
 			}
 
@@ -16405,6 +16412,25 @@ static qboolean PM_DoChargedWeapons(const qboolean vehicleRocketLock, const bgEn
 			}
 		}
 
+		if (pm->ps->weapon == WP_THERMAL && pm->ps->clientNum < MAX_CLIENTS && !pm->ps->m_iVehicleNum)
+		{// SP PM_TorsoAnimation: a player pulling back to throw a thermal holds BOTH_THERMAL_READY on the torso, and on
+			// the legs while standing (held so PM_Footsteps doesn't override it). MP kept the ready pose. (parity batch 9)
+			if (PM_StandingAnim(pm->ps->legsAnim))
+			{
+				PM_SetAnim(SETANIM_LEGS, BOTH_THERMAL_READY, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
+			}
+			else if (pm->ps->legsAnim == BOTH_THERMAL_READY && pm->ps->legsTimer < 100)
+			{
+				pm->ps->legsTimer = 100;
+			}
+			PM_SetAnim(SETANIM_TORSO, BOTH_THERMAL_READY, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
+		}
+		else if (pm->ps->weapon == WP_BOWCASTER && pm->ps->clientNum < MAX_CLIENTS && !pm->ps->m_iVehicleNum
+			&& BG_UnstyleAnim(pm->ps->torsoAnim) != TORSO_WEAPONREADY4)
+		{// SP PM_TorsoAnimation: charging the bowcaster, the torso holds its aim pose (traced with d_animLog, batch 9)
+			PM_StartTorsoAnim(TORSO_WEAPONREADY4);
+		}
+
 		return qtrue; // short-circuit rest of weapon code
 	}
 rest:
@@ -17132,6 +17158,106 @@ static int PM_TwoHandedPushAnim(void)
 		return BOTH_DUAL_PUSH_GALEN;
 	}
 	return BOTH_2HANDPUSH;
+}
+
+// SP PM_TorsoAnimation for a player with a gun (third person, AMD mode): the aim pose it holds while the gun is busy
+// and the rest pose it plays otherwise, per weapon, as traced in MD 9 SP with d_animLog (2026-11-03, parity batch 3).
+// -1: not ported (MP keeps its own poses: dual pistols, Tusken / Noghri weapons, which MP uses as melee weapons...)
+static void PM_SPGunTorsoPoses(const int weapon, int* aim, int* rest)
+{
+	switch (weapon)
+	{
+	case WP_BRYAR_PISTOL:
+	case WP_REBELBLASTER:
+	case WP_REY:
+	case WP_JANGO:
+	case WP_CLONEPISTOL:
+		*aim = BOTH_ATTACKJANGO;
+		*rest = TORSO_WEAPONREST2;
+		return;
+	case WP_BLASTER:
+	case WP_BATTLEDROID:
+	case WP_THEFIRSTORDER:
+	case WP_CLONECARBINE:
+	case WP_CLONECOMMANDO:
+	case WP_REBELRIFLE:
+	case WP_BOBA:
+		*aim = BOTH_ATTACK4;
+		*rest = TORSO_WEAPONREST3;
+		return;
+	case WP_DISRUPTOR:
+	case WP_BOWCASTER:
+		*aim = TORSO_WEAPONREADY4;
+		*rest = TORSO_WEAPONIDLE3;
+		return;
+	case WP_REPEATER:
+	case WP_DEMP2:
+	case WP_FLECHETTE:
+	case WP_ROCKET_LAUNCHER:
+	case WP_CONCUSSION:
+	case WP_CLONERIFLE:
+	case WP_Z6_ROTARY_CANNON:
+		*aim = TORSO_WEAPONREADY3;
+		*rest = TORSO_WEAPONIDLE3;
+		return;
+	case WP_THERMAL:
+	case WP_TRIP_MINE:
+		*aim = TORSO_WEAPONIDLE10;
+		*rest = BOTH_STAND9;
+		return;
+	case WP_DET_PACK:
+		*aim = TORSO_WEAPONIDLE3;
+		*rest = BOTH_STAND9;
+		return;
+	default:
+		*aim = -1;
+		*rest = -1;
+		return;
+	}
+}
+
+// SP PM_TorsoAnimation's weaponBusy (third person): firing / charging, the weapon time running, shot in the last 2 s
+// (1 s while aiming), or ducked ("on alert")
+static qboolean PM_SPGunBusy(void)
+{
+	const int hold = pm->ps->communicatingflags & 1u << CF_AIMINGGUN ? 1000 : 2000;
+	const int since = pm->cmd.serverTime - pm->ps->lastShotTime;
+
+	if (pm->ps->weaponstate == WEAPON_FIRING || pm->ps->weaponstate == WEAPON_CHARGING
+		|| pm->ps->weaponstate == WEAPON_CHARGING_ALT || pm->ps->weaponTime > 0
+		|| pm->ps->lastShotTime > 0 && since >= 0 && since < hold
+		|| pm->ps->pm_flags & PMF_DUCKED)
+	{
+		return qtrue;
+	}
+	return qfalse;
+}
+
+// walking with this gun, SP keeps the torso pose (a weapon with SP poses, not a grenade, dual pistols or a zoomed
+// disruptor): PM_Footsteps doesn't put the walk anim on the torso
+static qboolean PM_SPGunWalkKeepsTorso(void)
+{
+	int aim, rest;
+	PM_SPGunTorsoPoses(pm->ps->weapon, &aim, &rest);
+	return aim >= 0 && rest != BOTH_STAND9 && !PM_MoveDualPistols()
+		&& (pm->ps->weapon != WP_DISRUPTOR || pm->ps->zoomMode != 1) ? qtrue : qfalse;
+}
+
+// the torso pose SP plays for a player's gun now (PM_SPGunTorsoPoses / PM_SPGunBusy), or -1: MP's own (no SP pose for
+// the weapon, or moving with a jog / run / grenade walk, where the torso plays the legs anim as in SP)
+static int PM_SPGunTorsoPose(void)
+{
+	int aim, rest;
+	PM_SPGunTorsoPoses(pm->ps->weapon, &aim, &rest);
+	if (aim < 0)
+	{
+		return -1;
+	}
+	if ((pm->cmd.forwardmove || pm->cmd.rightmove) && (!PM_WalkingAnim(pm->ps->legsAnim) || rest == BOTH_STAND9))
+	{
+		return -1;
+	}
+	return PM_SPGunBusy() ? aim : rest;
 }
 
 static void PM_Weapon(void)
@@ -18198,6 +18324,28 @@ static void PM_Weapon(void)
 	}
 	else if (PM_CanSetWeaponAnims() &&
 		!PM_IsRocketTrooper() &&
+		pm->ps->clientNum < MAX_CLIENTS &&
+		pm->ps->weaponstate == WEAPON_READY && pm->ps->weaponTime <= 0 &&
+		pm->ps->torsoTimer <= 0 &&
+		pm->ps->pm_type != PM_JETPACK &&
+		pm->ps->groundEntityNum != ENTITYNUM_NONE &&
+		!(pm->cmd.buttons & BUTTON_WALKING && pm->cmd.buttons & BUTTON_BLOCK) && // MD's walk + block gun aim stays
+		(pm->ps->weapon != WP_DISRUPTOR || pm->ps->zoomMode != 1) &&
+		!PM_MoveDualPistols() &&
+		PM_SPGunTorsoPose() >= 0)
+	{ // SP PM_TorsoAnimation (a player with a gun, AMD mode, traced with d_animLog): standing, ducked or walking the
+		// torso holds the weapon's aim pose while the gun is busy (shot in the last 2 s, ducked...) and its rest pose
+		// otherwise; it keeps that pose while walking (grenades: the walk anim) and plays the jog / run anim. MP went
+		// back to a generic idle (BOTH_STAND3...) right after a shot, never aimed while ducked and played the walk anim
+		// on the torso. (2026-11-03, parity batch 3)
+		const int desTAnim = PM_SPGunTorsoPose();
+		if (BG_UnstyleAnim(pm->ps->torsoAnim) != desTAnim)
+		{
+			PM_StartTorsoAnim(desTAnim);
+		}
+	}
+	else if (PM_CanSetWeaponAnims() &&
+		!PM_IsRocketTrooper() &&
 		pm->ps->weaponstate == WEAPON_READY && pm->ps->weaponTime <= 0 &&
 		(pm->ps->weapon >= WP_BRYAR_PISTOL || pm->ps->weapon == WP_STUN_BATON) &&
 		pm->ps->torsoTimer <= 0 &&
@@ -18220,10 +18368,15 @@ static void PM_Weapon(void)
 			int desTAnim = pm->ps->legsAnim;
 
 			if (BG_UnstyleAnim(desTAnim) == BOTH_STAND1 ||
-				desTAnim == BOTH_STAND2)
+				desTAnim == BOTH_STAND2 || desTAnim == BOTH_STAND6) // MP's fists legs idle is BOTH_STAND6
 			{
-				//remap the standard standing anims for melee stance
-				desTAnim = BOTH_STAND6;
+				//remap the standard standing anims for melee stance: SP's (PM_TorsoAnimation, a player with fists) is
+				// BOTH_MD_CIN_1 standing (was BOTH_STAND6, 2026-11-03 parity batch 7)
+				desTAnim = BOTH_MD_CIN_1;
+			}
+			else if (PM_CrouchAnim(desTAnim))
+			{
+				desTAnim = BOTH_STAND6; // SP: BOTH_STAND6 on the torso while crouched
 			}
 
 			if (!(pm->cmd.buttons & (BUTTON_ATTACK | BUTTON_ALT_ATTACK)))
@@ -18252,7 +18405,8 @@ static void PM_Weapon(void)
 
 	if ((BG_UnstyleAnim(pm->ps->torsoAnim) == TORSO_WEAPONREADY4 || BG_UnstyleAnim(pm->ps->torsoAnim) == BOTH_ATTACK4) &&
 		(pm->ps->weapon != WP_DISRUPTOR || pm->ps->zoomMode != 1) &&
-		!PM_BotHoldsGunAim()) // a bot holds the aim after a shot
+		!PM_BotHoldsGunAim() && // a bot holds the aim after a shot
+		!(pm->ps->clientNum < MAX_CLIENTS && PM_SPGunTorsoPose() >= 0)) // SP's aim pose holds while the gun is busy (batch 3)
 	{
 		if (pm->ps->weapon == WP_EMPLACED_GUN)
 		{
@@ -18774,6 +18928,11 @@ static void PM_Weapon(void)
 			}
 			else
 			{
+				if (pm->ps->weapon == WP_THERMAL && pm->ps->clientNum < MAX_CLIENTS
+					&& (PM_StandingAnim(pm->ps->legsAnim) || pm->ps->legsAnim == BOTH_THERMAL_READY))
+				{// SP PM_Weapon: a player's thermal throw plays on the legs too while standing (parity batch 9)
+					PM_SetAnim(SETANIM_LEGS, BOTH_THERMAL_THROW, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
+				}
 				PM_StartTorsoAnim(WeaponAttackAnim[pm->ps->weapon]);
 			}
 		}

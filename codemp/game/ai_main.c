@@ -55,6 +55,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include <qcommon/q_string.h>
 #include "bg_saga.h"
 #include "g_pazaak.h"
+extern qboolean BG_SaberIsCrossguard(const saberInfo_t* saber); // bg_saberLoad.c
  //
 
 #define BOT_THINK_TIME (1000.0f / (float)bot_fps.integer)
@@ -14376,7 +14377,7 @@ void standard_bot_ai(bot_state_t* bs)
 		dualSabers = qtrue;
 	}
 
-	if (saber1->numBlades > 1)
+	if (saber1->numBlades > 1 && !BG_SaberIsCrossguard(saber1)) // (a crossguard saber is a single saber, 2026-11-04)
 	{
 		staffSaber = qtrue;
 	}
@@ -16604,7 +16605,7 @@ void Enhanced_bot_ai(bot_state_t* bs)
 		dualSabers = qtrue;
 	}
 
-	if (saber1->numBlades > 1)
+	if (saber1->numBlades > 1 && !BG_SaberIsCrossguard(saber1)) // (a crossguard saber is a single saber, 2026-11-04)
 	{
 		staffSaber = qtrue;
 	}

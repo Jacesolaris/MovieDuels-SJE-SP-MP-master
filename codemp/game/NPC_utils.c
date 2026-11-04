@@ -1668,7 +1668,8 @@ void JET_FlyStart(gentity_t* self)
 	{
 		Boba_FlyStart(self);
 	}
-	else if (self->client->NPC_class == CLASS_MANDO)
+	else if (self->client->NPC_class == CLASS_MANDO
+		|| self->client->NPC_class == CLASS_JANGO || self->client->NPC_class == CLASS_JANGODUAL) // (MD SP)
 	{
 		Boba_FlyStart(self);
 	}
@@ -1688,7 +1689,8 @@ void jet_fly_stop(gentity_t* self)
 	{
 		Boba_FlyStop(self);
 	}
-	else if (self->client->NPC_class == CLASS_MANDO)
+	else if (self->client->NPC_class == CLASS_MANDO
+		|| self->client->NPC_class == CLASS_JANGO || self->client->NPC_class == CLASS_JANGODUAL) // (MD SP)
 	{
 		Boba_FlyStop(self);
 	}

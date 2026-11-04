@@ -6044,7 +6044,7 @@ static struct
 	vec3_t point;
 	vec3_t swing;
 	vec3_t blade;
-} s_saberSliceHit = { ENTITYNUM_NONE, 0, { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 } };
+} s_saberSliceHit = { ENTITYNUM_NONE, 0,{ 0, 0, 0 },{ 0, 0, 0 },{ 0, 0, 0 } };
 
 // w_saber.c: remember the blade of a saber hit, just before G_Damage
 void G_SaberSliceSetHit(const gentity_t* victim, const vec3_t point, const vec3_t swing_dir, const vec3_t blade_dir)
@@ -6070,7 +6070,7 @@ static qboolean G_SaberSliceBoltMatrix(const gentity_t* ent, const int bolt, mdx
 	}
 	VectorSet(angles, 0, ent->client->ps.viewangles[YAW], 0);
 	VectorCopy(ent->client->ps.origin, origin);
-	trap->G2API_GetBoltMatrix(ent->ghoul2, 0, bolt, matrix, angles, origin, level.time, NULL, (float *)ent->modelScale);
+	trap->G2API_GetBoltMatrix(ent->ghoul2, 0, bolt, matrix, angles, origin, level.time, NULL, (float*)ent->modelScale);
 	return qtrue;
 }
 
@@ -7451,7 +7451,12 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
 			tent = G_TempEntity(targ->r.currentOrigin, EV_STUNNED);
 			tent->owner = targ;
 		}
-		return;
+		// (Jace 2026-11-04) the stun hit still does its damage (the 5 - 25 above): it returned here, so the DEMP2,
+		// the charged pistol and the seeker did no damage at all to a character
+		if (damage <= 0)
+		{
+			return;
+		}
 	}
 
 	if (targ->flags & FL_DMG_BY_SABER_ONLY && mod != MOD_SABER)
@@ -9410,4 +9415,4 @@ void G_DodgeDrain(const gentity_t* victim, const gentity_t* attacker, int amount
 	{
 		client->ps.stats[STAT_DODGE] = 0;
 	}
-}
+}

@@ -159,6 +159,10 @@ cvar_t* g_dismemberment;
 cvar_t* g_corpseRemovalTime;
 
 cvar_t* g_synchSplitAnims;
+#ifdef _DEBUG
+cvar_t* d_animLog;	// Debug builds: print anim changes (bg_panimate.cpp PM_SetAnimFinal, 2026-11-03)
+cvar_t* d_animLogEnt;
+#endif
 #ifndef FINAL_BUILD
 cvar_t* g_AnimWarning;
 #endif
@@ -768,6 +772,10 @@ static void G_InitCvars()
 	g_corpseRemovalTime = gi.cvar("g_corpseRemovalTime", "10", CVAR_ARCHIVE);
 	//number of seconds bodies stick around for, at least... 0 = never go away
 	g_synchSplitAnims = gi.cvar("g_synchSplitAnims", "1", 0);
+#ifdef _DEBUG
+	d_animLog = gi.cvar("d_animLog", "0", CVAR_CHEAT);
+	d_animLogEnt = gi.cvar("d_animLogEnt", "-1", CVAR_CHEAT);
+#endif
 #ifndef FINAL_BUILD
 	g_AnimWarning = gi.cvar("g_AnimWarning", "1", 0);
 #endif

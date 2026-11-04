@@ -2603,7 +2603,6 @@ static bool R_SliceSurfaceShowsCut(const mdxmSurface_t* surface, const CBoneCach
 	return R_SliceSurfaceCrossed(*m, refs, surface->numBoneReferences);
 }
 
-
 static void RenderSurfaces(CRenderSurface& RS)
 {
 	assert(RS.currentModel);

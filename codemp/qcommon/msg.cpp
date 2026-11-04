@@ -1740,7 +1740,8 @@ netField_t playerStateFields[] =
 
 	{ PSF(SaberSmashStartTime), 32 },
 	{ PSF(SaberSmashLastStartTime), 32 },
-	{ PSF(Smash_Count), 32 }
+	{ PSF(Smash_Count), 32 },
+	{ PSF(lastShotTime), 32 } // the gun holds its aim pose after a shot: the client predicts it too (2026-11-04)
 };
 
 netField_t pilotPlayerStateFields[] =
@@ -1974,7 +1975,8 @@ netField_t pilotPlayerStateFields[] =
 
 	{ PSF(SaberSmashStartTime), 32 },
 	{ PSF(SaberSmashLastStartTime), 32 },
-	{ PSF(Smash_Count), 32 }
+	{ PSF(Smash_Count), 32 },
+	{ PSF(lastShotTime), 32 } // the gun holds its aim pose after a shot: the client predicts it too (2026-11-04)
 };
 
 netField_t vehPlayerStateFields[] =
@@ -2114,7 +2116,8 @@ netField_t vehPlayerStateFields[] =
 
 	{ PSF(SaberSmashStartTime), 32 },
 	{ PSF(SaberSmashLastStartTime), 32 },
-	{ PSF(Smash_Count), 32 }
+	{ PSF(Smash_Count), 32 },
+	{ PSF(lastShotTime), 32 } // the gun holds its aim pose after a shot: the client predicts it too (2026-11-04)
 };
 
 //=====_OPTIMIZED_VEHICLE_NETWORKING=======================================================================
@@ -2334,7 +2337,8 @@ netField_t	playerStateFields[] =
 
 { PSF(SaberSmashStartTime), 32 },
 { PSF(SaberSmashLastStartTime), 32 },
-{ PSF(Smash_Count), 32 }
+{ PSF(Smash_Count), 32 },
+	{ PSF(lastShotTime), 32 } // the gun holds its aim pose after a shot: the client predicts it too (2026-11-04)
 };
 
 //=====_OPTIMIZED_VEHICLE_NETWORKING=======================================================================

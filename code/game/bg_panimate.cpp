@@ -66,6 +66,10 @@ extern pml_t pml;
 extern cvar_t* g_ICARUSDebug;
 extern cvar_t* g_timescale;
 extern cvar_t* g_synchSplitAnims;
+#ifdef _DEBUG
+extern cvar_t* d_animLog;
+extern cvar_t* d_animLogEnt;
+#endif
 #ifndef FINAL_BUILD
 extern cvar_t* g_AnimWarning;
 #endif
@@ -4968,7 +4972,6 @@ static saberMoveName_t PM_CheckDualSpinProtect()
 				((pm->gent != nullptr && pm->gent->client != nullptr &&
 					pm->gent->client->animationstyle == CS_GRIEVOUS) ? qtrue : qfalse);
 
-
 			const qboolean grievousSaberType =
 				((pm->ps->saber[0].type == SABER_DUAL_GRIE ||
 					pm->ps->saber[0].type == SABER_DUAL_GRIE4 ||
@@ -7098,6 +7101,17 @@ void PM_SetAnimFinal(int* torso_anim, int* legs_anim,
 				anim,
 				animTable[anim].name);
 		}
+	}
+#endif
+
+#ifdef _DEBUG
+	// d_animLog 1 (Debug builds only, 2026-11-03): the anims the player (and entity d_animLogEnt) start on the legs /
+	// torso, in the same lines as MP's d_animLog (bg_panimate.c BG_AnimLog), to compare SP and MP. No gameplay change.
+	if (d_animLog && d_animLog->integer && (body_play || tors_play)
+		&& (gent->s.number == 0 || gent->s.number == d_animLogEnt->integer) && anim >= 0 && anim < MAX_ANIMATIONS)
+	{
+		Com_Printf("ANIMLOG %8d ent %3d %-5s %4d %s\n", actual_time, gent->s.number,
+			body_play && tors_play ? "BOTH" : body_play ? "LEGS" : "TORSO", anim, animTable[anim].name);
 	}
 #endif
 

@@ -3671,7 +3671,7 @@ static qboolean G_DoGunDismemberment(gentity_t* self, vec3_t point, const int mo
 					limb_roll_base = 0;
 					limb_pitch_base = 0;
 					break;
-				// a gun hit on the chest or back takes nothing, only arm and hand hits take arms
+					// a gun hit on the chest or back takes nothing, only arm and hand hits take arms
 				case HL_ARM_RT:
 					do_dismemberment = qtrue;
 					limb_bone = "rhumerus";
@@ -5190,20 +5190,20 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker,
 			}
 			else if (g_gundismemberment->integer > 0
 				&& (means_of_death == MOD_BLASTER
-				|| means_of_death == MOD_BLASTER_ALT
-				|| means_of_death == MOD_REBELBLASTER
-				|| means_of_death == MOD_REBELBLASTER_ALT
-				|| means_of_death == MOD_CLONECOMMANDO
-				|| means_of_death == MOD_CLONECOMMANDO_ALT
-				|| means_of_death == MOD_REBELRIFLE
-				|| means_of_death == MOD_REBELRIFLE_ALT
-				|| means_of_death == MOD_BOBA
-				|| means_of_death == MOD_BOBA_ALT
-				|| means_of_death == MOD_BOWCASTER
-				|| means_of_death == MOD_BOWCASTER_ALT
-				|| means_of_death == MOD_REPEATER
-				|| means_of_death == MOD_FLECHETTE
-				|| means_of_death == MOD_EMPLACED)
+					|| means_of_death == MOD_BLASTER_ALT
+					|| means_of_death == MOD_REBELBLASTER
+					|| means_of_death == MOD_REBELBLASTER_ALT
+					|| means_of_death == MOD_CLONECOMMANDO
+					|| means_of_death == MOD_CLONECOMMANDO_ALT
+					|| means_of_death == MOD_REBELRIFLE
+					|| means_of_death == MOD_REBELRIFLE_ALT
+					|| means_of_death == MOD_BOBA
+					|| means_of_death == MOD_BOBA_ALT
+					|| means_of_death == MOD_BOWCASTER
+					|| means_of_death == MOD_BOWCASTER_ALT
+					|| means_of_death == MOD_REPEATER
+					|| means_of_death == MOD_FLECHETTE
+					|| means_of_death == MOD_EMPLACED)
 				&& (!inflictor || !G_IsPistolWeapon(inflictor->s.weapon)) // pistols never cut a body that is already dead
 				&& !NPC_IsNotDismemberable(self))
 			{
@@ -8673,7 +8673,12 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, const 
 				gentity_t* tent = G_TempEntity(targ->currentOrigin, EV_STUNNED);
 				tent->owner = targ;
 			}
-			return;
+			// (Jace 2026-11-04) the stun hit still does its damage (the 10 above): it returned here, so the DEMP2,
+			// the charged pistol and the seeker did no damage at all to a character
+			if (damage <= 0)
+			{
+				return;
+			}
 		}
 	}
 
@@ -10799,4 +10804,4 @@ void AddNPCBlockPointBonus(const gentity_t* self)
 	{
 		self->client->ps.saberFatigueChainCount = MISHAPLEVEL_LIGHT;
 	}
-}
+}

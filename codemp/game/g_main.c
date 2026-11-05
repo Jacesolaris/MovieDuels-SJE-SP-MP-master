@@ -4856,8 +4856,8 @@ void G_RunFrame(const int levelTime)
 
 		G_CheckSpecialPersistentEvents(ent);
 
-		if (ent->corpsePushUntil > level.time)
-		{// ragdoll: walking into the body pushes it
+		if (ent->corpsePushUntil)
+		{// ragdoll: walking into the body pushes it (any time, Jace 2026-11-04)
 			G_CorpseTouchPush(ent);
 		}
 

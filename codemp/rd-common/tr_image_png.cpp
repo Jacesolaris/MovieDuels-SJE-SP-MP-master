@@ -34,11 +34,11 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 static void user_write_data(const png_structp png_ptr, const png_bytep data, const png_size_t length) {
 	const fileHandle_t fp = *static_cast<fileHandle_t*>(png_get_io_ptr(png_ptr));
-	ri->FS_Write(data, length, fp);
+	ri.FS_Write(data, length, fp);
 }
 static void user_flush_data(png_structp png_ptr)
 {
-	//TODO: ri->FS_Flush?
+	//TODO: ri.FS_Flush?
 }
 
 int RE_SavePNG(const char* filename, const byte* buf, const size_t width, const size_t height, const int byte_depth) {
@@ -57,7 +57,7 @@ int RE_SavePNG(const char* filename, const byte* buf, const size_t width, const 
 	constexpr int depth = 8;
 	png_byte** row_pointers = nullptr;
 
-	fp = ri->FS_FOpenFileWrite(filename, qtrue);
+	fp = ri.FS_FOpenFileWrite(filename, qtrue);
 	if (!fp) {
 		goto fopen_failed;
 	}
@@ -125,7 +125,7 @@ png_failure:
 png_create_info_struct_failed:
 	png_destroy_write_struct(&png_ptr, &info_ptr);
 png_create_write_struct_failed:
-	ri->FS_FCloseFile(fp);
+	ri.FS_FCloseFile(fp);
 fopen_failed:
 	return status;
 }
@@ -133,12 +133,12 @@ fopen_failed:
 void user_read_data(png_structp png_ptr, png_bytep data, png_size_t length);
 static void png_print_error(png_structp png_ptr, const png_const_charp err)
 {
-	ri->Printf(PRINT_ERROR, "%s\n", err);
+	ri.Printf(PRINT_ERROR, "%s\n", err);
 }
 
 static void png_print_warning(png_structp png_ptr, const png_const_charp warning)
 {
-	ri->Printf(PRINT_WARNING, "%s\n", warning);
+	ri.Printf(PRINT_WARNING, "%s\n", warning);
 }
 
 static bool IsPowerOfTwo(const int i) { return (i & i - 1) == 0; }
@@ -148,7 +148,7 @@ struct PNGFileReader
 	PNGFileReader(char* buf, const size_t size) : buf(buf), size(size), offset(0), png_ptr(nullptr), info_ptr(nullptr) {}
 	~PNGFileReader()
 	{
-		ri->FS_FreeFile(buf);
+		ri.FS_FreeFile(buf);
 
 		if (png_ptr != nullptr)
 		{
@@ -170,7 +170,7 @@ struct PNGFileReader
 
 		if (size < signature_len)
 		{
-			ri->Printf(PRINT_ERROR, "PNG file is too small to be valid.\n");
+			ri.Printf(PRINT_ERROR, "PNG file is too small to be valid.\n");
 			return 0;
 		}
 
@@ -179,14 +179,14 @@ struct PNGFileReader
 
 		if (!png_check_sig(ident, signature_len))
 		{
-			ri->Printf(PRINT_ERROR, "PNG signature not found in given image.");
+			ri.Printf(PRINT_ERROR, "PNG signature not found in given image.");
 			return 0;
 		}
 
 		png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, png_print_error, png_print_warning);
 		if (png_ptr == nullptr)
 		{
-			ri->Printf(PRINT_ERROR, "Could not allocate enough memory to load the image.");
+			ri.Printf(PRINT_ERROR, "Could not allocate enough memory to load the image.");
 			return 0;
 		}
 
@@ -219,7 +219,7 @@ struct PNGFileReader
 		// so that the graphics driver doesn't have to fiddle about with the texture when uploading.
 		if (!IsPowerOfTwo(width32) || !IsPowerOfTwo(height32))
 		{
-			ri->Printf(PRINT_ERROR, "Width or height is not a power-of-two.\n");
+			ri.Printf(PRINT_ERROR, "Width or height is not a power-of-two.\n");
 			return 0;
 		}
 
@@ -229,7 +229,7 @@ struct PNGFileReader
 		// PNG_COLOR_TYPE_GRAY.
 		if (colortype != PNG_COLOR_TYPE_RGB && colortype != PNG_COLOR_TYPE_RGBA)
 		{
-			ri->Printf(PRINT_ERROR, "Image is not 24-bit or 32-bit.");
+			ri.Printf(PRINT_ERROR, "Image is not 24-bit or 32-bit.");
 			return 0;
 		}
 
@@ -252,20 +252,20 @@ struct PNGFileReader
 		png_read_update_info(png_ptr, info_ptr);
 
 		// We always assume there are 4 channels. RGB channels are expanded to RGBA when read.
-		const auto temp_data = static_cast<byte*>(ri->Z_Malloc(width32 * height32 * 4, TAG_TEMP_PNG, qfalse, 4));
+		const auto temp_data = static_cast<byte*>(ri.Z_Malloc(width32 * height32 * 4, TAG_TEMP_PNG, qfalse, 4));
 		if (!temp_data)
 		{
-			ri->Printf(PRINT_ERROR, "Could not allocate enough memory to load the image.");
+			ri.Printf(PRINT_ERROR, "Could not allocate enough memory to load the image.");
 			return 0;
 		}
 
 		// Dynamic array of row pointers, with 'height' elements, initialized to NULL.
-		const auto row_pointers = static_cast<byte**>(ri->Hunk_AllocateTempMemory(sizeof(byte*) * height32));
+		const auto row_pointers = static_cast<byte**>(ri.Hunk_AllocateTempMemory(sizeof(byte*) * height32));
 		if (!row_pointers)
 		{
-			ri->Printf(PRINT_ERROR, "Could not allocate enough memory to load the image.");
+			ri.Printf(PRINT_ERROR, "Could not allocate enough memory to load the image.");
 
-			ri->Z_Free(temp_data);
+			ri.Z_Free(temp_data);
 
 			return 0;
 		}
@@ -273,8 +273,8 @@ struct PNGFileReader
 		// Re-set the jmp so that these new memory allocations can be reclaimed
 		if (setjmp(png_jmpbuf(png_ptr)))
 		{
-			ri->Hunk_FreeTempMemory(row_pointers);
-			ri->Z_Free(temp_data);
+			ri.Hunk_FreeTempMemory(row_pointers);
+			ri.Z_Free(temp_data);
 			return 0;
 		}
 
@@ -288,7 +288,7 @@ struct PNGFileReader
 		// Finish reading
 		png_read_end(png_ptr, nullptr);
 
-		ri->Hunk_FreeTempMemory(row_pointers);
+		ri.Hunk_FreeTempMemory(row_pointers);
 
 		// Finally assign all the parameters
 		*data = temp_data;
@@ -332,7 +332,7 @@ void user_read_data(const png_structp png_ptr, const png_bytep data, const png_s
 void LoadPNG(const char* filename, byte** data, int* width, int* height)
 {
 	char* buf = nullptr;
-	const int len = ri->FS_ReadFile(filename, reinterpret_cast<void**>(&buf));
+	const int len = ri.FS_ReadFile(filename, reinterpret_cast<void**>(&buf));
 	if (len < 0 || buf == nullptr)
 	{
 		return;

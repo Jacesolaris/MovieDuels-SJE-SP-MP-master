@@ -50,8 +50,8 @@ void SMAABlendingWeightCalculationVS(vec2 texcoord,
 void main()
 {
 	vec2 position = vec2(2.0 * float(gl_VertexID & 2) - 1.0, 4.0 * float(gl_VertexID & 1) - 1.0);
- 	gl_Position = vec4(position, 0.0, 1.0);
- 	var_ScreenTex = position * 0.5 + vec2(0.5);
+	gl_Position = vec4(position, 0.0, 1.0);
+	var_ScreenTex = position * 0.5 + vec2(0.5);
 	SMAABlendingWeightCalculationVS(var_ScreenTex, var_pixcoord, var_offset);
 }
 

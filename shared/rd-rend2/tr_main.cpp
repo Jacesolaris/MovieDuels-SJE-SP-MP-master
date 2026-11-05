@@ -22,16 +22,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // tr_main.c -- main control flow for each frame
 
 #include "tr_local.h"
+#include "q_profile.h"
 #include "tr_weather.h"
 
-#ifdef REND2_SP
 #include <string.h> // memcpy
-#else // !REND2_SP
-#include <string.h> // memcpy
-
+#ifndef REND2_SP
 #include "ghoul2/g2_local.h"
-
-#endif // REND2_SP
+#endif
 trGlobals_t		tr;
 
 static float	s_flipMatrix[16] = {
@@ -43,11 +40,7 @@ static float	s_flipMatrix[16] = {
 	0, 0, 0, 1
 };
 
-#ifdef REND2_SP
 refimport_t	ri;
-#else // !REND2_SP
-refimport_t* ri = nullptr;
-#endif // REND2_SP
 
 // entities that will have procedurally generated surfaces will just
 // point at this for their sorting surface
@@ -58,11 +51,7 @@ surfaceType_t	entitySurface = SF_ENTITY;
 R_CompareVert
 ================
 */
-#ifdef REND2_SP
-qboolean R_CompareVert(srfVert_t* v1, srfVert_t* v2, qboolean checkST)
-#else // !REND2_SP
 static qboolean R_CompareVert(srfVert_t* v1, srfVert_t* v2, qboolean checkST)
-#endif // REND2_SP
 {
 	int             i = 0;
 
@@ -87,11 +76,7 @@ static qboolean R_CompareVert(srfVert_t* v1, srfVert_t* v2, qboolean checkST)
 R_CalcNormalForTriangle
 =============
 */
-#ifdef REND2_SP
-void R_CalcNormalForTriangle(vec3_t normal, const vec3_t v0, const vec3_t v1, const vec3_t v2)
-#else // !REND2_SP
 static void R_CalcNormalForTriangle(vec3_t normal, const vec3_t v0, const vec3_t v1, const vec3_t v2)
-#endif // REND2_SP
 {
 	vec3_t          udir, vdir;
 
@@ -103,22 +88,6 @@ static void R_CalcNormalForTriangle(vec3_t normal, const vec3_t v0, const vec3_t
 	VectorNormalize(normal);
 }
 
-#ifdef REND2_SP
-/*
-=============
-R_CalcTangentsForTriangle
-http://members.rogers.com/deseric/tangentspace.htm
-=============
-*/
-void R_CalcTangentsForTriangle(vec3_t tangent, vec3_t bitangent,
-	const vec3_t v0, const vec3_t v1, const vec3_t v2,
-	const vec2_t t0, const vec2_t t1, const vec2_t t2)
-{
-	int             i = 0;
-	vec3_t          planes[3];
-	vec3_t          u, v;
-
-#else // !REND2_SP
 /*
 =============
 R_CalcTangentsForTriangle
@@ -133,7 +102,6 @@ static void R_CalcTangentsForTriangle(vec3_t tangent, vec3_t bitangent,
 	vec3_t          planes[3]{};
 	vec3_t          u, v;
 
-#endif // REND2_SP
 	for (i = 0; i < 3; i++)
 	{
 		VectorSet(u, v1[i] - v0[i], t1[0] - t0[0], t1[1] - t0[1]);
@@ -164,19 +132,6 @@ static void R_CalcTangentsForTriangle(vec3_t tangent, vec3_t bitangent,
 	VectorNormalize(bitangent);
 }
 
-#ifdef REND2_SP
-/*
-=============
-R_CalcTangentSpace
-=============
-*/
-void R_CalcTangentSpace(vec3_t tangent, vec3_t bitangent, vec3_t normal,
-	const vec3_t v0, const vec3_t v1, const vec3_t v2, const vec2_t t0, const vec2_t t1, const vec2_t t2)
-{
-	vec3_t          cp, u, v;
-	vec3_t          faceNormal;
-
-#else // !REND2_SP
 /*
 =============
 R_CalcTangentSpace
@@ -188,7 +143,6 @@ static void R_CalcTangentSpace(vec3_t tangent, vec3_t bitangent, vec3_t normal,
 	vec3_t          cp, u, v;
 	vec3_t          faceNormal;
 
-#endif // REND2_SP
 	VectorSet(u, v1[0] - v0[0], t1[0] - t0[0], t1[1] - t0[1]);
 	VectorSet(v, v2[0] - v0[0], t2[0] - t0[0], t2[1] - t0[1]);
 
@@ -265,15 +219,9 @@ static void R_CalcTangentSpace(vec3_t tangent, vec3_t bitangent, vec3_t normal,
 
 	VectorCopy(faceNormal, normal);
 }
-#ifdef REND2_SP
-
-void R_CalcTangentSpaceFast(vec3_t tangent, vec3_t bitangent, vec3_t normal,
-	const vec3_t v0, const vec3_t v1, const vec3_t v2, const vec2_t t0, const vec2_t t1, const vec2_t t2)
-#else // !REND2_SP
 
 static void R_CalcTangentSpaceFast(vec3_t tangent, vec3_t bitangent, vec3_t normal,
 	const vec3_t v0, const vec3_t v1, const vec3_t v2, const vec2_t t0, const vec2_t t1, const vec2_t t2)
-#endif // REND2_SP
 {
 	vec3_t          cp, u, v;
 	vec3_t          faceNormal;
@@ -389,15 +337,11 @@ void R_CalcTbnFromNormalAndTexDirs(vec3_t tangent, vec3_t bitangent, vec3_t norm
 	VectorScale(bitangent, handedness, bitangent);
 }
 
-qboolean R_CalcTangentVectors(srfVert_t * dv[3])
+qboolean R_CalcTangentVectors(srfVert_t* dv[3])
 {
 	int             i = 0;
 	float           bb = 0.0f, s = 0.0f, t = 0.0f;
-#ifdef REND2_SP
-	vec3_t          bary;
-#else // !REND2_SP
 	vec3_t          bary{};
-#endif // REND2_SP
 
 	/* calculate barycentric basis for the triangle */
 	bb = (dv[1]->st[0] - dv[0]->st[0]) * (dv[2]->st[1] - dv[0]->st[1]) - (dv[2]->st[0] - dv[0]->st[0]) * (dv[1]->st[1] - dv[0]->st[1]);
@@ -407,11 +351,7 @@ qboolean R_CalcTangentVectors(srfVert_t * dv[3])
 	/* do each vertex */
 	for (i = 0; i < 3; i++)
 	{
-#ifdef REND2_SP
-		vec3_t bitangent, nxt;
-#else // !REND2_SP
 		vec3_t bitangent{}, nxt;
-#endif // REND2_SP
 
 		// calculate s tangent vector
 		s = dv[i]->st[0] + 10.0f;
@@ -460,12 +400,8 @@ R_CullLocalBox
 Returns CULL_IN, CULL_CLIP, or CULL_OUT
 =================
 */
-#ifdef REND2_SP
-int R_CullLocalBox(vec3_t localBounds[2]) {
-#else // !REND2_SP
 int R_CullLocalBox(const vec3_t bounds[2])
 {
-#endif // REND2_SP
 #if 0
 	int		i, j;
 	vec3_t	transformed[8];
@@ -485,17 +421,10 @@ int R_CullLocalBox(const vec3_t bounds[2])
 		v[1] = bounds[(i >> 1) & 1][1];
 		v[2] = bounds[(i >> 2) & 1][2];
 
-#ifdef REND2_SP
 		VectorCopy(tr.ori.origin, transformed[i]);
 		VectorMA(transformed[i], v[0], tr.ori.axis[0], transformed[i]);
 		VectorMA(transformed[i], v[1], tr.ori.axis[1], transformed[i]);
 		VectorMA(transformed[i], v[2], tr.ori.axis[2], transformed[i]);
-#else // !REND2_SP
-		VectorCopy(tr.ori->origin, transformed[i]);
-		VectorMA(transformed[i], v[0], tr.ori->axis[0], transformed[i]);
-		VectorMA(transformed[i], v[1], tr.ori->axis[1], transformed[i]);
-		VectorMA(transformed[i], v[2], tr.ori->axis[2], transformed[i]);
-#endif // REND2_SP
 	}
 
 	// check against frustum planes
@@ -531,13 +460,8 @@ int R_CullLocalBox(const vec3_t bounds[2])
 #else
 	int             j = 0;
 	vec3_t          transformed;
-#ifdef REND2_SP
-	vec3_t          v;
-	vec3_t          worldBounds[2];
-#else // !REND2_SP
 	vec3_t          v{};
 	vec3_t          worldBounds[2]{};
-#endif // REND2_SP
 
 	if (r_nocull->integer)
 	{
@@ -549,15 +473,9 @@ int R_CullLocalBox(const vec3_t bounds[2])
 
 	for (j = 0; j < 8; j++)
 	{
-#ifdef REND2_SP
-		v[0] = localBounds[j & 1][0];
-		v[1] = localBounds[(j >> 1) & 1][1];
-		v[2] = localBounds[(j >> 2) & 1][2];
-#else // !REND2_SP
 		v[0] = bounds[j & 1][0];
 		v[1] = bounds[(j >> 1) & 1][1];
 		v[2] = bounds[(j >> 2) & 1][2];
-#endif // REND2_SP
 
 		R_LocalPointToWorld(v, transformed);
 
@@ -615,11 +533,7 @@ int R_CullBox(vec3_t worldBounds[2]) {
 /*
 ** R_CullLocalPointAndRadius
 */
-#ifdef REND2_SP
-int R_CullLocalPointAndRadius(const vec3_t pt, float radius)
-#else // !REND2_SP
 int R_CullLocalPointAndRadius(const vec3_t pt, const float radius)
-#endif // REND2_SP
 {
 	vec3_t transformed;
 
@@ -631,7 +545,7 @@ int R_CullLocalPointAndRadius(const vec3_t pt, const float radius)
 /*
 ** R_CullPointAndRadius
 */
-int R_CullPointAndRadiusEx(const vec3_t pt, float radius, const cplane_t * frustum, int numPlanes)
+int R_CullPointAndRadiusEx(const vec3_t pt, float radius, const cplane_t* frustum, int numPlanes)
 {
 	int		i = 0;
 	float	dist = 0.0f;
@@ -669,11 +583,7 @@ int R_CullPointAndRadiusEx(const vec3_t pt, float radius, const cplane_t * frust
 /*
 ** R_CullPointAndRadius
 */
-#ifdef REND2_SP
-int R_CullPointAndRadius(const vec3_t pt, float radius)
-#else // !REND2_SP
 int R_CullPointAndRadius(const vec3_t pt, const float radius)
-#endif // REND2_SP
 {
 	return R_CullPointAndRadiusEx(pt, radius, tr.viewParms.frustum, (tr.viewParms.flags & VPF_FARPLANEFRUSTUM) ? 5 : 4);
 }
@@ -720,28 +630,16 @@ R_TransformModelToClip
 
 ==========================
 */
-#ifdef REND2_SP
-void R_TransformModelToClip(const vec3_t src, const float* modelViewMatrix, const float* projectionMatrix,
-	vec4_t eye, vec4_t dst) {
-#else // !REND2_SP
 void R_TransformModelToClip(const vec3_t src, const float* modelMatrix, const float* projectionMatrix, vec4_t eye, vec4_t dst)
 {
-#endif // REND2_SP
 	int i = 0;
 
 	for (i = 0; i < 4; i++) {
 		eye[i] =
-#ifdef REND2_SP
-			src[0] * modelViewMatrix[i + 0 * 4] +
-			src[1] * modelViewMatrix[i + 1 * 4] +
-			src[2] * modelViewMatrix[i + 2 * 4] +
-			1 * modelViewMatrix[i + 3 * 4];
-#else // !REND2_SP
 			src[0] * modelMatrix[i + 0 * 4] +
 			src[1] * modelMatrix[i + 1 * 4] +
 			src[2] * modelMatrix[i + 2 * 4] +
 			1 * modelMatrix[i + 3 * 4];
-#endif // REND2_SP
 	}
 
 	for (i = 0; i < 4; i++) {
@@ -759,7 +657,7 @@ R_TransformClipToWindow
 
 ==========================
 */
-void R_TransformClipToWindow(const vec4_t clip, const viewParms_t * view, vec4_t normalized, vec4_t window) {
+void R_TransformClipToWindow(const vec4_t clip, const viewParms_t* view, vec4_t normalized, vec4_t window) {
 	normalized[0] = clip[0] / clip[3];
 	normalized[1] = clip[1] / clip[3];
 	normalized[2] = (clip[2] + clip[3]) / (2 * clip[3]);
@@ -778,11 +676,7 @@ myGlMultMatrix
 
 ==========================
 */
-#ifdef REND2_SP
-void myGlMultMatrix(const float* a, const float* b, float* out) {
-#else // !REND2_SP
 static void myGlMultMatrix(const float* a, const float* b, float* out) {
-#endif // REND2_SP
 	int		i = 0, j = 0;
 
 	for (i = 0; i < 4; i++) {
@@ -805,8 +699,7 @@ Does NOT produce any GL calls
 Called by both the front end and the back end
 =================
 */
-void R_RotateForEntity(const trRefEntity_t * ent, const viewParms_t * viewParms,
-	orientationr_t * ori)
+void R_RotateForEntity(const trRefEntity_t* ent, const viewParms_t* viewParms, orientationr_t* ori)
 {
 	vec3_t	delta;
 	float	axisLength = 0.0f;
@@ -872,13 +765,9 @@ R_RotateForViewer
 Sets up the modelview matrix for a given viewParm
 =================
 */
-static void R_RotateForViewer(orientationr_t * ori, viewParms_t * viewParms)
+static void R_RotateForViewer(orientationr_t* ori, viewParms_t* viewParms)
 {
-#ifdef REND2_SP
-	float	viewerMatrix[16];
-#else // !REND2_SP
 	float	viewerMatrix[16]{};
-#endif // REND2_SP
 	vec3_t	origin;
 
 	*ori = {};
@@ -919,27 +808,22 @@ static void R_RotateForViewer(orientationr_t * ori, viewParms_t * viewParms)
 /*
 ** SetFarClip
 */
-static void R_SetFarClip(viewParms_t * viewParms, const trRefdef_t * refdef)
+static void R_SetFarClip(viewParms_t* viewParms, const trRefdef_t* refdef)
 {
 	float	farthestCornerDistance = 0;
 	int		i = 0;
 
 	// if not rendering the world (icons, menus, etc)
-#ifdef REND2_SP
 	// set a 2k far clip plane
 	if (refdef != NULL)
 	{
 		if (refdef->rdflags & RDF_NOWORLDMODEL) {
-#else // !REND2_SP
-	// set a 2k far clip plane
-	if (refdef != NULL)
-	{
-		if (refdef->rdflags & RDF_NOWORLDMODEL) {
+#ifndef REND2_SP
 			// override the zfar then
 			if (refdef->rdflags & RDF_AUTOMAP)
 				viewParms->zFar = 32768.0f;
 			else
-#endif // REND2_SP
+#endif
 				viewParms->zFar = 2048.0f;
 			return;
 		}
@@ -950,11 +834,7 @@ static void R_SetFarClip(viewParms_t * viewParms, const trRefdef_t * refdef)
 	//
 	for (i = 0; i < 8; i++)
 	{
-#ifdef REND2_SP
-		vec3_t v;
-#else // !REND2_SP
 		vec3_t v{};
-#endif // REND2_SP
 		float distance = 0.0f;
 
 		if (i & 1)
@@ -996,7 +876,7 @@ static void R_SetFarClip(viewParms_t * viewParms, const trRefdef_t * refdef)
 	// The sky renders at zFar so need to move it out a little
 	// ...and make sure there is a minimum zfar to prevent problems
 	viewParms->zFar = Com_Clamp(2048.0f, tr.distanceCull * (1.732), sqrtf(farthestCornerDistance));
-		}
+}
 
 /*
 =================
@@ -1006,11 +886,7 @@ Set up the culling frustum planes for the current view using the results we got 
 the projection matrix.
 =================
 */
-#ifdef REND2_SP
-void R_SetupFrustum(viewParms_t * dest, float xmin, float xmax, float ymax, float zProj, float zFar, float stereoSep)
-#else // !REND2_SP
-static void R_SetupFrustum(viewParms_t * dest, float xmin, float xmax, float ymax, float zProj, float zFar, float stereoSep)
-#endif // REND2_SP
+static void R_SetupFrustum(viewParms_t* dest, float xmin, float xmax, float ymax, float zProj, float zFar, float stereoSep)
 {
 	vec3_t ofsorigin;
 	float oppleg = 0.0f, adjleg = 0.0f, length = 0.0f;
@@ -1083,7 +959,7 @@ static void R_SetupFrustum(viewParms_t * dest, float xmin, float xmax, float yma
 R_SetupProjection
 ===============
 */
-void R_SetupProjection(viewParms_t * dest, float zProj, float zFar, qboolean computeFrustum)
+void R_SetupProjection(viewParms_t* dest, float zProj, float zFar, qboolean computeFrustum)
 {
 	float	xmin = 0.0f, xmax = 0.0f, ymin = 0.0f, ymax = 0.0f;
 	float	width = 0.0f, height = 0.0f, stereoSep = r_stereoSeparation->value;
@@ -1139,11 +1015,7 @@ R_SetupProjectionZ
 Sets the z-component transformation part in the projection matrix
 ===============
 */
-#ifdef REND2_SP
-void R_SetupProjectionZ(viewParms_t * dest)
-#else // !REND2_SP
-static void R_SetupProjectionZ(viewParms_t * dest)
-#endif // REND2_SP
+static void R_SetupProjectionZ(viewParms_t* dest)
 {
 	float zNear = 0.0f, zFar = 0.0f, depth = 0.0f;
 
@@ -1159,15 +1031,9 @@ static void R_SetupProjectionZ(viewParms_t * dest)
 
 	if (dest->isPortal)
 	{
-#ifdef REND2_SP
-		float	plane[4];
-		float	plane2[4];
-		vec4_t q, c;
-#else // !REND2_SP
 		float	plane[4]{};
 		float	plane2[4]{};
 		vec4_t q{}, c{};
-#endif // REND2_SP
 
 		// transform portal plane into camera space
 		plane[0] = dest->portalPlane.normal[0];
@@ -1201,11 +1067,7 @@ static void R_SetupProjectionZ(viewParms_t * dest)
 R_SetupProjectionOrtho
 ===============
 */
-#ifdef REND2_SP
-void R_SetupProjectionOrtho(viewParms_t * dest, const vec3_t viewBounds[2])
-#else // !REND2_SP
-static void R_SetupProjectionOrtho(viewParms_t * dest, const vec3_t viewBounds[2])
-#endif // REND2_SP
+static void R_SetupProjectionOrtho(viewParms_t* dest, const vec3_t viewBounds[2])
 {
 	float xmin = 0.0f, xmax = 0.0f, ymin = 0.0f, ymax = 0.0f, znear = 0.0f, zfar = 0.0f;
 	//viewParms_t *dest = &tr.viewParms;
@@ -1278,14 +1140,11 @@ static void R_SetupProjectionOrtho(viewParms_t * dest, const vec3_t viewBounds[2
 /*
 =================
 R_MirrorPoint
+
 =================
 */
-#ifdef REND2_SP
-void R_MirrorPoint(vec3_t in, orientation_t * surface, orientation_t * camera, vec3_t out) {
-#else // !REND2_SP
-static void R_MirrorPoint(vec3_t in, const orientation_t * surface, const orientation_t * camera, vec3_t out)
+static void R_MirrorPoint(vec3_t in, const orientation_t* surface, const orientation_t* camera, vec3_t out)
 {
-#endif // REND2_SP
 	int		i = 0;
 	vec3_t	local;
 	vec3_t	transformed;
@@ -1302,12 +1161,8 @@ static void R_MirrorPoint(vec3_t in, const orientation_t * surface, const orient
 	VectorAdd(transformed, camera->origin, out);
 }
 
-#ifdef REND2_SP
-void R_MirrorVector(vec3_t in, orientation_t * surface, orientation_t * camera, vec3_t out) {
-#else // !REND2_SP
-static void R_MirrorVector(vec3_t in, const orientation_t * surface, const orientation_t * camera, vec3_t out)
+static void R_MirrorVector(vec3_t in, const orientation_t* surface, const orientation_t* camera, vec3_t out)
 {
-#endif // REND2_SP
 	int		i = 0;
 	float	d = 0.0f;
 
@@ -1323,12 +1178,8 @@ static void R_MirrorVector(vec3_t in, const orientation_t * surface, const orien
 R_PlaneForSurface
 =============
 */
-#ifdef REND2_SP
-void R_PlaneForSurface(surfaceType_t * surfType, cplane_t * plane) {
-#else // !REND2_SP
-static void R_PlaneForSurface(surfaceType_t * surfType, cplane_t * plane)
+static void R_PlaneForSurface(surfaceType_t* surfType, cplane_t* plane)
 {
-#endif // REND2_SP
 	srfBspSurface_t* tri = nullptr;
 	srfPoly_t* poly = nullptr;
 	srfVert_t* v1 = nullptr, * v2 = nullptr, * v3 = nullptr;
@@ -1375,20 +1226,10 @@ be moving and rotating.
 Returns qtrue if it should be mirrored
 =================
 */
-#ifdef REND2_SP
-qboolean R_GetPortalOrientations(const msurface_t * surf, int entityNum,
-	orientation_t * surface, orientation_t * camera,
-	vec3_t pvsOrigin, qboolean * mirror) {
-#else // !REND2_SP
-static qboolean R_GetPortalOrientations(const msurface_t * surf, const int entityNum, orientation_t * surface, orientation_t * camera, vec3_t pvsOrigin, qboolean * mirror)
+static qboolean R_GetPortalOrientations(const msurface_t* surf, const int entityNum, orientation_t* surface, orientation_t* camera, vec3_t pvsOrigin, qboolean* mirror)
 {
-#endif // REND2_SP
 	int			i = 0;
-#ifdef REND2_SP
-	cplane_t	originalPlane, plane;
-#else // !REND2_SP
 	cplane_t	originalPlane, plane{};
-#endif // REND2_SP
 	trRefEntity_t* e = nullptr;
 	float		d = 0.0f;
 	vec3_t		transformed;
@@ -1504,18 +1345,10 @@ static qboolean R_GetPortalOrientations(const msurface_t * surf, const int entit
 	return qfalse;
 }
 
-#ifdef REND2_SP
-static qboolean IsMirror(const msurface_t * surface, int entityNum)
-#else // !REND2_SP
-static qboolean IsMirror(const msurface_t * surface, const int entityNum)
-#endif // REND2_SP
+static qboolean IsMirror(const msurface_t* surface, const int entityNum)
 {
 	int			i = 0;
-#ifdef REND2_SP
-	cplane_t	originalPlane, plane;
-#else // !REND2_SP
 	cplane_t	originalPlane, plane{};
-#endif // REND2_SP
 	trRefEntity_t* e = nullptr;
 	float		d = 0.0f;
 
@@ -1572,7 +1405,7 @@ static qboolean IsMirror(const msurface_t * surface, const int entityNum)
 **
 ** Determines if a surface is completely offscreen.
 */
-static qboolean SurfIsOffscreen(const msurface_t * surface, int entityNum, vec4_t clipDest[128], int* numVertices) {
+static qboolean SurfIsOffscreen(const msurface_t* surface, int entityNum, vec4_t clipDest[128], int* numVertices) {
 	float shortest = 100000000;
 	int numTriangles = 0;
 	vec4_t clip, eye;
@@ -1679,11 +1512,7 @@ R_MirrorViewBySurface
 Returns qtrue if another view has been rendered
 ========================
 */
-#ifdef REND2_SP
-qboolean R_MirrorViewBySurface(msurface_t * surface, int entityNum) {
-#else // !REND2_SP
-static qboolean R_MirrorViewBySurface(msurface_t * surface, int entityNum) {
-#endif // REND2_SP
+static qboolean R_MirrorViewBySurface(msurface_t* surface, int entityNum) {
 	vec4_t			clipDest[128];
 	int				numVertices = 0;
 	viewParms_t		newParms;
@@ -1691,14 +1520,8 @@ static qboolean R_MirrorViewBySurface(msurface_t * surface, int entityNum) {
 	orientation_t	surfaceOri, camera;
 
 	// don't recursively mirror
-#ifdef REND2_SP
 	if (tr.viewParms.isPortal) {
 		ri.Printf(PRINT_DEVELOPER, "WARNING: recursive mirror/portal found\n");
-#else // !REND2_SP
-	if (tr.viewParms.isPortal)
-	{
-		ri->Printf(PRINT_DEVELOPER, S_COLOR_RED "WARNING: recursive mirror/portal found\n");
-#endif // REND2_SP
 		return qfalse;
 	}
 
@@ -1823,9 +1646,8 @@ static qboolean R_MirrorViewBySurface(msurface_t * surface, int entityNum) {
 	tr.numCachedViewParms++;
 
 	return qtrue;
-	}
+}
 
-#ifdef REND2_SP
 /*
 =================
 R_SpriteFogNum
@@ -1833,7 +1655,8 @@ R_SpriteFogNum
 See if a sprite is inside a fog volume
 =================
 */
-int R_SpriteFogNum(trRefEntity_t * ent) {
+static int R_SpriteFogNum(const trRefEntity_t* ent)
+{
 	int				i = 0, j = 0;
 	float			frameRadius = 0.0f;
 	fog_t* fog = nullptr;
@@ -1845,6 +1668,23 @@ int R_SpriteFogNum(trRefEntity_t * ent) {
 
 	VectorCopy(ent->e.origin, localOrigin);
 	frameRadius = ent->e.radius;
+#ifndef REND2_SP
+	for (i = 1; i < tr.world->numfogs; i++) {
+		fog = &tr.world->fogs[i];
+		for (j = 0; j < 3; j++) {
+			if (localOrigin[j] - frameRadius >= fog->bounds[1][j]) {
+				break;
+			}
+			if (localOrigin[j] + frameRadius <= fog->bounds[0][j]) {
+				break;
+			}
+		}
+		if (j == 3) {
+			return i;
+		}
+	}
+	return 0;
+#else
 	int partialFog = 0;
 	for (i = 1; i < tr.world->numfogs; i++) {
 		fog = &tr.world->fogs[i];
@@ -1863,12 +1703,6 @@ int R_SpriteFogNum(trRefEntity_t * ent) {
 			(localOrigin[0] + frameRadius >= fog->bounds[0][0] && localOrigin[1] + frameRadius >= fog->bounds[0][1] && localOrigin[2] + frameRadius >= fog->bounds[0][2] &&
 				localOrigin[0] + frameRadius <= fog->bounds[1][0] && localOrigin[1] + frameRadius <= fog->bounds[1][1] && localOrigin[2] + frameRadius <= fog->bounds[1][2]))
 		{//partially inside it
-			//if (tr.refdef.fogIndex == i || R_FogParmsMatch(tr.refdef.fogIndex, i))
-			//{//take new one only if it's the same one that the viewpoint is in
-			//	return i;
-			//	break;
-			//}
-			//else
 			if (!partialFog)
 			{//first partialFog
 				partialFog = i;
@@ -1876,42 +1710,8 @@ int R_SpriteFogNum(trRefEntity_t * ent) {
 		}
 	}
 	return partialFog;
+#endif
 }
-#else // !REND2_SP
-/*
-=================
-R_SpriteFogNum
-
-See if a sprite is inside a fog volume
-=================
-*/
-static int R_SpriteFogNum(const trRefEntity_t * ent)
-{
-	int				i = 0, j = 0;
-	fog_t* fog = nullptr;
-
-	if (tr.refdef.rdflags & RDF_NOWORLDMODEL) {
-		return 0;
-	}
-
-	for (i = 1; i < tr.world->numfogs; i++) {
-		fog = &tr.world->fogs[i];
-		for (j = 0; j < 3; j++) {
-			if (ent->e.origin[j] - ent->e.radius >= fog->bounds[1][j]) {
-				break;
-			}
-			if (ent->e.origin[j] + ent->e.radius <= fog->bounds[0][j]) {
-				break;
-			}
-		}
-		if (j == 3) {
-			return i;
-		}
-	}
-
-	return 0;
-}
-#endif // REND2_SP
 
 /*
 ==========================================================================================
@@ -1926,18 +1726,10 @@ DRAWSURF SORTING
 R_Radix
 ===============
 */
-#ifdef REND2_SP
-static QINLINE void R_Radix(int byte, int size, drawSurf_t * source, drawSurf_t * dest)
-#else // !REND2_SP
-static QINLINE void R_Radix(const int byte, const int size, drawSurf_t * source, drawSurf_t * dest)
-#endif // REND2_SP
+static QINLINE void R_Radix(const int byte, const int size, drawSurf_t* source, drawSurf_t* dest)
 {
 	int           count[256] = { 0 };
-#ifdef REND2_SP
-	int           index[256];
-#else // !REND2_SP
 	int           index[256]{};
-#endif // REND2_SP
 	int           i = 0;
 	unsigned char* sortKey = NULL;
 	unsigned char* end = NULL;
@@ -1964,7 +1756,7 @@ R_RadixSort
 Radix sort with 4 byte size buckets
 ===============
 */
-static void R_RadixSort(drawSurf_t * source, int size)
+static void R_RadixSort(drawSurf_t* source, int size)
 {
 	static drawSurf_t scratch[MAX_DRAWSURFS];
 #ifdef Q3_LITTLE_ENDIAN
@@ -1982,14 +1774,12 @@ static void R_RadixSort(drawSurf_t * source, int size)
 
 //==========================================================================================
 
-bool R_IsPostRenderEntity(const trRefEntity_t * refEntity)
+bool R_IsPostRenderEntity(const trRefEntity_t* refEntity)
 {
-#ifdef REND2_SP
 	return (refEntity->e.renderfx & RF_DISTORTION) ||
-#else // !REND2_SP
-	return (refEntity->e.renderfx & RF_DISTORTION) ||
-		(refEntity->e.renderfx & RF_FORCEPOST) ||
-#endif // REND2_SP
+#ifndef REND2_SP
+	(refEntity->e.renderfx & RF_FORCEPOST) ||
+#endif
 		(refEntity->e.renderfx & RF_FORCE_ENT_ALPHA);
 }
 
@@ -1998,16 +1788,12 @@ bool R_IsPostRenderEntity(const trRefEntity_t * refEntity)
 R_DecomposeSort
 =================
 */
-void R_DecomposeSort(uint32_t sort, int* entityNum, shader_t * *shader, int* cubemap, int* postRender)
+void R_DecomposeSort(uint32_t sort, int* entityNum, shader_t** shader, int* cubemap, int* postRender)
 {
 	*shader = tr.sortedShaders[(sort >> QSORT_SHADERNUM_SHIFT) & QSORT_SHADERNUM_MASK];
 	*postRender = (sort >> QSORT_POSTRENDER_SHIFT) & QSORT_POSTRENDER_MASK;
-#ifdef REND2_SP
-	* entityNum = (sort >> QSORT_ENTITYNUM_SHIFT) & QSORT_ENTITYNUM_MASK;
-#else // !REND2_SP
-	* entityNum = (sort >> QSORT_ENTITYNUM_SHIFT) & QSORT_entity_num_MASK;
-#endif // REND2_SP
-	* cubemap = (sort >> QSORT_CUBEMAP_SHIFT) & QSORT_CUBEMAP_MASK;
+	*entityNum = (sort >> QSORT_ENTITYNUM_SHIFT) & QSORT_ENTITYNUM_MASK;
+	*cubemap = (sort >> QSORT_CUBEMAP_SHIFT) & QSORT_CUBEMAP_MASK;
 }
 
 uint32_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex, int postRender)
@@ -2017,11 +1803,7 @@ uint32_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex,
 	key |= (sortedShaderIndex & QSORT_SHADERNUM_MASK) << QSORT_SHADERNUM_SHIFT;
 	key |= (cubemapIndex & QSORT_CUBEMAP_MASK) << QSORT_CUBEMAP_SHIFT;
 	key |= (postRender & QSORT_POSTRENDER_MASK) << QSORT_POSTRENDER_SHIFT;
-#ifdef REND2_SP
 	key |= (entityNum & QSORT_ENTITYNUM_MASK) << QSORT_ENTITYNUM_SHIFT;
-#else // !REND2_SP
-	key |= (entityNum & QSORT_entity_num_MASK) << QSORT_ENTITYNUM_SHIFT;
-#endif // REND2_SP
 
 	return key;
 }
@@ -2031,7 +1813,7 @@ uint32_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex,
 R_AddDrawSurf
 =================
 */
-void R_AddDrawSurf(surfaceType_t * surface, int entityNum, const shader_t * shader, int fogIndex, const int dlightMap, int postRender, int cubemap)
+void R_AddDrawSurf(surfaceType_t* surface, int entityNum, const shader_t* shader, int fogIndex, const int dlightMap, int postRender, int cubemap)
 {
 	int index = 0;
 	drawSurf_t* surf = nullptr;
@@ -2042,12 +1824,10 @@ void R_AddDrawSurf(surfaceType_t * surface, int entityNum, const shader_t * shad
 		fogIndex = 0;
 	}
 
-#ifdef REND2_SP
-	else if (tr.refdef.doLAGoggles)
+	if (tr.refdef.doLAGoggles)
 	{
 		fogIndex = tr.world->numfogs;
 	}
-#endif // REND2_SP
 	if ((drawShader->surfaceFlags & SURF_FORCESIGHT) && !(tr.refdef.rdflags & RDF_ForceSightOn))
 	{	//if shader is only seen with ForceSight and we don't have ForceSight on, then don't draw
 		return;
@@ -2087,7 +1867,7 @@ void R_AddDrawSurf(surfaceType_t * surface, int entityNum, const shader_t * shad
 R_SortAndSubmitDrawSurfs
 =================
 */
-void R_SortAndSubmitDrawSurfs(drawSurf_t * drawSurfs, int numDrawSurfs) {
+void R_SortAndSubmitDrawSurfs(drawSurf_t* drawSurfs, int numDrawSurfs) {
 	// it is possible for some views to not have any surfaces
 	if (numDrawSurfs < 1)
 		return;
@@ -2103,7 +1883,9 @@ void R_SortAndSubmitDrawSurfs(drawSurf_t * drawSurfs, int numDrawSurfs) {
 	R_AddDrawSurfCmd(drawSurfs, numDrawSurfs);
 }
 
-static bool R_SunShadowNpcDistSq(const trRefEntity_t * ent)
+// r_sunShadowNpcDist (0 = off, every character casts a sun shadow as before): true when this character
+// is farther than that from the camera, so the sun shadow maps leave it out
+static bool R_SunShadowNpcDistSq(const trRefEntity_t* ent)
 {
 	static cvar_t* cv = nullptr;
 	if (!cv)
@@ -2111,7 +1893,7 @@ static bool R_SunShadowNpcDistSq(const trRefEntity_t * ent)
 #ifdef REND2_SP
 		cv = ri.Cvar_Get("r_sunShadowNpcDist", "1000", CVAR_ARCHIVE_ND);
 #else
-		cv = ri->Cvar_Get("r_sunShadowNpcDist", "1000", CVAR_ARCHIVE_ND, "Characters farther than this from the camera cast no sun shadow (0 = all do, default 1000)");
+		cv = ri.Cvar_Get("r_sunShadowNpcDist", "1000", CVAR_ARCHIVE_ND, "Characters farther than this from the camera cast no sun shadow (0 = all do)");
 #endif
 	}
 	if (!cv || cv->value <= 0.0f || (ent->e.renderfx & (RF_FIRST_PERSON | RF_THIRD_PERSON)))
@@ -2123,7 +1905,7 @@ static bool R_SunShadowNpcDistSq(const trRefEntity_t * ent)
 	return DotProduct(d, d) > cv->value * cv->value;
 }
 
-static void R_AddEntitySurface(const trRefdef_t * refdef, trRefEntity_t * ent, int entityNum)
+static void R_AddEntitySurface(const trRefdef_t* refdef, trRefEntity_t* ent, int entityNum)
 {
 	shader_t* shader = nullptr;
 
@@ -2171,6 +1953,8 @@ static void R_AddEntitySurface(const trRefdef_t * refdef, trRefEntity_t * ent, i
 		break;
 
 	case RT_MODEL:
+		// r_sunShadowNpcDist: ghoul2 characters farther than this from the camera cast no sun shadow (each
+		// of the 3 sun shadow maps redraws every character in it; far away their shadow is a few pixels)
 		if (tr.viewParms.viewParmType == VPT_SUN_SHADOWS && ent->e.ghoul2 && R_SunShadowNpcDistSq(ent))
 		{
 			return;
@@ -2232,16 +2016,11 @@ static void R_AddEntitySurface(const trRefdef_t * refdef, trRefEntity_t * ent, i
 						0 /* cubeMap */);
 				break;
 			default:
-#ifdef REND2_SP
 				ri.Error(ERR_DROP, "R_AddEntitySurfaces: Bad modeltype");
-#else // !REND2_SP
-				Com_Error(ERR_DROP, "R_AddEntitySurfaces: Bad modeltype");
-#endif // REND2_SP
 				break;
 			}
 		}
 		break;
-#ifndef REND2_SP
 	case RT_ENT_CHAIN:
 		shader = R_GetShaderByHandle(ent->e.customShader);
 		R_AddDrawSurf(
@@ -2253,13 +2032,8 @@ static void R_AddEntitySurface(const trRefdef_t * refdef, trRefEntity_t * ent, i
 			R_IsPostRenderEntity(ent),
 			0 /* cubeMap */);
 		break;
-#endif // !REND2_SP
 	default:
-#ifdef REND2_SP
 		ri.Error(ERR_DROP, "R_AddEntitySurfaces: Bad reType");
-#else // !REND2_SP
-		Com_Error(ERR_DROP, "R_AddEntitySurfaces: Bad reType");
-#endif // REND2_SP
 	}
 }
 
@@ -2268,7 +2042,7 @@ static void R_AddEntitySurface(const trRefdef_t * refdef, trRefEntity_t * ent, i
 R_AddEntitySurfaces
 =============
 */
-static void R_AddEntitySurfaces(const trRefdef_t * refdef)
+static void R_AddEntitySurfaces(const trRefdef_t* refdef)
 {
 	if (!r_drawentities->integer)
 	{
@@ -2303,7 +2077,7 @@ static void R_AddEntitySurfaces(const trRefdef_t * refdef)
 R_GenerateDrawSurfs
 ====================
 */
-void R_GenerateDrawSurfs(viewParms_t * viewParms, trRefdef_t * refdef) {
+void R_GenerateDrawSurfs(viewParms_t* viewParms, trRefdef_t* refdef) {
 	// TODO: Get rid of this
 	if (viewParms->viewParmType == VPT_PLAYER_SHADOWS)
 	{
@@ -2313,9 +2087,15 @@ void R_GenerateDrawSurfs(viewParms_t * viewParms, trRefdef_t * refdef) {
 		return;
 	}
 
-	R_AddWorldSurfaces(viewParms, refdef);
+	{
+		PROFILE_ZONE("R: world surfaces");
+		R_AddWorldSurfaces(viewParms, refdef);
+	}
 
-	R_AddEntitySurfaces(refdef);
+	{
+		PROFILE_ZONE("R: entity surfaces");
+		R_AddEntitySurfaces(refdef);
+	}
 
 	R_AddPolygonSurfaces(refdef);
 
@@ -2336,15 +2116,9 @@ void R_GenerateDrawSurfs(viewParms_t * viewParms, trRefdef_t * refdef) {
 R_DebugPolygon
 ================
 */
-#ifdef REND2_SP
-void R_DebugPolygon(const int color, const int numPoints, const float* points)
-#else // !REND2_SP
 static void R_DebugPolygon(const int color, const int numPoints, const float* points)
-#endif // REND2_SP
 {
-	// FIXME: implement this
-#if 0
-	int		i;
+	int		i = 0;
 
 	GL_State(GLS_DEPTHMASK_TRUE | GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE);
 
@@ -2367,7 +2141,6 @@ static void R_DebugPolygon(const int color, const int numPoints, const float* po
 	}
 	qglEnd();
 	qglDepthRange(0, 1);
-#endif
 }
 
 /*
@@ -2377,11 +2150,7 @@ R_DebugGraphics
 Visualization aid for movement clipping debugging
 ====================
 */
-#ifdef REND2_SP
-void R_DebugGraphics(void)
-#else // !REND2_SP
 static void R_DebugGraphics(void)
-#endif // REND2_SP
 {
 	if (!r_debugSurface->integer)
 	{
@@ -2393,11 +2162,7 @@ static void R_DebugGraphics(void)
 
 	GL_Bind(tr.whiteImage);
 	GL_Cull(CT_FRONT_SIDED);
-#ifdef REND2_SP
 	ri.CM_DrawDebugSurface(R_DebugPolygon);
-#else // !REND2_SP
-	ri->CM_DrawDebugSurface(R_DebugPolygon);
-#endif // REND2_SP
 }
 
 /*
@@ -2408,12 +2173,8 @@ A view may be either the actual camera view,
 or a mirror / remote location
 ================
 */
-#ifdef REND2_SP
-void R_RenderView(viewParms_t * parms) {
-#else // !REND2_SP
-void R_RenderView(const viewParms_t * parms)
+void R_RenderView(const viewParms_t* parms)
 {
-#endif // REND2_SP
 	if (parms->viewportWidth <= 0 || parms->viewportHeight <= 0) {
 		return;
 	}
@@ -2428,7 +2189,10 @@ void R_RenderView(const viewParms_t * parms)
 
 	R_GenerateDrawSurfs(&tr.viewParms, &tr.refdef);
 
-	R_SortAndSubmitDrawSurfs(tr.refdef.drawSurfs + tr.refdef.fistDrawSurf, tr.refdef.numDrawSurfs - tr.refdef.fistDrawSurf);
+	{
+		PROFILE_ZONE("R: sort + submit");
+		R_SortAndSubmitDrawSurfs(tr.refdef.drawSurfs + tr.refdef.fistDrawSurf, tr.refdef.numDrawSurfs - tr.refdef.fistDrawSurf);
+	}
 
 	// draw main system development information (surface outlines, etc)
 	R_DebugGraphics();
@@ -2516,7 +2280,7 @@ void R_RenderDlightCubemaps()
 }
 
 void R_SetOrientationOriginAndAxis(
-	orientationr_t & orientation,
+	orientationr_t& orientation,
 	const vec3_t origin,
 	const vec3_t forward,
 	const vec3_t left,
@@ -2529,7 +2293,7 @@ void R_SetOrientationOriginAndAxis(
 }
 
 void R_SetOrientationOriginAndAxis(
-	orientationr_t & orientation,
+	orientationr_t& orientation,
 	const vec3_t origin,
 	const matrix3_t axis)
 {
@@ -2539,9 +2303,9 @@ void R_SetOrientationOriginAndAxis(
 void R_SetupViewParmsForOrthoRendering(
 	int viewportWidth,
 	int viewportHeight,
-	FBO_t * fbo,
+	FBO_t* fbo,
 	viewParmFlags_t viewParmFlags,
-	const orientationr_t & orientation,
+	const orientationr_t& orientation,
 	const vec3_t viewBounds[2])
 {
 	viewParms_t& viewParms = tr.viewParms;
@@ -2567,9 +2331,8 @@ void R_SetupViewParmsForOrthoRendering(
 	R_SetupProjectionOrtho(&viewParms, viewBounds);
 }
 
-void R_SetupPshadowMaps(trRefdef_t * refdef)
+void R_SetupPshadowMaps(trRefdef_t* refdef)
 {
-	/*viewParms_t		shadowParms;*/
 	int i = 0;
 
 	// first, make a list of shadows
@@ -2580,13 +2343,8 @@ void R_SetupPshadowMaps(trRefdef_t * refdef)
 		if ((ent->e.renderfx & (RF_FIRST_PERSON | RF_NOSHADOW | RF_DEPTHHACK)))
 			continue;
 
-#ifdef REND2_SP
-		if ((ent->e.renderfx & RF_THIRD_PERSON))
-			continue;
-#else // !REND2_SP
 		//if((ent->e.renderfx & RF_THIRD_PERSON))
 			//continue;
-#endif // REND2_SP
 
 		if (ent->e.reType == RT_MODEL)
 		{
@@ -2647,11 +2405,7 @@ void R_SetupPshadowMaps(trRefdef_t * refdef)
 			memset(&shadow, 0, sizeof(shadow));
 
 			shadow.numEntities = 1;
-#ifdef REND2_SP
 			shadow.entityNums[0] = i;
-#else // !REND2_SP
-			shadow.entity_nums[0] = i;
-#endif // REND2_SP
 			shadow.viewRadius = radius;
 			shadow.lightRadius = r_pshadowDist->value;
 			VectorCopy(ent->e.lightingOrigin, shadow.viewOrigin);
@@ -2823,17 +2577,14 @@ void R_RenderCubemapSide(int cubemapIndex, int cubemapSide, bool bounce)
 	R_NewFrameSync();
 }
 
-#ifdef REND2_SP
-void R_SetupViewParms(const trRefdef_t * refdef)
-#else // !REND2_SP
-static void R_SetupViewParms(const trRefdef_t * refdef)
-#endif // REND2_SP
+static void R_SetupViewParms(const trRefdef_t* refdef)
 {
 	tr.viewCount++;
 	Com_Memset(&tr.viewParms, 0, sizeof(viewParms_t));
 	tr.viewParms.viewportX = refdef->x;
 
-	// Shoud be just refef->y but this flips the menu orientation for models, so its actually needed like this
+	// GL viewports count from the bottom: flip the refdef's top-down y for menu / no-world scenes too (MP only flipped it
+	// while no map was loaded, so the in-game character menu's model preview was drawn too big and too high)
 	if (!tr.world || refdef->rdflags & RDF_NOWORLDMODEL)
 		tr.viewParms.viewportY = glConfig.vidHeight - (refdef->y + refdef->height);
 	else
@@ -2871,11 +2622,7 @@ static void R_SetupViewParms(const trRefdef_t * refdef)
 	R_SetupProjectionZ(&tr.viewParms);
 }
 
-#ifdef REND2_SP
-qboolean R_AddPortalView(const trRefdef_t * refdef)
-#else // !REND2_SP
-static qboolean R_AddPortalView(const trRefdef_t * refdef)
-#endif // REND2_SP
+static qboolean R_AddPortalView(const trRefdef_t* refdef)
 {
 	if (!tr.world || refdef->rdflags & RDF_NOWORLDMODEL)
 		return qfalse;
@@ -2938,7 +2685,8 @@ static qboolean R_AddPortalView(const trRefdef_t * refdef)
 				continue;
 			}
 			else {
-				switch (tr.currentModel->type) {
+				switch (tr.currentModel->type)
+				{
 				case MOD_BRUSH:
 				{
 					//R_AddBrushModelSurfaces(ent, i);
@@ -2986,7 +2734,7 @@ static float CalcSplit(float n, float f, float i, float m)
 // r_dlightShadowMax (default 4, 0 = every light, as before): with r_dlightMode 2 every dynamic light renders
 // a 6-sided shadow map of everything around it. A big saber battle has a light per blade, so 15 lights made
 // 90 shadow views a frame. Only the lights nearest the camera cast shadows; the others still light.
-static void R_PickShadowedDlights(trRefdef_t * refdef)
+static void R_PickShadowedDlights(trRefdef_t* refdef)
 {
 	static cvar_t* maxShadowed = nullptr;
 	if (!maxShadowed)
@@ -2994,7 +2742,7 @@ static void R_PickShadowedDlights(trRefdef_t * refdef)
 #ifdef REND2_SP
 		maxShadowed = ri.Cvar_Get("r_dlightShadowMax", "4", CVAR_ARCHIVE_ND);
 #else
-		maxShadowed = ri->Cvar_Get("r_dlightShadowMax", "4", CVAR_ARCHIVE_ND, "Dynamic lights casting shadows (r_dlightMode 2), nearest the camera first; 0 = all");
+		maxShadowed = ri.Cvar_Get("r_dlightShadowMax", "4", CVAR_ARCHIVE_ND, "Dynamic lights casting shadows (r_dlightMode 2), nearest the camera first; 0 = all");
 #endif
 	}
 	const int maxN = maxShadowed->integer;
@@ -3026,8 +2774,9 @@ static void R_PickShadowedDlights(trRefdef_t * refdef)
 	}
 }
 
-void R_GatherFrameViews(trRefdef_t * refdef)
+void R_GatherFrameViews(trRefdef_t* refdef)
 {
+	PROFILE_ZONE("R: gather views (shadows, portals, cubemaps)");
 	int mainFlags = 0;
 	// skyportal view
 	if (tr.world &&
@@ -3138,6 +2887,17 @@ void R_GatherFrameViews(trRefdef_t * refdef)
 					shadowParms.targetFbo = tr.shadowCubeFbo[i * 6 + j];
 					shadowParms.targetFboLayer = 0;
 
+#ifdef REND2_SP
+					// SP renders these views here, before RE_BeginScene opens the scene debug group: open the scene and
+					// view groups first, or every draw list warns "invalid layer order" (r_dlightMode 2, 2026-10-26)
+					R_PushDebugGroup(AL_SCENE, "Dlight shadows");
+					R_PushDebugGroup(AL_VIEW, va("Point light shadow %i, side %i", i, j));
+					R_RenderView(&shadowParms);
+
+					R_IssuePendingRenderCommands();
+
+					tr.refdef.numDrawSurfs = 0;
+#else
 					shadowParms.currentViewParm = tr.numCachedViewParms;
 					shadowParms.viewParmType = VPT_POINT_SHADOWS;
 
@@ -3147,6 +2907,7 @@ void R_GatherFrameViews(trRefdef_t * refdef)
 
 					Com_Memcpy(&tr.cachedViewParms[tr.numCachedViewParms], &shadowParms, sizeof(viewParms_t));
 					tr.numCachedViewParms++;
+#endif
 				}
 			}
 		}
@@ -3172,11 +2933,7 @@ void R_GatherFrameViews(trRefdef_t * refdef)
 				tr.viewParms.fovY = 90;
 
 				tr.viewParms.targetFbo = tr.pshadowFbos[i];
-#ifdef REND2_SP
 				tr.viewParms.targetFboLayer = shadow->entityNums[0];
-#else // !REND2_SP
-				tr.viewParms.targetFboLayer = shadow->entity_nums[0];
-#endif // REND2_SP
 
 				tr.viewParms.flags = (viewParmFlags_t)(VPF_DEPTHSHADOW | VPF_NOVIEWMODEL);
 				tr.viewParms.viewParmType = VPT_PLAYER_SHADOWS;
@@ -3256,6 +3013,9 @@ void R_GatherFrameViews(trRefdef_t * refdef)
 					}
 
 					tr.viewParms.currentViewParm = tr.numCachedViewParms;
+#ifdef REND2_SP
+					tr.viewParms.viewParmType = VPT_PLAYER_SHADOWS;
+#endif
 					Com_Memcpy(&tr.cachedViewParms[tr.numCachedViewParms], &tr.viewParms, sizeof(viewParms_t));
 					tr.numCachedViewParms++;
 				}
@@ -3265,19 +3025,11 @@ void R_GatherFrameViews(trRefdef_t * refdef)
 		// sun shadowmaps
 		if (r_sunlightMode->integer && r_depthPrepass->value && (r_forceSun->integer || tr.sunShadows))
 		{
-#ifdef REND2_SP
-			vec3_t lightViewAxis[3];
-#else // !REND2_SP
 			vec3_t lightViewAxis[3]{};
-#endif // REND2_SP
 			vec3_t lightOrigin;
 			float splitZNear = 0.0f, splitZFar = 0.0f, splitBias = 0.0f;
 			float viewZNear = 0.0f, viewZFar = 0.0f;
-#ifdef REND2_SP
-			vec3_t lightviewBounds[2];
-#else // !REND2_SP
 			vec3_t lightviewBounds[2]{};
-#endif // REND2_SP
 
 			viewZNear = r_shadowCascadeZNear->value;
 			viewZFar = r_shadowCascadeZFar->value;
@@ -3420,7 +3172,9 @@ void R_GatherFrameViews(trRefdef_t * refdef)
 				Com_Memcpy(&tr.cachedViewParms[tr.numCachedViewParms], &tr.viewParms, sizeof(viewParms_t));
 				tr.numCachedViewParms++;
 			}
+#ifndef REND2_SP
 			mainFlags |= VPF_USESUNLIGHT;
+#endif
 		}
 	}
 

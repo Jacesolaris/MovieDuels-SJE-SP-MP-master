@@ -21,11 +21,7 @@ Allocator::Allocator(size_t memorySize, size_t alignment)
 #if defined(GLSL_BUILDTOOL)
 	, unalignedBase(malloc(memorySize))
 #else
-#ifdef REND2_SP
 	, unalignedBase(R_Malloc(memorySize, TAG_SHADERTEXT))
-#else // !REND2_SP
-	, unalignedBase(Z_Malloc(memorySize, TAG_SHADERTEXT))
-#endif // REND2_SP
 #endif
 	, alignedBase(PADP(unalignedBase, alignment))
 	, mark(alignedBase)
@@ -61,11 +57,7 @@ size_t Allocator::GetSize() const
 void* Allocator::Alloc(size_t allocSize)
 {
 	// Check remaining space
-#ifdef REND2_SP
 	size_t remaining = (size_t)((char*)end - (char*)mark);
-#else // !REND2_SP
-	const size_t remaining = (size_t)((char*)end - (char*)mark);
-#endif // REND2_SP
 
 	// 2026-11-01: check the PADDED size, and a mark already past the end. The old check compared the
 	// unpadded size, so the mark could end up to alignment-1 bytes past the end; 'remaining' then wrapped
@@ -78,11 +70,7 @@ void* Allocator::Alloc(size_t allocSize)
 	void* result = mark;
 
 	// Align allocation size
-#ifdef REND2_SP
 	size_t alignedSize = PAD(allocSize, alignment);
-#else // !REND2_SP
-	const size_t alignedSize = PAD(allocSize, alignment);
-#endif // REND2_SP
 
 	// Advance mark
 	mark = (char*)mark + alignedSize;

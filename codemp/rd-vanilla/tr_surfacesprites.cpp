@@ -311,7 +311,7 @@ static void R_SurfaceSpriteFrameUpdate(void)
 
 	if (r_surfaceSprites->integer >= 2)
 	{
-		ri->Printf(PRINT_ALL, "Surfacesprites Drawn: %d, on %d surfaces\n", totalsurfsprites, sssurfaces);
+		ri.Printf(PRINT_ALL, "Surfacesprites Drawn: %d, on %d surfaces\n", totalsurfsprites, sssurfaces);
 	}
 
 	totalsurfsprites = 0;
@@ -346,8 +346,8 @@ extern cvar_t* r_grassPushRadius;
 extern cvar_t* r_grassForceWave;
 
 // Grass cutting (2026-11-02): a saber swing cuts the grass to stubble (tr_grasscut.h, the same grid as rend2)
-#define GRASSCUT_CVAR_GET(name, value) ri->Cvar_Get(name, value, CVAR_ARCHIVE_ND, "")
-#define GRASSCUT_RI ri->
+#define GRASSCUT_CVAR_GET(name, value) ri.Cvar_Get(name, value, CVAR_ARCHIVE_ND, "")
+#define GRASSCUT_RI ri.
 #include "rd-common/tr_grasscut.h"
 
 // Grass cutting, plant models: tr_bsp.cpp hands over the main world: its entity lump lists the plant models, and baked

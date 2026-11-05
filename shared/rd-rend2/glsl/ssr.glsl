@@ -12,6 +12,7 @@ void main()
 // the hit with a binary search and blends the colour found there by a Fresnel-like weight.
 uniform sampler2D u_ScreenImageMap;	// copy of the finished view (tr.sharpenImage)
 uniform sampler2D u_ScreenDepthMap;	// scene depth (tr.renderDepthImage)
+uniform sampler2D u_SsrMaskMap;		// r_ssr material mask (Jace 2026-11-04): 1 = matte ground (grass, sand, mud...)
 
 uniform vec4 u_SsrProjection;		// projection matrix [0] [5] [8] [9]
 uniform vec4 u_SsrParams;			// projection matrix [10] [14], strength, max ray length (world units)
@@ -73,6 +74,10 @@ void main()
 
 	float d = DepthAt(ip);
 	if (d >= SKY_DEPTH || d < DEPTHHACK_LIMIT)
+		return;
+
+	// grass, sand, mud and other matte ground never reflect
+	if (texelFetch(u_SsrMaskMap, ip, 0).r > 0.5)
 		return;
 
 	vec3 P = ViewPos(vec2(ip) + 0.5, d);

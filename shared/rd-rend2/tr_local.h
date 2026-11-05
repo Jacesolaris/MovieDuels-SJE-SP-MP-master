@@ -40,6 +40,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <unordered_map>
 #include <string>
 
+// One renderer for SerenityJediEngine and MovieDuels (shared/rd-rend2 is the same in both, 2026-11-05). MovieDuels' CMake
+// sets MD_SP_BUILD / MD_MP_BUILD: REND2_MOVIEDUELS marks the few MovieDuels-only parts (its animation styles).
+#if defined(MD_SP_BUILD) || defined(MD_MP_BUILD)
+#define REND2_MOVIEDUELS
+#ifdef REND2_SP
+#include "qcommon/md_animsets.h"	// MD_AnimSetGLA / MD_SkeletonFitsMaster (code/qcommon)
+#endif
+#endif
+
 #ifdef REND2_SP
 typedef enum {
 	h_high,
@@ -47,10 +56,13 @@ typedef enum {
 	h_dontcare
 } ha_pref;
 void* Hunk_Alloc(const int size, const ha_pref preference);
-void* Hunk_AllocateTempMemory(const int size);
+void* Hunk_AllocateTempMemory(int size);
 void Hunk_FreeTempMemory(void* buf);
+#else
+void* R_Malloc(const int iSize, const memtag_t eTag);
+void* R_Malloc(const int iSize, const memtag_t eTag, const qboolean bZeroit);
+#endif
 
-#endif // REND2_SP
 #define GL_INDEX_TYPE		GL_UNSIGNED_INT
 typedef unsigned int glIndex_t;
 
@@ -59,6 +71,7 @@ typedef unsigned int glIndex_t;
 // 14 bits
 // can't be increased without changing bit packing for drawsurfs
 // see QSORT_SHADERNUM_SHIFT
+
 #define MAX_FRAMES (2)
 #define SHADERNUM_BITS	14
 #define MAX_SHADERS		(1<<SHADERNUM_BITS)
@@ -281,10 +294,8 @@ extern int		max_polyverts;
 
 extern	cvar_t* r_aspectCorrectFonts;
 
-#ifndef REND2_SP
 extern cvar_t* r_patchStitching;
 
-#endif // !REND2_SP
 /*
 Ghoul2 Insert Start
 */
@@ -329,14 +340,12 @@ extern cvar_t* broadsword_extra2;
 extern cvar_t* broadsword_effcorr;
 extern cvar_t* broadsword_ragtobase;
 extern cvar_t* broadsword_dircap;
-#ifdef REND2_SP
-
-extern cvar_t* r_patchStitching;
-#endif // REND2_SP
 
 /*
 Ghoul2 Insert End
 */
+
+extern cvar_t* r_patchStitching;
 
 /*
 End Cvars
@@ -399,18 +408,12 @@ enum
 	ATTR_INDEX_LIGHTDIRECTION,
 	ATTR_INDEX_BONE_INDEXES,
 	ATTR_INDEX_BONE_WEIGHTS,
-#ifdef REND2_SP
 
 	// GPU vertex animations and some extra sprite info
 	ATTR_INDEX_POSITION2,
 #ifdef REND2_SP_MD3
 	ATTR_INDEX_TANGENT2,
 	ATTR_INDEX_NORMAL2,
-#endif // REND2_SP
-#else // !REND2_SP
-
-	// GPU vertex animations and some extra sprite info
-	ATTR_INDEX_POSITION2,
 #endif // REND2_SP
 
 	ATTR_INDEX_MAX
@@ -1075,6 +1078,7 @@ typedef struct shader_s {
 
 	int			surfaceFlags;			// if explicitlyDefined, this will have SURF_* flags
 	int			contentFlags;
+	qboolean	noSsr;					// r_ssr material mask (Jace 2026-11-04): matte ground (grass, sand, mud...), never gets r_ssr reflections
 
 	qboolean	entityMergable;			// merge across entites optimizable (smoke, blood)
 
@@ -1110,9 +1114,7 @@ typedef struct shader_s {
 
 	void		(*optimalStageIteratorFunc)(void);
 	qboolean	isHDRLit;
-#ifndef REND2_SP
 	qboolean	useSimpleDepthShader;
-#endif // !REND2_SP
 	depthPrepass_t	depthPrepass;
 	qboolean	useDistortion;
 
@@ -1271,18 +1273,12 @@ enum
 	ATTR_LIGHTDIRECTION = 0x0200,
 	ATTR_BONE_INDEXES = 0x0400,
 	ATTR_BONE_WEIGHTS = 0x0800,
-#ifdef REND2_SP
 
 	// for .md3 interpolation and some sprite data
 	ATTR_POSITION2 = 0x1000,
 #ifdef REND2_SP_MD3
 	ATTR_TANGENT2 = 0x2000,
 	ATTR_NORMAL2 = 0x4000,
-#endif // REND2_SP
-#else // !REND2_SP
-
-	// for .md3 interpolation and some sprite data
-	ATTR_POSITION2 = 0x1000,
 #endif // REND2_SP
 
 	ATTR_DEFAULT = ATTR_POSITION,
@@ -1295,7 +1291,6 @@ enum
 	ATTR_TANGENT |
 	ATTR_NORMAL |
 	ATTR_COLOR |
-#ifdef REND2_SP
 	ATTR_LIGHTDIRECTION |
 	ATTR_BONE_INDEXES |
 	ATTR_BONE_WEIGHTS |
@@ -1304,12 +1299,6 @@ enum
 	|
 	ATTR_TANGENT2 |
 	ATTR_NORMAL2
-#endif // REND2_SP
-#else // !REND2_SP
-	ATTR_LIGHTDIRECTION |
-	ATTR_BONE_INDEXES |
-	ATTR_BONE_WEIGHTS |
-	ATTR_POSITION2
 #endif // REND2_SP
 };
 
@@ -1326,33 +1315,23 @@ enum
 {
 	GENERICDEF_USE_DEFORM_VERTEXES = 0x0001,
 	GENERICDEF_USE_TCGEN_AND_TCMOD = 0x0002,
-#ifdef REND2_SP
-	GENERICDEF_USE_FOG = 0x0004,
-	GENERICDEF_USE_RGBAGEN = 0x0008,
-	GENERICDEF_USE_SKELETAL_ANIMATION = 0x0010,
-	GENERICDEF_USE_FLARE_TEST = 0x0020, // rend2 cb494ecb
-	//GENERICDEF_USE_ALPHA_TEST = 0x0040,
-#ifdef REND2_SP_MD3
-	GENERICDEF_USE_VERTEX_ANIMATION = 0x0080,
-	GENERICDEF_ALL = 0x00FF,
-#else
-	GENERICDEF_ALL = 0x007F,
-#endif // REND2_SP
-#else // !REND2_SP
 	GENERICDEF_USE_FOG = 0x0004,
 	GENERICDEF_USE_RGBAGEN = 0x0008,
 	GENERICDEF_USE_SKELETAL_ANIMATION = 0x0010,
 	GENERICDEF_USE_GLOW_BUFFER = 0x0020,
 	GENERICDEF_USE_ALPHA_TEST = 0x0040,
 	GENERICDEF_USE_FLARE_TEST = 0x0080,
+#ifdef REND2_SP_MD3
+	GENERICDEF_USE_VERTEX_ANIMATION = 0x0100,
+	GENERICDEF_ALL = 0x01FF,
+#else
 	GENERICDEF_ALL = 0x007F,
-#endif // REND2_SP
+#endif // REND2_SP_MD3
 
 	GENERICDEF_COUNT = GENERICDEF_ALL + 1,
 };
 
 enum
-#ifdef REND2_SP
 {
 	FOGDEF_USE_DEFORM_VERTEXES = 0x0001,
 	FOGDEF_USE_SKELETAL_ANIMATION = 0x0002,
@@ -1364,16 +1343,8 @@ enum
 #else
 	FOGDEF_ALL = 0x000F,
 #endif // REND2_SP
-#else // !REND2_SP
-	{
-		FOGDEF_USE_DEFORM_VERTEXES = 0x0001,
-		FOGDEF_USE_SKELETAL_ANIMATION = 0x0002,
-		FOGDEF_USE_ALPHA_TEST = 0x0004,
-		FOGDEF_USE_FALLBACK_GLOBAL_FOG = 0x0008,
-		FOGDEF_ALL = 0x000F,
-	#endif // REND2_SP
 
-		FOGDEF_COUNT = FOGDEF_ALL + 1,
+	FOGDEF_COUNT = FOGDEF_ALL + 1,
 };
 
 enum
@@ -1396,7 +1367,6 @@ enum
 enum
 {
 	REFRACTIONDEF_USE_DEFORM_VERTEXES = 0x0001,
-#ifdef REND2_SP
 	REFRACTIONDEF_USE_TCGEN_AND_TCMOD = 0x0002,
 	REFRACTIONDEF_USE_RGBAGEN = 0x0004,
 	REFRACTIONDEF_USE_SKELETAL_ANIMATION = 0x0008,
@@ -1406,14 +1376,6 @@ enum
 	REFRACTIONDEF_USE_VERTEX_ANIMATION = 0x0040,
 	REFRACTIONDEF_ALL = 0x007F,
 #else
-	REFRACTIONDEF_ALL = 0x003F,
-#endif // REND2_SP
-#else // !REND2_SP
-	REFRACTIONDEF_USE_TCGEN_AND_TCMOD = 0x0002,
-	REFRACTIONDEF_USE_RGBAGEN = 0x0004,
-	REFRACTIONDEF_USE_SKELETAL_ANIMATION = 0x0008,
-	REFRACTIONDEF_USE_ALPHA_TEST = 0x0010,
-	REFRACTIONDEF_USE_SRGB_TRANSFORM = 0x0020,
 	REFRACTIONDEF_ALL = 0x003F,
 #endif // REND2_SP
 
@@ -1427,11 +1389,12 @@ enum
 	LIGHTDEF_USE_LIGHT_VERTEX = 0x0003,
 	LIGHTDEF_USE_TCGEN_AND_TCMOD = 0x0004,
 	LIGHTDEF_USE_PARALLAXMAP = 0x0008,
+	//	LIGHTDEF_USE_SHADOWMAP       		= 0x0010,
 	LIGHTDEF_USE_SKELETAL_ANIMATION = 0x0010,
-#ifdef REND2_SP
-	//LIGHTDEF_USE_ALPHA_TEST = 0x0040,
-	LIGHTDEF_USE_CLOTH_BRDF = 0x0020,
-	LIGHTDEF_USE_SPEC_GLOSS = 0x0040,
+	LIGHTDEF_USE_GLOW_BUFFER = 0x0020,
+	LIGHTDEF_USE_ALPHA_TEST = 0x0040,
+	LIGHTDEF_USE_CLOTH_BRDF = 0x0080,
+	LIGHTDEF_USE_SPEC_GLOSS = 0x0100,
 
 	LIGHTDEF_LIGHTTYPE_MASK = LIGHTDEF_USE_LIGHTMAP |
 	LIGHTDEF_USE_LIGHT_VECTOR |
@@ -1443,18 +1406,6 @@ enum
 #else
 	LIGHTDEF_ALL = 0x01FF,
 #endif // REND2_SP
-#else // !REND2_SP
-	LIGHTDEF_USE_GLOW_BUFFER = 0x0020,
-	LIGHTDEF_USE_ALPHA_TEST = 0x0040,
-	LIGHTDEF_USE_CLOTH_BRDF = 0x0080,
-	LIGHTDEF_USE_SPEC_GLOSS = 0x0100,
-
-	LIGHTDEF_LIGHTTYPE_MASK = LIGHTDEF_USE_LIGHTMAP |
-	LIGHTDEF_USE_LIGHT_VECTOR |
-	LIGHTDEF_USE_LIGHT_VERTEX,
-
-	LIGHTDEF_ALL = 0x01FF,
-#endif // REND2_SP
 
 	LIGHTDEF_COUNT = LIGHTDEF_ALL + 1
 };
@@ -1462,7 +1413,6 @@ enum
 enum
 {
 	SSDEF_FACE_CAMERA = 0x01,
-#ifndef REND2_SP
 	SSDEF_ALPHA_TEST = 0x02,
 	SSDEF_FACE_UP = 0x04,
 	SSDEF_FX_SPRITE = 0x08,
@@ -1471,21 +1421,8 @@ enum
 	SSDEF_ADDITIVE = 0x40,
 	SSDEF_FLATTENED = 0x80,
 	SSDEF_VELOCITY = 0x100,
-#endif // !REND2_SP
-	//SSDEF_ALPHA_TEST					= 0x02,
-#ifdef REND2_SP
-	SSDEF_FACE_UP = 0x02,
-	SSDEF_FX_SPRITE = 0x04,
-	SSDEF_USE_FOG = 0x08,
-	SSDEF_FOG_MODULATE = 0x10,
-	SSDEF_ADDITIVE = 0x20,
-	SSDEF_FLATTENED = 0x40,
-	SSDEF_VELOCITY = 0x80,
 
-	SSDEF_ALL = 0xFF,
-#else // !REND2_SP
 	SSDEF_ALL = 0x1FF,
-#endif // REND2_SP
 	SSDEF_COUNT = SSDEF_ALL + 1
 };
 
@@ -1559,7 +1496,7 @@ struct GPUProgramDesc
 	size_t numShaders;
 	GPUShaderDesc* shaders;
 };
-// Needs to stay in sync with uniformInfo_t in tr_glsl.cpp
+
 typedef enum
 {
 	UNIFORM_DIFFUSEMAP = 0,
@@ -1682,6 +1619,8 @@ typedef enum
 	UNIFORM_SSRPARAMS,
 	UNIFORM_SSRVIEWPORT,
 	UNIFORM_SSRUP,
+	UNIFORM_SSRMASKMAP,		// r_ssr material mask (Jace 2026-11-04)
+	UNIFORM_SSRNOREFLECT,
 	UNIFORM_GODRAYSUN,
 	UNIFORM_GODRAYPARAMS,
 
@@ -1774,9 +1713,9 @@ typedef struct {
 } trRefdef_t;
 
 //=================================================================================
-#ifdef REND2_SP
 
 // skins allow models to be retextured without modifying the model file
+#ifdef REND2_SP
 typedef struct {
 	char		name[MAX_QPATH];
 	shader_t* shader;
@@ -1787,7 +1726,10 @@ typedef struct skin_s {
 	int			numSurfaces;
 	skinSurface_t* surfaces[128];
 } skin_t;
-#endif // REND2_SP
+#else
+// MP: skin_t and _skinSurface_t come from rd-common/tr_types.h (shared with the ghoul2 code)
+typedef _skinSurface_t skinSurface_t;
+#endif
 
 typedef struct {
 	int			originalBrushNumber;
@@ -1894,11 +1836,7 @@ compared quickly during the qsorting process
 
 #define QSORT_ENTITYNUM_SHIFT	(QSORT_CUBEMAP_SHIFT + QSORT_CUBEMAP_BITS)
 #define QSORT_ENTITYNUM_BITS	REFENTITYNUM_BITS
-#ifdef REND2_SP
 #define QSORT_ENTITYNUM_MASK	((1 << QSORT_ENTITYNUM_BITS) - 1)
-#else // !REND2_SP
-#define QSORT_entity_num_MASK	((1 << QSORT_ENTITYNUM_BITS) - 1)
-#endif // REND2_SP
 
 #define	QSORT_SHADERNUM_SHIFT	(QSORT_ENTITYNUM_SHIFT + QSORT_ENTITYNUM_BITS)
 #define QSORT_SHADERNUM_BITS	SHADERNUM_BITS
@@ -2143,11 +2081,7 @@ typedef struct pshadow_s
 	float sort;
 
 	int    numEntities;
-#ifdef REND2_SP
 	int    entityNums[8];
-#else // !REND2_SP
-	int    entity_nums[8];
-#endif // REND2_SP
 	vec3_t entityOrigins[8];
 	float  entityRadiuses[8];
 
@@ -2249,11 +2183,7 @@ typedef struct {
 	int			numBModels;
 	bmodel_t* bmodels;
 
-#ifdef REND2_SP
-	int			numPlanes;
-#else // !REND2_SP
 	int			numplanes;
-#endif // REND2_SP
 	cplane_t* planes;
 
 	int			numnodes;		// includes leafs
@@ -2430,20 +2360,13 @@ typedef struct mdxmData_s
 	mdxmVBOModel_t* vboModels;
 } mdxmData_t;
 
-#ifdef REND2_SP
-using model_t = struct model_s
-{
-#else // !REND2_SP
 typedef struct model_s {
-#endif // REND2_SP
 	char		name[MAX_QPATH];
 	modtype_t	type;
 	int			index;		// model = tr.models[model->index]
 
 	int			dataSize;	// just for listing purposes
-#ifdef REND2_SP
 	md3Header_t* md3[MD3_MAX_LODS];	// only if type == MOD_MESH
-#endif // REND2_SP
 	union
 	{
 		bmodel_t* bmodel;			// type == MOD_BRUSH
@@ -2454,54 +2377,26 @@ typedef struct model_s {
 		mdxaHeader_t* gla;				// type == MOD_MDXA
 	} data;
 
-#ifdef REND2_SP
-	mdxmHeader_t* mdxm;				// only if type == MOD_GL2M which is a GHOUL II Mesh file NOT a GHOUL II animation file
-	mdxaHeader_t* mdxa;				// only if type == MOD_GL2A which is a GHOUL II Animation file
-#else // !REND2_SP
 	int			 numLods;
 } model_t;
-#endif // REND2_SP
 
-#ifdef REND2_SP
-unsigned char	numLods;
-bool			bspInstance;			// model is a bsp instance
-};
-
-constexpr auto MAX_MOD_KNOWN = 1024;
-#else // !REND2_SP
 #define	MAX_MOD_KNOWN	1024
-#endif // REND2_SP
 
 void		R_ModelInit(void);
 
-#ifdef REND2_SP
-model_t* R_GetModelByHandle(qhandle_t hModel);
-#else // !REND2_SP
 model_t* R_GetModelByHandle(const qhandle_t index);
-#endif // REND2_SP
-int			R_LerpTag(orientation_t* tag, const qhandle_t handle, const int startFrame, const int endFrame, const float frac, const char* tagName);
-#ifdef REND2_SP
-void		R_ModelBounds(qhandle_t handle, vec3_t mins, vec3_t maxs);
-#else // !REND2_SP
+int	R_LerpTag(orientation_t* tag, const qhandle_t handle, const int startFrame, const int endFrame, const float frac, const char* tagName);
 
 void R_ModelBounds(const qhandle_t handle, vec3_t mins, vec3_t maxs);
-#endif // REND2_SP
 
-void		R_Modellist_f(void);
+void R_Modellist_f(void);
 
 //====================================================
-#ifdef REND2_SP
-constexpr auto MAX_SKINS = 1024;
-#endif // REND2_SP
 
-#ifdef REND2_SP
-constexpr auto MAX_DRAWSURFS = 0x10000;
-#else // !REND2_SP
 #define	MAX_DRAWIMAGES			2048
 #define	MAX_SKINS				1024
 
 #define	MAX_DRAWSURFS			0x10000
-#endif // REND2_SP
 #define	DRAWSURF_MASK			(MAX_DRAWSURFS-1)
 
 #define MAX_INSTANCES			256
@@ -2758,15 +2653,11 @@ typedef struct trGlobals_s {
 
 	image_t* renderImage;
 	image_t* glowImage;
-#ifndef REND2_SP
+	image_t* ssrMaskImage;			// r_ssr material mask (Jace 2026-11-04): 1 = no screen space reflections here (grass, sand, mud...)
 	image_t* glowImageScaled[6];
-#endif // !REND2_SP
 	image_t* velocityImage;
 	image_t* temporalResolveImage;
 	image_t* historyImage;
-#ifdef REND2_SP
-	image_t* glowImageScaled[6];
-#endif // REND2_SP
 	image_t* sunRaysImage;
 	image_t* sharpenImage;		// r_sharpen: copy of the finished 3D view
 	image_t* renderDepthImage;
@@ -2778,9 +2669,7 @@ typedef struct trGlobals_s {
 	image_t* fixedLevelsImage;
 	image_t* sunShadowArrayImage;
 	image_t* pointShadowArrayImage;
-#ifndef REND2_SP
 	image_t* screenShadowImage;
-#endif // !REND2_SP
 	image_t* screenSsaoImage;
 	image_t* hdrDepthImage;
 	image_t* renderCubeImage;
@@ -2809,9 +2698,7 @@ typedef struct trGlobals_s {
 	FBO_t* calcLevelsFbo;
 	FBO_t* targetLevelsFbo;
 	FBO_t* sunShadowFbo[3];
-#ifndef REND2_SP
 	FBO_t* screenShadowFbo;
-#endif // !REND2_SP
 	FBO_t* screenSsaoFbo;
 	FBO_t* hdrDepthFbo;
 	FBO_t* renderCubeFbo[6];
@@ -2877,14 +2764,10 @@ typedef struct trGlobals_s {
 	shaderProgram_t ssrShader;		// r_ssr (glsl/ssr.glsl)
 	shaderProgram_t godRaysShader;	// r_godRays (glsl/godrays.glsl)
 	shaderProgram_t depthBlurShader[2];
-#ifndef REND2_SP
 	shaderProgram_t testcubeShader;
-#endif // !REND2_SP
 	shaderProgram_t prefilterEnvMapShader;
 	shaderProgram_t gaussianBlurShader[2];
-#ifndef REND2_SP
 	shaderProgram_t glowCompositeShader;
-#endif // !REND2_SP
 	shaderProgram_t dglowDownsample;
 	shaderProgram_t dglowUpsample;
 	shaderProgram_t spriteShader[SSDEF_COUNT];
@@ -2909,18 +2792,6 @@ typedef struct trGlobals_s {
 	size_t defaultFogsUboOffset;
 	size_t defaultShaderInstanceUboOffset;
 
-#ifdef REND2_SP
-	size_t cameraUboOffsets[3 + MAX_DLIGHTS * 6 + 3 + MAX_DRAWN_PSHADOWS];
-	size_t sceneUboOffset;
-	size_t temporalInfoUboOffset;
-	size_t lightsUboOffset;
-	size_t fogsUboOffset;
-	size_t skyEntityUboOffset;
-	size_t entityUboOffsets[REFENTITYNUM_WORLD + 1];
-	size_t previousEntityUboOffsets[REFENTITYNUM_WORLD + 1];
-	size_t animationBoneUboOffset;
-	size_t previousAnimationBoneUboOffset;
-#else // !REND2_SP
 	long cameraUboOffsets[3 + MAX_DLIGHTS * 6 + 3 + MAX_DRAWN_PSHADOWS];
 	long sceneUboOffset;
 	long temporalInfoUboOffset;
@@ -2931,7 +2802,6 @@ typedef struct trGlobals_s {
 	long previousEntityUboOffsets[REFENTITYNUM_WORLD + 1];
 	long animationBoneUboOffset;
 	long previousAnimationBoneUboOffset;
-#endif // REND2_SP
 
 	// -----------------------------------------
 
@@ -3024,12 +2894,10 @@ typedef struct trGlobals_s {
 struct glconfigExt_t
 {
 	glconfig_t* glConfig;
-#ifndef REND2_SP
 
 	qboolean textureFilterAnisotropicAvailable;
 	qboolean doGammaCorrectionWithShaders;
 	qboolean doStencilShadowsInOneDrawcall;
-#endif // !REND2_SP
 
 	const char* originalExtensionString;
 };
@@ -3130,11 +2998,9 @@ extern	cvar_t* r_anaglyphMode;
 
 extern  cvar_t* r_mergeMultidraws;
 extern  cvar_t* r_mergeLeafSurfaces;
-#ifndef REND2_SP
 
 extern cvar_t* r_smaa;
 extern cvar_t* r_smaa_quality;
-#endif // !REND2_SP
 
 extern	cvar_t* r_externalGLSL;
 
@@ -3244,26 +3110,18 @@ void R_SetupViewParmsForOrthoRendering(
 	const vec3_t viewBounds[2]);
 void R_SortAndSubmitDrawSurfs(drawSurf_t* drawSurfs, int numDrawSurfs);
 
-#ifdef REND2_SP
-void R_RenderView(viewParms_t* parms);
-#else // !REND2_SP
 void R_RenderView(const viewParms_t* parms);
-#endif // REND2_SP
 void R_RenderDlightCubemaps();
 void R_SetupPshadowMaps(trRefdef_t* refdef);
 void R_RenderCubemapSide(int cubemapIndex, int cubemapSide, bool bounce);
 void R_GatherFrameViews(trRefdef_t* refdef);
 
-#ifdef REND2_SP
-void R_AddMD3Surfaces(trRefEntity_t* e, int entityNum);
-#else // !REND2_SP
 void R_AddMD3Surfaces(trRefEntity_t* ent, int entityNum);
-#endif // REND2_SP
 void R_AddPolygonSurfaces(const trRefdef_t* refdef);
 
 void R_DecomposeSort(uint32_t sort, int* entityNum, shader_t** shader, int* cubemap, int* postRender);
 uint32_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex, int postRender);
-void R_AddDrawSurf(surfaceType_t* surface, int entityNum, const shader_t* shader, int fogIndex, const int dlightMap, int postRender, int cubemap);
+void R_AddDrawSurf(surfaceType_t* surface, int entityNum, const shader_t* shader, int fogIndex, const  int dlightMap, int postRender, int cubemap);
 bool R_IsPostRenderEntity(const trRefEntity_t* refEntity);
 
 void R_CalcMikkTSpaceBSPSurface(int numSurfaces, packedVertex_t* vertices, glIndex_t* indices);
@@ -3281,19 +3139,10 @@ qboolean R_CalcTangentVectors(srfVert_t* dv[3]);
 void R_LocalNormalToWorld(const vec3_t local, vec3_t world);
 void R_LocalPointToWorld(const vec3_t local, vec3_t world);
 int R_CullBox(vec3_t bounds[2]);
-#ifdef REND2_SP
-int R_CullLocalBox(vec3_t bounds[2]);
-#else // !REND2_SP
 int R_CullLocalBox(const vec3_t bounds[2]);
-#endif // REND2_SP
 int R_CullPointAndRadiusEx(const vec3_t origin, float radius, const cplane_t* frustum, int numPlanes);
-#ifdef REND2_SP
-int R_CullPointAndRadius(const vec3_t origin, float radius);
-int R_CullLocalPointAndRadius(const vec3_t origin, float radius);
-#else // !REND2_SP
 int R_CullPointAndRadius(const vec3_t pt, const float radius);
 int R_CullLocalPointAndRadius(const vec3_t pt, const float radius);
-#endif // REND2_SP
 
 void R_SetupProjection(viewParms_t* dest, float zProj, float zFar, qboolean computeFrustum);
 void R_RotateForEntity(const trRefEntity_t* ent, const viewParms_t* viewParms, orientationr_t* ori);
@@ -3329,25 +3178,15 @@ void	GL_Draw(GLenum primitiveType, int firstVertex, int numVertices, int numInst
 extern glconfig_t  glConfig;
 extern glconfigExt_t	glConfigExt;
 
-#ifdef REND2_SP
-void	RE_StretchRaw(const int x, const int y, const int w, const int h, int cols, int rows, const byte* data, const int client, const qboolean dirty);
+void	RE_StretchRaw(const int x, const int y, const int w, const int h, const int cols, const int rows, const byte* data, const int client, const qboolean dirty);
 void	RE_UploadCinematic(int cols, int rows, const byte* data, int client, qboolean dirty);
-#else // !REND2_SP
-typedef _skinSurface_t skinSurface_t;
-
-void RE_StretchRaw(const int x, const int y, const int w, const int h, const int cols, const int rows, const byte* data, const int client, const qboolean dirty);
-void RE_UploadCinematic(const int cols, const int rows, const byte* data, const int client, const qboolean dirty);
-#endif // REND2_SP
 void	RE_SetRangedFog(float range);
 #ifdef REND2_SP
 byte* RB_ReadPixels(int x, int y, int width, int height, size_t* offset, int* padlen);
-void	RE_GetScreenShot(byte* data, int w, int h);
-byte* RE_TempRawImage_ReadFromFile(const char* psLocalFilename, int* piWidth, int* piHeight, byte* pb_re_sample_buffer, const qboolean qbVertFlip);
+void	RE_GetScreenShot(byte* buffer, int w, int h);
+byte* RE_TempRawImage_ReadFromFile(const char* psLocalFilename, int* piWidth, int* piHeight, byte* pbReSampleBuffer, const qboolean qbVertFlip);
 void	RE_TempRawImage_CleanUp();
-#else // !REND2_SP
-void RE_LAGoggles(void);
-void RE_Scissor(float x, float y, float w, float h);
-#endif // REND2_SP
+#endif
 
 void		RE_BeginRegistration(glconfig_t* glconfig);
 void		RE_LoadWorldMap(const char* mapname);
@@ -3356,12 +3195,12 @@ qhandle_t	RE_RegisterServerModel(const char* name);
 qhandle_t	RE_RegisterModel(const char* name);
 qhandle_t	RE_RegisterServerSkin(const char* name);
 qhandle_t	RE_RegisterSkin(const char* name);
-void		RE_Shutdown(qboolean destroyWindow, qboolean restarting);
+void RE_Shutdown(const qboolean destroyWindow, const qboolean restarting);
 world_t* R_LoadBSP(const char* name, int* bspIndex = nullptr);
-#ifdef REND2_SP
 
+#ifdef REND2_SP
 int			RE_GetAnimationCFG(const char* psCFGFilename, char* psDest, int iDestSize);
-#endif // REND2_SP
+#endif
 
 qboolean	R_GetEntityToken(char* buffer, int size);
 
@@ -3393,11 +3232,7 @@ void	R_LoadHDRImage(const char* filename, byte** data, int* width, int* height);
 void	R_DeleteTextures(void);
 int		R_SumOfUsedImages(void);
 void	R_InitSkins(void);
-#ifdef REND2_SP
-skin_t* R_GetSkinByHandle(const qhandle_t h_skin);
-#else // !REND2_SP
 skin_t* R_GetSkinByHandle(const qhandle_t hSkin);
-#endif // REND2_SP
 
 int R_ComputeLOD(trRefEntity_t* ent);
 
@@ -3413,21 +3248,13 @@ extern const int lightmapsVertex[MAXLIGHTMAPS];
 extern const int lightmapsFullBright[MAXLIGHTMAPS];
 extern const byte stylesDefault[MAXLIGHTMAPS];
 
-#ifdef REND2_SP
-shader_t* R_FindShader(const char* name, const int* lightmapIndex, const byte* styles, const qboolean mip_raw_image);
-shader_t* R_GetShaderByHandle(qhandle_t hShader);
-#else // !REND2_SP
 shader_t* R_FindShader(const char* name, const int* lightmapIndexes, const byte* styles, const qboolean mipRawImage);
+qboolean R_MaterialIsMatteGround(const int material); // r_ssr material mask (Jace 2026-11-04)
 shader_t* R_GetShaderByHandle(const qhandle_t hShader);
-#endif // REND2_SP
 shader_t* R_FindShaderByName(const char* name);
 void R_InitShaders(const qboolean server);
 void R_ShaderList_f(void);
-#ifdef REND2_SP
-void    R_RemapShader(const char* oldShader, const char* newShader, const char* timeOffset);
-#else // !REND2_SP
 void R_RemapShader(const char* shaderName, const char* newShaderName, const char* timeOffset);
-#endif // REND2_SP
 shader_t* R_CreateShaderFromTextureBundle(
 	const char* name,
 	const textureBundle_t* bundle,
@@ -3534,11 +3361,7 @@ void RB_StageIteratorGeneric(void);
 void RB_StageIteratorSky(void);
 
 void RB_AddQuadStamp(vec3_t origin, vec3_t left, vec3_t up, float color[4]);
-#ifdef REND2_SP
-void RB_AddQuadStampExt(vec3_t origin, vec3_t left, vec3_t up, float color[4], float s1, float t1, float s2, float t2);
-#else // !REND2_SP
 void RB_AddQuadStampExt(vec3_t origin, vec3_t left, vec3_t up, float color[4], const float s1, const float t1, const float s2, const float t2);
-#endif // REND2_SP
 void RB_InstantQuad(vec4_t quadVerts[4]);
 void RB_InstantQuad2(vec4_t quadVerts[4], vec2_t texCoords[4]);
 void RB_InstantTriangle();
@@ -3553,11 +3376,7 @@ WORLD MAP
 ============================================================
 */
 world_t* R_GetWorld(int worldIndex);
-#ifdef REND2_SP
-void R_AddBrushModelSurfaces(trRefEntity_t* e, int entityNum);
-#else // !REND2_SP
 void R_AddBrushModelSurfaces(trRefEntity_t* ent, int entityNum);
-#endif // REND2_SP
 void R_AddWorldSurfaces(viewParms_t* viewParms, trRefdef_t* refdef);
 void R_MarkLeaves(void);
 void R_RecursiveWorldNode(mnode_t* node, int planeBits, int dlightBits, int pshadowBits);
@@ -3585,11 +3404,7 @@ LIGHTS
 ============================================================
 */
 
-#ifdef REND2_SP
-void R_DlightBmodel(const bmodel_t* bmodel, trRefEntity_t* ent);
-#else // !REND2_SP
 void R_DlightBmodel(bmodel_t* bmodel, trRefEntity_t* ent);
-#endif // REND2_SP
 void R_SetupEntityLighting(const trRefdef_t* refdef, trRefEntity_t* ent);
 void R_TransformDlights(const int count, dlight_t* dl, const orientationr_t* ori);
 int R_LightForPoint(vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir);
@@ -3598,7 +3413,7 @@ int R_DLightsForPoint(const vec3_t point, const float radius);
 int R_CubemapForPoint(const vec3_t point);
 #ifdef REND2_SP
 qboolean RE_GetLighting(const vec3_t origin, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir);
-#endif // REND2_SP
+#endif
 
 /*
 ============================================================
@@ -3608,19 +3423,10 @@ SKIES
 ============================================================
 */
 
-#ifdef REND2_SP
-void R_BuildCloudData(shaderCommands_t* shader);
-void R_InitSkyTexCoords(float cloudLayerHeight);
-#else // !REND2_SP
 void R_BuildCloudData(const shaderCommands_t* input);
 void R_InitSkyTexCoords(const float heightCloud);
-#endif // REND2_SP
 void RB_DrawSun(float scale, shader_t* shader);
-#ifdef REND2_SP
-void RB_ClipSkyPolygons(shaderCommands_t* shader);
-#else // !REND2_SP
 void RB_ClipSkyPolygons(const shaderCommands_t* input);
-#endif // REND2_SP
 
 /*
 ============================================================
@@ -3630,7 +3436,8 @@ CURVE TESSELATION
 ============================================================
 */
 
-srfBspSurface_t* R_SubdividePatchToGrid(int width, int height, srfVert_t points[MAX_PATCH_SIZE * MAX_PATCH_SIZE]);
+srfBspSurface_t* R_SubdividePatchToGrid(int width, int height,
+	srfVert_t points[MAX_PATCH_SIZE * MAX_PATCH_SIZE]);
 srfBspSurface_t* R_GridInsertColumn(srfBspSurface_t* grid, int column, int row, vec3_t point, float loderror);
 srfBspSurface_t* R_GridInsertRow(srfBspSurface_t* grid, int row, int column, vec3_t point, float loderror);
 void R_FreeSurfaceGridMesh(srfBspSurface_t* grid);
@@ -3643,11 +3450,7 @@ MARKERS, POLYGON PROJECTION ON WORLD POLYGONS
 ============================================================
 */
 
-#ifdef REND2_SP
-int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection, const int max_points, vec3_t point_buffer, const int max_fragments, markFragment_t* fragment_buffer);
-#else // !REND2_SP
 int R_MarkFragments(int numPoints, const vec3_t* points, const vec3_t projection, const int maxPoints, vec3_t pointBuffer, const int maxFragments, markFragment_t* fragmentBuffer);
-#endif // REND2_SP
 
 /*
 ============================================================
@@ -3763,22 +3566,12 @@ void R_InitNextFrame(void);
 void RE_ClearScene(void);
 void RE_AddRefEntityToScene(const refEntity_t* ent);
 void RE_AddMiniRefEntityToScene(const miniRefEntity_t* miniRefEnt);
-#ifdef REND2_SP
-void RE_AddPolyToScene(qhandle_t hShader, int numVerts, const polyVert_t* verts, int num = 1);
-void RE_AddLightToScene(const vec3_t org, float intensity, float r, float g, float b);
-void RE_AddAdditiveLightToScene(const vec3_t org, float intensity, float r, float g, float b);
-#else // !REND2_SP
-void RE_AddPolyToScene(const qhandle_t hShader, const int numVerts, const polyVert_t* verts, const int numPolys);
+void RE_AddPolyToScene(const qhandle_t hShader, const int numVerts, const polyVert_t* verts, const int numPolys = 1);
 void RE_AddLightToScene(const vec3_t org, const float intensity, const float r, const float g, const float b);
 void RE_AddAdditiveLightToScene(const vec3_t org, const float intensity, const float r, const float g, const float b);
-#endif // REND2_SP
 void RE_BeginScene(const refdef_t* fd);
 void RE_RenderScene(const refdef_t* fd);
-#ifdef REND2_SP
-void RE_EndScene(void);
-#else // !REND2_SP
 void RE_EndScene();
-#endif // REND2_SP
 
 /*
 =============================================================
@@ -3796,10 +3589,6 @@ UNCOMPRESSING BONES
 #define MC_SCALE_X (1.0f/64)
 #define MC_SCALE_Y (1.0f/64)
 #define MC_SCALE_Z (1.0f/64)
-#ifndef REND2_SP
-
-void MC_UnCompress(float mat[3][4], const unsigned char* comp);
-#endif // !REND2_SP
 
 /*
 =============================================================
@@ -3857,7 +3646,12 @@ public:
 	float impactTime;
 #endif
 
-	CRenderableSurface& operator =(const CRenderableSurface& src)
+	/*
+	==========================
+	Assignment operator
+	==========================
+	*/
+	CRenderableSurface& operator=(const CRenderableSurface& src)
 	{
 		ident = src.ident;
 		boneCache = src.boneCache;
@@ -3875,18 +3669,10 @@ public:
 		: ident(SF_MDX)
 		, boneCache(nullptr)
 		, vboMesh(nullptr)
-#ifdef REND2_SP
-		, surfaceData(nullptr)
-#else // !REND2_SP
 		, genShadows(qfalse)
-#endif // REND2_SP
 		, dlightBits(0)
 		, pshadowBits(0)
-#ifdef REND2_SP
-		, genShadows(qfalse)
-#else // !REND2_SP
 		, surfaceData(nullptr)
-#endif // REND2_SP
 #ifdef _G2_GORE
 		, alternateTex(nullptr)
 		, goreChain(nullptr)
@@ -4103,13 +3889,8 @@ typedef enum {
 	RC_DRAW_BUFFER,
 	RC_SWAP_BUFFERS,
 	RC_SCREENSHOT,
-#ifndef REND2_SP
-	RC_SCISSOR,
-#endif // !REND2_SP
 	RC_VIDEOFRAME,
-#ifdef REND2_SP
 	RC_SCISSOR,
-#endif // REND2_SP
 	RC_COLORMASK,
 	RC_CLEARDEPTH,
 	RC_CONVOLVECUBEMAP,
@@ -4162,6 +3943,7 @@ struct modelUboCache_t
 
 #define MAX_GPU_TIMERS (512)
 #define MAX_SCENES (6)
+
 struct gpuFrame_t
 {
 	GLsync sync;
@@ -4186,7 +3968,7 @@ struct gpuFrame_t
 
 #ifdef _G2_GORE
 	VBO_t* goreVBO;
-	void* goreVBOMemory; // rend2 c38bceb0: mapped gore buffers when the buffers are immutable
+	void* goreVBOMemory;
 	int						goreVBOCurrentIndex;
 	IBO_t* goreIBO;
 	void* goreIBOMemory;
@@ -4255,10 +4037,8 @@ void RE_SetColor(const float* rgba);
 void RE_StretchPic(const float x, const float y, const float w, const float h, const float s1, const float t1, const float s2, const float t2, const qhandle_t hShader);
 void RE_RotatePic(const float x, const float y, const float w, const float h, const float s1, const float t1, const float s2, const float t2, const float a, const qhandle_t hShader);
 void RE_RotatePic2(const float x, const float y, const float w, const float h, const float s1, const float t1, const float s2, const float t2, const float a, const qhandle_t hShader);
-#ifdef REND2_SP
 void RE_LAGoggles(void);
 void RE_Scissor(const float x, const float y, const float w, const float h);
-#endif // REND2_SP
 void RE_BeginFrame(const stereoFrame_t stereoFrame);
 void R_NewFrameSync();
 void RE_EndFrame(int* frontEndMsec, int* backEndMsec);
@@ -4267,42 +4047,26 @@ void RE_TakeVideoFrame(int width, int height,
 
 // tr_ghoul2.cpp
 #ifdef REND2_SP
-//#ifdef REND2_SP
 void Create_Matrix(const float* angle, mdxaBone_t* matrix);
-void G2_SetSurfaceOnOffFromSkin(CGhoul2Info* ghlInfo, const qhandle_t render_skin);	//tr_ghoul2.cpp
-//#endif
-#endif // REND2_SP
+void G2_SetSurfaceOnOffFromSkin(CGhoul2Info* ghlInfo, qhandle_t renderSkin);	//tr_ghoul2.cpp
+#endif
 void Mat3x4_Multiply(mdxaBone_t* out, const mdxaBone_t* in2, const mdxaBone_t* in);
 void Mat3x4_Scale(mdxaBone_t* result, const mdxaBone_t* lhs, const float scale);
-void Mat3x4_Lerp(
-	mdxaBone_t* result,
-	const mdxaBone_t* lhs,
-	const mdxaBone_t* rhs,
-	const float t);
+void Mat3x4_Lerp(mdxaBone_t* result, const mdxaBone_t* lhs, const mdxaBone_t* rhs, const float t);
 const mdxaBone_t operator +(const mdxaBone_t& lhs, const mdxaBone_t& rhs);
 const mdxaBone_t operator -(const mdxaBone_t& lhs, const mdxaBone_t& rhs);
 const mdxaBone_t operator *(const mdxaBone_t& lhs, const mdxaBone_t& rhs);
 const mdxaBone_t operator *(const mdxaBone_t& lhs, const float scale);
 const mdxaBone_t operator *(const float scale, const mdxaBone_t& rhs);
 
-#ifdef REND2_SP
-qboolean R_LoadMDXM(model_t* mod, void* buffer, const char* name, qboolean& bAlreadyCached);
-qboolean R_LoadMDXA(model_t* mod, void* buffer, const char* name, qboolean& bAlreadyCached);
-void RE_InsertModelIntoHash(const char* name, model_t* mod);
-#else // !REND2_SP
 qboolean R_LoadMDXM(model_t* mod, void* buffer, const char* mod_name, qboolean& bAlreadyCached);
 qboolean R_LoadMDXA(model_t* mod, void* buffer, const char* mod_name, qboolean& bAlreadyCached);
 void RE_InsertModelIntoHash(const char* name, const model_t* mod);
-#endif // REND2_SP
 void ResetGhoul2RenderableSurfaceHeap();
 
 void R_InitDecals(void);
 void RE_ClearDecals(void);
-#ifdef REND2_SP
-void RE_AddDecalToScene(qhandle_t shader, const vec3_t origin, const vec3_t dir, float orientation, float r, float g, float b, float a, qboolean alphaFade, float radius, qboolean temporary);
-#else // !REND2_SP
 void RE_AddDecalToScene(const qhandle_t decalShader, const vec3_t origin, const vec3_t dir, const float orientation, const float red, const float green, const float blue, const float alpha, qboolean alphaFade, const float radius, const qboolean temporary);
-#endif // REND2_SP
 void R_AddDecals(void);
 
 image_t* R_FindImageFile(const char* name, imgType_t type, int flags);
@@ -4314,11 +4078,7 @@ const char* RE_ShaderNameFromIndex(int index);
 image_t* R_CreateImage(const char* name, byte* pic, int width, int height, imgType_t type, int flags, int internalFormat);
 image_t* R_CreateImage3D(const char* name, byte* data, int width, int height, int depth, int internalFormat);
 
-#ifdef REND2_SP
-float ProjectRadius(float r, vec3_t location);
-#else // !REND2_SP
 float ProjectRadius(const float r, vec3_t location);
-#endif // REND2_SP
 void RE_RegisterModels_StoreShaderRequest(const char* psModelFileName, const char* psShaderName, int* piShaderIndexPoke);
 qboolean ShaderHashTableExists(void);
 void R_ImageLoader_Init(void);
@@ -4500,13 +4260,8 @@ void RB_FillDrawCommand(
 	const shaderCommands_t* input
 );
 
-#ifndef REND2_SP
 uint32_t RB_CreateSortKey(const DrawItem& item, int stage, int layer);
-#endif // !REND2_SP
 uint32_t RB_CreateSkySortKey(const DrawItem& item, int stage, int skyNumber, int layer);
-#ifdef REND2_SP
-uint32_t RB_CreateSortKey(const DrawItem& item, int stage, int layer);
-#endif // REND2_SP
 void RB_AddDrawItem(Pass* pass, uint32_t sortKey, const DrawItem& drawItem);
 DepthRange RB_GetDepthRange(const trRefEntity_t* re, const shader_t* shader);
 

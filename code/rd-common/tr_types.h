@@ -446,6 +446,10 @@ using refEntityType_t = enum
 	RT_LIGHTNING,
 	RT_ENT_CHAIN,
 
+	RT_MAX_MP_REF_ENTITY_TYPE,	// as SJE / MP (the shared rend2 checks these, 2026-11-05)
+
+	RT_MAX_SP_REF_ENTITY_TYPE,
+
 	RT_MAX_REF_ENTITY_TYPE
 };
 

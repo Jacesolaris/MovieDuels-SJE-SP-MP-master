@@ -1213,6 +1213,7 @@ enum
 typedef struct cgMedia_s {
 	qhandle_t	charsetShader;
 	qhandle_t	whiteShader;
+	qhandle_t	qhFontMenu;	// albertus_bold: overhead names (as MD8 / SP, 2026-11-05)
 
 	qhandle_t	loadBarLED;
 	qhandle_t	loadBarLEDCap;
@@ -1717,6 +1718,11 @@ typedef struct cgMedia_s {
 	qhandle_t	saberSliceCapShader; // glowing cut face of a saber slice (vanilla renderer)
 	qhandle_t	bdecal_burn1;
 	qhandle_t	mSaberDamageGlow;
+	// force lightning burn marks (JKG burn line images, 2026-11-04)
+	qhandle_t	lightningBurnShader;
+	qhandle_t	lightningBurnAshShader;
+	qhandle_t	lightningBurnGlowShader;
+	qhandle_t	lightningBurnBodyShader;
 
 	// For vehicles only now
 	sfxHandle_t	noAmmoSound;

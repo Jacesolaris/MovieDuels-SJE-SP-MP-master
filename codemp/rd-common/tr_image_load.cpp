@@ -41,7 +41,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include <vector>
 
 // refimport access and the memory LoadJPG returns its pixels in (the prefetch must match)
-#define PF_RI ri->
+#define PF_RI ri.
 #define PF_ALLOC(bytes) Z_Malloc((bytes), TAG_TEMP_WORKSPACE, qfalse)
 
 constexpr int MAX_IMAGE_LOADERS = 10;
@@ -80,13 +80,13 @@ qboolean R_ImageLoader_Add(const char* extension, const ImageLoaderFn imageLoade
 {
 	if (numImageLoaders >= MAX_IMAGE_LOADERS)
 	{
-		ri->Printf(PRINT_DEVELOPER, "R_AddImageLoader: Cannot add any more image loaders (maximum %d).\n", MAX_IMAGE_LOADERS);
+		ri.Printf(PRINT_DEVELOPER, "R_AddImageLoader: Cannot add any more image loaders (maximum %d).\n", MAX_IMAGE_LOADERS);
 		return qfalse;
 	}
 
 	if (FindImageLoader(extension) != nullptr)
 	{
-		ri->Printf(PRINT_DEVELOPER, "R_AddImageLoader: Image loader already exists for extension \"%s\".\n", extension);
+		ri.Printf(PRINT_DEVELOPER, "R_AddImageLoader: Image loader already exists for extension \"%s\".\n", extension);
 		return qfalse;
 	}
 

@@ -419,6 +419,7 @@ Ghoul2 Insert End
 */
 cg_t cg;
 cgs_t cgs;
+qhandle_t cg_forceIconsOff[NUM_FORCE_POWERS]; // the weapon wheel's dimmed force icons (cg_weapons.c)
 centity_t cg_entities[MAX_GENTITIES];
 
 centity_t* cg_permanents[MAX_GENTITIES]; //rwwRMG - added
@@ -3096,6 +3097,7 @@ void CG_Init(const int serverMessageNum, const int serverCommandSequence, const 
 	//	CG_LoadFonts();
 	cgDC.Assets.qhSmallFont = trap->R_RegisterFont("ocr_a");
 	cgDC.Assets.qhMediumFont = trap->R_RegisterFont("ergoec");
+	cgs.media.qhFontMenu = trap->R_RegisterFont("albertus_bold"); // menu font: overhead names (as MD8 / SP)
 	cgDC.Assets.qhBigFont = cgDC.Assets.qhMediumFont;
 
 	memset(&cgs, 0, sizeof cgs);
@@ -3194,6 +3196,12 @@ void CG_Init(const int serverMessageNum, const int serverCommandSequence, const 
 	while (i < NUM_FORCE_POWERS)
 	{
 		cgs.media.forcePowerIcons[i] = trap->R_RegisterShaderNoMip(HolocronIcons[i]);
+		// the weapon wheel's dimmed copy (0 when shaders/md_wheelicons.shader is not installed)
+		{
+			const char* base = HolocronIcons[i] ? strrchr(HolocronIcons[i], '/') : NULL;
+			cg_forceIconsOff[i] = HolocronIcons[i]
+				? trap->R_RegisterShaderNoMip(va("gfx/menus/weaponwheel/off/%s", base ? base + 1 : HolocronIcons[i])) : 0;
+		}
 
 		i++;
 	}
@@ -3204,6 +3212,11 @@ void CG_Init(const int serverMessageNum, const int serverCommandSequence, const 
 	cgs.media.bdecal_saberglow = trap->R_RegisterShader("gfx/damage/saberglowmark");
 	cgs.media.bdecal_burn1 = trap->R_RegisterShader("gfx/damage/bodybigburnmark1");
 	cgs.media.mSaberDamageGlow = trap->R_RegisterShader("gfx/effects/saberDamageGlow");
+	// force lightning burn marks (JKG burn line images, shaders/zz_lightningburn.shader; 2026-11-04)
+	cgs.media.lightningBurnShader = trap->R_RegisterShader("gfx/burnmarks/lightningburn");
+	cgs.media.lightningBurnAshShader = trap->R_RegisterShader("gfx/burnmarks/lightningburn_ash");
+	cgs.media.lightningBurnGlowShader = trap->R_RegisterShader("gfx/burnmarks/lightningburn_glow");
+	cgs.media.lightningBurnBodyShader = trap->R_RegisterShader("gfx/burnmarks/lightningburn_body");
 	cgs.media.saberSliceCapShader = trap->R_RegisterShader("gfx/effects/saberslice_cap");
 
 	//jk2 hud

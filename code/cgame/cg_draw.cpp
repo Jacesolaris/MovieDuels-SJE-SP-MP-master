@@ -6476,7 +6476,7 @@ constexpr float OVERHEAD_HEAD_GAP = 6.0f;	// world units from the top of the bou
 constexpr float OVERHEAD_HEAD_MARGIN = 14.0f;	// world units from the live head (tag_head / eyes) to the anchor
 constexpr float OVERHEAD_BAR_SPACING = 1.0f;
 constexpr float OVERHEAD_NAME_SPACING = 3.0f;
-constexpr float OVERHEAD_NAME_SCALE = 0.4f;
+constexpr float OVERHEAD_NAME_SCALE = 0.1f;
 constexpr auto BLOCKPOINT_BAR_RANGE = 200;
 constexpr auto Fatigue_BAR_RANGE = 200;
 constexpr auto HEALTHBARRANGE = 200;
@@ -6705,12 +6705,12 @@ static void CG_DrawOverheadName(const centity_t* cent, const char* name, const v
 		return;
 	}
 	const float fontScale = OVERHEAD_NAME_SCALE * scale;
-	const float w = static_cast<float>(cgi_R_Font_StrLenPixels(name, cgs.media.qhFontMedium, fontScale));
-	const float h = static_cast<float>(cgi_R_Font_HeightPixels(cgs.media.qhFontMedium, fontScale));
+	const float w = static_cast<float>(cgi_R_Font_StrLenPixels(name, cgs.media.qhFontMenu, fontScale));
+	const float h = static_cast<float>(cgi_R_Font_HeightPixels(cgs.media.qhFontMenu, fontScale));
 	const vec4_t c = { color[0], color[1], color[2], color[3] * alpha };
 	// the font takes whole virtual units: round, don't truncate
 	cgi_R_Font_DrawString(static_cast<int>(floorf(x - w / 2.0f + 0.5f)), static_cast<int>(floorf(y - h - scale + 0.5f)),
-		name, c, cgs.media.qhFontMedium, -1, fontScale);
+		name, c, cgs.media.qhFontMenu, -1, fontScale);
 }
 
 void CG_AddBlockPointBarEnt(const int entNum)
@@ -10891,4 +10891,4 @@ void CG_DrawActive(const stereoFrame_t stereoView)
 
 	// draw status bar and other floating elements
 	CG_Draw2D();
-}
+}

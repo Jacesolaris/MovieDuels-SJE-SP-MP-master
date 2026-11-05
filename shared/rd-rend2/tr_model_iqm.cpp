@@ -162,15 +162,9 @@ qboolean R_LoadIQM(model_t* mod, void* buffer, int filesize, const char* mod_nam
 	}
 
 	LL(header->version);
-#ifdef REND2_SP
 	if (header->version != IQM_VERSION) {
 		ri.Printf(PRINT_WARNING, "R_LoadIQM: %s is a unsupported IQM version (%d), only version %d is supported.\n",
 			mod_name, header->version, IQM_VERSION);
-#else // !REND2_SP
-	if (header->version != IQM_VERSION) {
-		ri->Printf(PRINT_WARNING, "R_LoadIQM: %s is a unsupported IQM version (%d), only version %d is supported.\n",
-			mod_name, header->version, IQM_VERSION);
-#endif // REND2_SP
 		return qfalse;
 	}
 
@@ -182,11 +176,7 @@ qboolean R_LoadIQM(model_t* mod, void* buffer, int filesize, const char* mod_nam
 	LL(header->flags);
 	LL(header->num_text);
 	LL(header->ofs_text);
-#ifdef REND2_SP
-	LL(header->num_meshes);
-#else // !REND2_SP
 	LL(header->numMeshes);
-#endif // REND2_SP
 	LL(header->ofs_meshes);
 	LL(header->num_vertexarrays);
 	LL(header->numVertexes);
@@ -210,15 +200,9 @@ qboolean R_LoadIQM(model_t* mod, void* buffer, int filesize, const char* mod_nam
 	LL(header->ofs_extensions);
 
 	// check ioq3 joint limit
-#ifdef REND2_SP
 	if (header->num_joints > IQM_MAX_JOINTS) {
 		ri.Printf(PRINT_WARNING, "R_LoadIQM: %s has more than %d joints (%d).\n",
 			mod_name, IQM_MAX_JOINTS, header->num_joints);
-#else // !REND2_SP
-	if (header->num_joints > IQM_MAX_JOINTS) {
-		ri->Printf(PRINT_WARNING, "R_LoadIQM: %s has more than %d joints (%d).\n",
-			mod_name, IQM_MAX_JOINTS, header->num_joints);
-#endif // REND2_SP
 		return qfalse;
 	}
 
@@ -333,22 +317,12 @@ qboolean R_LoadIQM(model_t* mod, void* buffer, int filesize, const char* mod_nam
 	}
 
 	// check and swap meshes
-#ifdef REND2_SP
-	if (IQM_CheckRange(header, header->ofs_meshes,
-		header->num_meshes, sizeof(iqmMesh_t))) {
-		return qfalse;
-#else // !REND2_SP
 	if (IQM_CheckRange(header, header->ofs_meshes,
 		header->numMeshes, sizeof(iqmMesh_t))) {
 		return qfalse;
-#endif // REND2_SP
 	}
 	mesh = (iqmMesh_t*)((byte*)header + header->ofs_meshes);
-#ifdef REND2_SP
-	for (i = 0; i < header->num_meshes; i++, mesh++) {
-#else // !REND2_SP
 	for (i = 0; i < header->numMeshes; i++, mesh++) {
-#endif // REND2_SP
 		LL(mesh->name);
 		LL(mesh->material);
 		LL(mesh->first_vertex);
@@ -364,34 +338,18 @@ qboolean R_LoadIQM(model_t* mod, void* buffer, int filesize, const char* mod_nam
 		}
 
 		// check ioq3 limits
-#ifdef REND2_SP
 		if (mesh->numVertexes >= SHADER_MAX_VERTEXES)
 		{
 			ri.Printf(PRINT_WARNING, "R_LoadIQM: %s has more than %i verts on %s (%i).\n",
 				mod_name, SHADER_MAX_VERTEXES - 1, meshName[0] ? meshName : "a surface",
 				mesh->numVertexes);
-#else // !REND2_SP
-		if (mesh->numVertexes >= SHADER_MAX_VERTEXES)
-		{
-			ri->Printf(PRINT_WARNING, "R_LoadIQM: %s has more than %i verts on %s (%i).\n",
-				mod_name, SHADER_MAX_VERTEXES - 1, meshName[0] ? meshName : "a surface",
-				mesh->numVertexes);
-#endif // REND2_SP
 			return qfalse;
 		}
-#ifdef REND2_SP
 		if (mesh->num_triangles * 3 >= SHADER_MAX_INDEXES)
 		{
 			ri.Printf(PRINT_WARNING, "R_LoadIQM: %s has more than %i triangles on %s (%i).\n",
 				mod_name, (SHADER_MAX_INDEXES / 3) - 1, meshName[0] ? meshName : "a surface",
 				mesh->num_triangles);
-#else // !REND2_SP
-		if (mesh->num_triangles * 3 >= SHADER_MAX_INDEXES)
-		{
-			ri->Printf(PRINT_WARNING, "R_LoadIQM: %s has more than %i triangles on %s (%i).\n",
-				mod_name, (SHADER_MAX_INDEXES / 3) - 1, meshName[0] ? meshName : "a surface",
-				mesh->num_triangles);
-#endif // REND2_SP
 			return qfalse;
 		}
 
@@ -403,17 +361,11 @@ qboolean R_LoadIQM(model_t* mod, void* buffer, int filesize, const char* mod_nam
 			mesh->material >= header->num_text) {
 			return qfalse;
 		}
-		}
+	}
 
-#ifdef REND2_SP
 	if (header->num_poses != header->num_joints && header->num_poses != 0) {
 		ri.Printf(PRINT_WARNING, "R_LoadIQM: %s has %d poses and %d joints, must have the same number or 0 poses\n",
 			mod_name, header->num_poses, header->num_joints);
-#else // !REND2_SP
-	if (header->num_poses != header->num_joints && header->num_poses != 0) {
-		ri->Printf(PRINT_WARNING, "R_LoadIQM: %s has %d poses and %d joints, must have the same number or 0 poses\n",
-			mod_name, header->num_poses, header->num_joints);
-#endif // REND2_SP
 		return qfalse;
 	}
 
@@ -509,11 +461,7 @@ qboolean R_LoadIQM(model_t* mod, void* buffer, int filesize, const char* mod_nam
 
 	// allocate the model and copy the data
 	size = sizeof(iqmData_t);
-#ifdef REND2_SP
-	size += header->num_meshes * sizeof(srfIQModel_t);
-#else // !REND2_SP
 	size += header->numMeshes * sizeof(srfIQModel_t);
-#endif // REND2_SP
 	size += header->num_joints * 12 * sizeof(float); // joint mats
 	size += header->num_poses * header->numFrames * 12 * sizeof(float); // pose mats
 	if (header->ofs_bounds)
@@ -537,22 +485,14 @@ qboolean R_LoadIQM(model_t* mod, void* buffer, int filesize, const char* mod_nam
 	}
 
 	mod->type = MOD_IQM;
-#ifdef REND2_SP
 	iqmData = (iqmData_t*)Hunk_Alloc(size, h_low);
-#else // !REND2_SP
-	iqmData = (iqmData_t*)ri->Hunk_Alloc(size, h_low);
-#endif // REND2_SP
 	mod->data.iqm = iqmData;
 
 	// fill header
 	iqmData->numVertexes = header->numVertexes;
 	iqmData->num_triangles = header->num_triangles;
 	iqmData->numFrames = header->numFrames;
-#ifdef REND2_SP
-	iqmData->num_surfaces = header->num_meshes;
-#else // !REND2_SP
 	iqmData->num_surfaces = header->numMeshes;
-#endif // REND2_SP
 	iqmData->num_joints = header->num_joints;
 	iqmData->num_poses = header->num_poses;
 	iqmData->blendWeightsType = blendWeightsType;
@@ -682,11 +622,7 @@ qboolean R_LoadIQM(model_t* mod, void* buffer, int filesize, const char* mod_nam
 	mesh = (iqmMesh_t*)((byte*)header + header->ofs_meshes);
 	surface = iqmData->surfaces;
 	str = (char*)header + header->ofs_text;
-#ifdef REND2_SP
-	for (i = 0; i < header->num_meshes; i++, mesh++, surface++) {
-#else // !REND2_SP
 	for (i = 0; i < header->numMeshes; i++, mesh++, surface++) {
-#endif // REND2_SP
 		surface->surfaceType = SF_IQM;
 		Q_strncpyz(surface->name, str + mesh->name, sizeof(surface->name));
 		Q_strlwr(surface->name); // lowercase the surface name so skin compares are faster
@@ -807,21 +743,16 @@ qboolean R_LoadIQM(model_t* mod, void* buffer, int filesize, const char* mod_nam
 	}
 
 	return qtrue;
-	}
+}
 
 /*
 =============
 R_CullIQM
 =============
 */
-#ifdef REND2_SP
-static int R_CullIQM(iqmData_t * data, trRefEntity_t * ent) {
-	vec3_t		bounds[2];
-#else // !REND2_SP
-static int R_CullIQM(iqmData_t * data, trRefEntity_t * ent)
+static int R_CullIQM(iqmData_t* data, trRefEntity_t* ent)
 {
 	vec3_t		bounds[2]{};
-#endif // REND2_SP
 	float* oldBounds = nullptr, * newBounds = nullptr;
 	int		i = 0;
 
@@ -861,7 +792,7 @@ R_ComputeIQMFogNum
 
 =================
 */
-int R_ComputeIQMFogNum(iqmData_t * data, trRefEntity_t * ent) {
+int R_ComputeIQMFogNum(iqmData_t* data, trRefEntity_t* ent) {
 	int			i = 0, j = 0;
 	fog_t* fog = nullptr;
 	const float* bounds = nullptr;
@@ -911,7 +842,7 @@ R_AddIQMSurfaces
 Add all surfaces of this model
 =================
 */
-void R_AddIQMSurfaces(trRefEntity_t * ent, int entityNum) {
+void R_AddIQMSurfaces(trRefEntity_t* ent, int entityNum) {
 	iqmData_t* data = nullptr;
 	srfIQModel_t* surface = nullptr;
 	int			i = 0, j = 0;
@@ -939,7 +870,6 @@ void R_AddIQMSurfaces(trRefEntity_t * ent, int entityNum) {
 	// when the surfaces are rendered, they don't need to be
 	// range checked again.
 	//
-#ifdef REND2_SP
 	if ((ent->e.frame >= data->numFrames)
 		|| (ent->e.frame < 0)
 		|| (ent->e.oldframe >= data->numFrames)
@@ -949,17 +879,6 @@ void R_AddIQMSurfaces(trRefEntity_t * ent, int entityNum) {
 			tr.currentModel->name);
 		ent->e.frame = 0;
 		ent->e.oldframe = 0;
-#else // !REND2_SP
-	if ((ent->e.frame >= data->numFrames)
-		|| (ent->e.frame < 0)
-		|| (ent->e.oldframe >= data->numFrames)
-		|| (ent->e.oldframe < 0)) {
-		ri->Printf(PRINT_DEVELOPER, "R_AddIQMSurfaces: no such frame %d to %d for '%s'\n",
-			ent->e.oldframe, ent->e.frame,
-			tr.currentModel->name);
-		ent->e.frame = 0;
-		ent->e.oldframe = 0;
-#endif // REND2_SP
 	}
 
 	//
@@ -1008,26 +927,10 @@ void R_AddIQMSurfaces(trRefEntity_t * ent, int entityNum) {
 			&& !(ent->e.renderfx & (RF_NOSHADOW | RF_DEPTHHACK))
 			&& shader->sort == SS_OPAQUE)
 		{
-#ifdef REND2_SP
-			R_AddDrawSurf((surfaceType_t*)surface, entityNum, tr.shadowShader, 0, 0, R_IsPostRenderEntity(ent), 0);
-#else // !REND2_SP
 			R_AddDrawSurf(reinterpret_cast<surfaceType_t*>(surface), entityNum, tr.shadowShader, 0, 0, R_IsPostRenderEntity(ent), 0);
-#endif // REND2_SP
 		}
 
 		// projection shadows work fine with personal models
-#ifdef REND2_SP
-		if (r_shadows->integer == 3
-			&& fogNum == 0
-			&& (ent->e.renderfx & RF_SHADOW_PLANE)
-			&& shader->sort == SS_OPAQUE) {
-			R_AddDrawSurf((surfaceType_t*)surface, entityNum, tr.projectionShadowShader, 0, 0, R_IsPostRenderEntity(ent), 0);
-		}
-
-		if (!personalModel) {
-			R_AddDrawSurf((surfaceType_t*)surface, entityNum, shader, fogNum, 0, R_IsPostRenderEntity(ent), cubemapIndex);
-		}
-#else // !REND2_SP
 		if (r_shadows->integer == 3
 			&& fogNum == 0
 			&& (ent->e.renderfx & RF_SHADOW_PLANE)
@@ -1040,13 +943,12 @@ void R_AddIQMSurfaces(trRefEntity_t * ent, int entityNum) {
 		{
 			R_AddDrawSurf(reinterpret_cast<surfaceType_t*>(surface), entityNum, shader, fogNum, 0, R_IsPostRenderEntity(ent), cubemapIndex);
 		}
-#endif // REND2_SP
 
 		surface++;
 	}
-	}
+}
 
-static void ComputePoseMats(iqmData_t * data, int frame, int oldframe,
+static void ComputePoseMats(iqmData_t* data, int frame, int oldframe,
 	float backlerp, float* mat) {
 	float* mat1 = nullptr, * mat2 = nullptr;
 	int* joint = data->jointParents;
@@ -1097,7 +999,7 @@ static void ComputePoseMats(iqmData_t * data, int frame, int oldframe,
 	}
 }
 
-static void ComputeJointMats(iqmData_t * data, int frame, int oldframe,
+static void ComputeJointMats(iqmData_t* data, int frame, int oldframe,
 	float backlerp, float* mat) {
 	float* mat1 = nullptr;
 	int	i = 0;
@@ -1121,7 +1023,7 @@ RB_AddIQMSurfaces
 Compute vertices for this model surface
 =================
 */
-void RB_IQMSurfaceAnim(surfaceType_t * surface) {
+void RB_IQMSurfaceAnim(surfaceType_t* surface) {
 	srfIQModel_t* surf = (srfIQModel_t*)surface;
 	iqmData_t* data = surf->data;
 	float		jointMats[IQM_MAX_JOINTS * 12];
@@ -1261,7 +1163,7 @@ void RB_IQMSurfaceAnim(surfaceType_t * surface) {
 	tess.numVertexes += surf->numVertexes;
 }
 
-int R_IQMLerpTag(orientation_t * tag, iqmData_t * data,
+int R_IQMLerpTag(orientation_t* tag, iqmData_t* data,
 	int startFrame, int endFrame,
 	float frac, const char* tagName) {
 	float	jointMats[IQM_MAX_JOINTS * 12];

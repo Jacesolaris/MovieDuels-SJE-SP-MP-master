@@ -86,7 +86,7 @@ void G2Time_ResetTimers(void)
 
 void G2Time_ReportTimers(void)
 {
-	ri->Printf(PRINT_ALL, "\n---------------------------------\nRenderSurfaces: %i\nR_AddGhoulSurfaces: %i\nG2_TransformGhoulBones: %i\nG2_ProcessGeneratedSurfaceBolts: %i\nProcessModelBoltSurfaces: %i\nG2_ConstructGhoulSkeleton: %i\nRB_SurfaceGhoul: %i\nG2_SetupModelPointers: %i\n\nPrecise frame time: %i\nTransformGhoulBones calls: %i\n---------------------------------\n\n",
+	ri.Printf(PRINT_ALL, "\n---------------------------------\nRenderSurfaces: %i\nR_AddGhoulSurfaces: %i\nG2_TransformGhoulBones: %i\nG2_ProcessGeneratedSurfaceBolts: %i\nProcessModelBoltSurfaces: %i\nG2_ConstructGhoulSkeleton: %i\nRB_SurfaceGhoul: %i\nG2_SetupModelPointers: %i\n\nPrecise frame time: %i\nTransformGhoulBones calls: %i\n---------------------------------\n\n",
 		G2Time_RenderSurfaces,
 		G2Time_R_AddGHOULSurfaces,
 		G2Time_G2_TransformGhoulBones,
@@ -589,7 +589,7 @@ bool G2_WasBoneRendered(const CGhoul2Info& ghoul2, const int boneNum)
 // G2_GetBoneBasepose
 // Retrieves the basepose and inverse basepose matrices for a
 // specific bone. Behaviour preserved exactly as original, but
-// asserts removed and replaced with ri->Printf diagnostics.
+// asserts removed and replaced with ri.Printf diagnostics.
 // ------------------------------------------------------------
 void G2_GetBoneBasepose(
 	const CGhoul2Info& ghoul2,
@@ -602,7 +602,7 @@ void G2_GetBoneBasepose(
 	// ------------------------------------------------------------
 	if (ghoul2.mBoneCache == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetBoneBasepose: NULL boneCache\n");
+		ri.Printf(PRINT_WARNING, "G2_GetBoneBasepose: NULL boneCache\n");
 		retBasepose = const_cast<mdxaBone_t*>(&identityMatrix);
 		retBaseposeInv = const_cast<mdxaBone_t*>(&identityMatrix);
 		return;
@@ -613,7 +613,7 @@ void G2_GetBoneBasepose(
 	// Validate model + header
 	if (boneCache.mod == NULL || boneCache.header == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetBoneBasepose: Missing model/header\n");
+		ri.Printf(PRINT_WARNING, "G2_GetBoneBasepose: Missing model/header\n");
 		retBasepose = const_cast<mdxaBone_t*>(&identityMatrix);
 		retBaseposeInv = const_cast<mdxaBone_t*>(&identityMatrix);
 		return;
@@ -622,7 +622,7 @@ void G2_GetBoneBasepose(
 	// Validate bone index
 	if (boneNum < 0 || boneNum >= boneCache.header->numBones)
 	{
-		ri->Printf(PRINT_WARNING,
+		ri.Printf(PRINT_WARNING,
 			"G2_GetBoneBasepose: Invalid boneNum %d (max %d)\n",
 			boneNum, boneCache.header->numBones);
 
@@ -662,7 +662,7 @@ char* G2_GetBoneNameFromSkel(const CGhoul2Info& ghoul2, const int boneNum)
 	// Validate bone cache
 	if (ghoul2.mBoneCache == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetBoneNameFromSkel: NULL boneCache\n");
+		ri.Printf(PRINT_WARNING, "G2_GetBoneNameFromSkel: NULL boneCache\n");
 		return nullptr;
 	}
 
@@ -671,14 +671,14 @@ char* G2_GetBoneNameFromSkel(const CGhoul2Info& ghoul2, const int boneNum)
 	// Validate model + header
 	if (boneCache.mod == NULL || boneCache.header == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetBoneNameFromSkel: Missing model/header\n");
+		ri.Printf(PRINT_WARNING, "G2_GetBoneNameFromSkel: Missing model/header\n");
 		return nullptr;
 	}
 
 	// Validate bone index
 	if (boneNum < 0 || boneNum >= boneCache.header->numBones)
 	{
-		ri->Printf(PRINT_WARNING,
+		ri.Printf(PRINT_WARNING,
 			"G2_GetBoneNameFromSkel: Invalid boneNum %d (max %d)\n",
 			boneNum, boneCache.header->numBones);
 		return nullptr;
@@ -721,7 +721,7 @@ void G2_RagGetBoneBasePoseMatrixLow(const CGhoul2Info& ghoul2, const int boneNum
 	if (boneNum < 0 || boneNum >= boneCache.header->numBones)
 	{
 		// invalid index -- avoid crash by returning input matrix
-		ri->Printf(PRINT_DEVELOPER, "G2_RagGetBoneBasePoseMatrixLow: invalid boneNum %d (numBones=%d)\n", boneNum, boneCache.header->numBones);
+		ri.Printf(PRINT_DEVELOPER, "G2_RagGetBoneBasePoseMatrixLow: invalid boneNum %d (numBones=%d)\n", boneNum, boneCache.header->numBones);
 		retMatrix = boneMatrix;
 		return;
 	}
@@ -732,7 +732,7 @@ void G2_RagGetBoneBasePoseMatrixLow(const CGhoul2Info& ghoul2, const int boneNum
 	int ofs = offsets->offsets[boneNum];
 	if (ofs < 0 || ofs < boneCache.header->ofsSkel || ofs >= boneCache.header->ofsEnd)
 	{
-		ri->Printf(PRINT_DEVELOPER, "G2_RagGetBoneBasePoseMatrixLow: bad offset for bone %d: %d (ofsSkel=%d ofsEnd=%d)\n",
+		ri.Printf(PRINT_DEVELOPER, "G2_RagGetBoneBasePoseMatrixLow: bad offset for bone %d: %d (ofsSkel=%d ofsEnd=%d)\n",
 			boneNum, ofs, boneCache.header->ofsSkel, boneCache.header->ofsEnd);
 		retMatrix = boneMatrix;
 		return;
@@ -742,7 +742,7 @@ void G2_RagGetBoneBasePoseMatrixLow(const CGhoul2Info& ghoul2, const int boneNum
 	// additional sanity check on skel pointer data (name should be readable)
 	if (!skel || skel->numChildren < 0 || skel->numChildren > boneCache.header->numBones)
 	{
-		ri->Printf(PRINT_DEVELOPER, "G2_RagGetBoneBasePoseMatrixLow: malformed skel for bone %d\n", boneNum);
+		ri.Printf(PRINT_DEVELOPER, "G2_RagGetBoneBasePoseMatrixLow: malformed skel for bone %d\n", boneNum);
 		retMatrix = boneMatrix;
 		return;
 	}
@@ -771,7 +771,7 @@ void G2_RagGetBoneBasePoseMatrixLow(const CGhoul2Info& ghoul2, const int boneNum
 // G2_GetBoneMatrixLow
 // Safely retrieves a bone matrix from a Ghoul2 model.
 // Behaviour preserved exactly as original, but asserts replaced
-// with ri->Printf and all pointer/index checks hardened.
+// with ri.Printf and all pointer/index checks hardened.
 // ------------------------------------------------------------
 void G2_GetBoneMatrixLow(
 	const CGhoul2Info& ghoul2,
@@ -786,7 +786,7 @@ void G2_GetBoneMatrixLow(
 	// ------------------------------------------------------------
 	if (ghoul2.mBoneCache == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetBoneMatrixLow: NULL boneCache\n");
+		ri.Printf(PRINT_WARNING, "G2_GetBoneMatrixLow: NULL boneCache\n");
 		retMatrix = identityMatrix;
 		retBasepose = const_cast<mdxaBone_t*>(&identityMatrix);
 		retBaseposeInv = const_cast<mdxaBone_t*>(&identityMatrix);
@@ -798,7 +798,7 @@ void G2_GetBoneMatrixLow(
 	// Validate model + header
 	if (boneCache.mod == NULL || boneCache.header == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetBoneMatrixLow: Missing model/header\n");
+		ri.Printf(PRINT_WARNING, "G2_GetBoneMatrixLow: Missing model/header\n");
 		retMatrix = identityMatrix;
 		retBasepose = const_cast<mdxaBone_t*>(&identityMatrix);
 		retBaseposeInv = const_cast<mdxaBone_t*>(&identityMatrix);
@@ -808,7 +808,7 @@ void G2_GetBoneMatrixLow(
 	// Validate bone index
 	if (boneNum < 0 || boneNum >= boneCache.header->numBones)
 	{
-		ri->Printf(PRINT_WARNING,
+		ri.Printf(PRINT_WARNING,
 			"G2_GetBoneMatrixLow: Invalid boneNum %d (max %d)\n",
 			boneNum, boneCache.header->numBones);
 
@@ -875,7 +875,7 @@ void G2_GetBoneMatrixLow(
 		{
 			if (Q_isnan(retMatrix.matrix[i][j]))
 			{
-				ri->Printf(PRINT_WARNING,
+				ri.Printf(PRINT_WARNING,
 					"G2_GetBoneMatrixLow: NaN detected in retMatrix[%d][%d]\n",
 					i, j);
 			}
@@ -900,7 +900,7 @@ int G2_GetParentBoneMatrixLow(
 	// Validate bone cache
 	if (ghoul2.mBoneCache == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetParentBoneMatrixLow: NULL boneCache\n");
+		ri.Printf(PRINT_WARNING, "G2_GetParentBoneMatrixLow: NULL boneCache\n");
 		retMatrix = identityMatrix;
 		retBasepose = const_cast<mdxaBone_t*>(&identityMatrix);
 		retBaseposeInv = const_cast<mdxaBone_t*>(&identityMatrix);
@@ -912,7 +912,7 @@ int G2_GetParentBoneMatrixLow(
 	// Validate model + header
 	if (boneCache.mod == NULL || boneCache.header == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetParentBoneMatrixLow: Missing model/header\n");
+		ri.Printf(PRINT_WARNING, "G2_GetParentBoneMatrixLow: Missing model/header\n");
 		retMatrix = identityMatrix;
 		retBasepose = const_cast<mdxaBone_t*>(&identityMatrix);
 		retBaseposeInv = const_cast<mdxaBone_t*>(&identityMatrix);
@@ -922,7 +922,7 @@ int G2_GetParentBoneMatrixLow(
 	// Validate bone index
 	if (boneNum < 0 || boneNum >= boneCache.header->numBones)
 	{
-		ri->Printf(PRINT_WARNING,
+		ri.Printf(PRINT_WARNING,
 			"G2_GetParentBoneMatrixLow: Invalid boneNum %d (max %d)\n",
 			boneNum, boneCache.header->numBones);
 
@@ -938,7 +938,7 @@ int G2_GetParentBoneMatrixLow(
 	// Validate parent index
 	if (parent < 0 || parent >= boneCache.header->numBones)
 	{
-		ri->Printf(PRINT_WARNING,
+		ri.Printf(PRINT_WARNING,
 			"G2_GetParentBoneMatrixLow: Invalid parent %d for bone %d (max %d)\n",
 			parent, boneNum, boneCache.header->numBones);
 
@@ -1918,7 +1918,7 @@ void G2_RagGetAnimMatrix(CGhoul2Info& ghoul2, const int boneNum, mdxaBone_t& mat
 		if (bListIndex == -1)
 		{
 #ifdef _RAG_PRINT_TEST
-			ri->Printf(PRINT_ALL, "Attempting to add %s\n", skel->name);
+			ri.Printf(PRINT_ALL, "Attempting to add %s\n", skel->name);
 #endif
 			bListIndex = G2_Add_Bone(ghoul2.animModel, ghoul2.mBlist, skel->name);
 		}
@@ -1978,7 +1978,7 @@ void G2_RagGetAnimMatrix(CGhoul2Info& ghoul2, const int boneNum, mdxaBone_t& mat
 		}
 		else
 		{
-			ri->Printf(PRINT_ALL, "BAD LIST INDEX: %s, %s [%i]\n", skel->name, pskel->name, parent);
+			ri.Printf(PRINT_ALL, "BAD LIST INDEX: %s, %s [%i]\n", skel->name, pskel->name, parent);
 		}
 #endif
 	}
@@ -1993,7 +1993,7 @@ void G2_RagGetAnimMatrix(CGhoul2Info& ghoul2, const int boneNum, mdxaBone_t& mat
 		}
 		else
 		{
-			ri->Printf(PRINT_ALL, "BAD LIST INDEX: %s\n", skel->name);
+			ri.Printf(PRINT_ALL, "BAD LIST INDEX: %s\n", skel->name);
 		}
 #endif
 		//bone.animFrameMatrix = ghoul2.mBoneCache->mFinalBones[boneNum].boneMatrix;
@@ -2008,7 +2008,7 @@ void G2_RagGetAnimMatrix(CGhoul2Info& ghoul2, const int boneNum, mdxaBone_t& mat
 #ifdef _RAG_PRINT_TEST
 	if (!actuallySet)
 	{
-		ri->Printf(PRINT_ALL, "SET FAILURE\n");
+		ri.Printf(PRINT_ALL, "SET FAILURE\n");
 		G2_RagPrintMatrix(&bone.animFrameMatrix);
 	}
 #endif
@@ -2573,7 +2573,7 @@ static void G2_TransformGhoulBones(boneInfo_v& rootBoneList, const mdxaBone_t& r
 	ghoul2.mBoneCache->mUnsquash = false;
 
 	// master smoothing control
-	if (HackadelicOnClient && smooth && !ri->Cvar_VariableIntegerValue("dedicated"))
+	if (HackadelicOnClient && smooth && !ri.Cvar_VariableIntegerValue("dedicated"))
 	{
 		ghoul2.mBoneCache->mLastTouch = ghoul2.mBoneCache->mLastLastTouch;
 		/*
@@ -2948,9 +2948,9 @@ static int R_SliceOption(const int which)
 	if (!cv[0])
 	{
 #ifdef R_SLICE_CVAR_DESC
-		cv[0] = ri->Cvar_Get("r_saberSliceInsideCull", "1", CVAR_ARCHIVE_ND, "Saber cuts: draw the inside of a cut body only where a cut crosses it (1 on, 0 every surface)");
-		cv[1] = ri->Cvar_Get("r_saberSliceCap", "1", CVAR_ARCHIVE_ND, "Saber cuts: close the cut with an exact flat cap (1 on, 0 off)");
-		cv[2] = ri->Cvar_Get("r_saberSliceSeam", "1", CVAR_ARCHIVE_ND, "Saber cuts: glowing band along the cut edge that cools with the cut (1 on, 0 off)");
+		cv[0] = ri.Cvar_Get("r_saberSliceInsideCull", "1", CVAR_ARCHIVE_ND, "Saber cuts: draw the inside of a cut body only where a cut crosses it (1 on, 0 every surface)");
+		cv[1] = ri.Cvar_Get("r_saberSliceCap", "1", CVAR_ARCHIVE_ND, "Saber cuts: close the cut with an exact flat cap (1 on, 0 off)");
+		cv[2] = ri.Cvar_Get("r_saberSliceSeam", "1", CVAR_ARCHIVE_ND, "Saber cuts: glowing band along the cut edge that cools with the cut (1 on, 0 off)");
 #else
 		cv[0] = ri.Cvar_Get("r_saberSliceInsideCull", "1", CVAR_ARCHIVE_ND);
 		cv[1] = ri.Cvar_Get("r_saberSliceCap", "1", CVAR_ARCHIVE_ND);
@@ -3892,7 +3892,7 @@ static bool R_StencilShadowAllowed(const trRefEntity_t* ent)
 	static cvar_t* maxChars = nullptr;
 	if (!maxChars)
 	{
-		maxChars = ri->Cvar_Get("r_shadowMaxCharacters", "16", CVAR_ARCHIVE_ND, "Characters nearest the camera that cast stencil shadows (cg_shadows 2); 0 = all");
+		maxChars = ri.Cvar_Get("r_shadowMaxCharacters", "16", CVAR_ARCHIVE_ND, "Characters nearest the camera that cast stencil shadows (cg_shadows 2); 0 = all");
 	}
 	const int maxN = maxChars->integer;
 	if (maxN <= 0)
@@ -4120,12 +4120,12 @@ Mesh cloth glue (see tr_meshcloth.h)
 void R_MeshClothLoadConfig()
 {
 	char* buf = nullptr;
-	const long len = ri->FS_ReadFile("ext_data/meshcloth.dat", reinterpret_cast<void**>(&buf));
+	const long len = ri.FS_ReadFile("ext_data/meshcloth.dat", reinterpret_cast<void**>(&buf));
 	if (len > 0 && buf)
 	{
 		const int n = MC_LoadConfig(buf);
-		ri->Printf(PRINT_ALL, "Mesh cloth: %d surface(s) from ext_data/meshcloth.dat\n", n);
-		ri->FS_FreeFile(buf);
+		ri.Printf(PRINT_ALL, "Mesh cloth: %d surface(s) from ext_data/meshcloth.dat\n", n);
+		ri.FS_FreeFile(buf);
 	}
 	else
 	{
@@ -4274,7 +4274,7 @@ bool R_MeshClothVisible(const float from[3], const float to[3])
 		return true;
 	}
 	trace_t trc;
-	ri->CM_BoxTrace(&trc, from, to, vec3_origin, vec3_origin, 0, CONTENTS_SOLID, qfalse);	// MP: world only
+	ri.CM_BoxTrace(&trc, from, to, vec3_origin, vec3_origin, 0, CONTENTS_SOLID, qfalse);	// MP: world only
 	return trc.startsolid || trc.fraction >= 0.99f;
 }
 
@@ -4292,14 +4292,14 @@ static bool MC_WaterHeight(const vec3_t origin, float* z)
 	vec3_t p;
 	VectorCopy(origin, p);
 	p[2] -= 16.0f;	// near the feet (the origin is at the hips)
-	if (!(ri->CM_PointContents(p, 0) & (CONTENTS_WATER | CONTENTS_SLIME)))
+	if (!(ri.CM_PointContents(p, 0) & (CONTENTS_WATER | CONTENTS_SLIME)))
 	{
 		return false;
 	}
 	for (int i = 0; i < 8; i++)
 	{
 		p[2] += 12.0f;
-		if (!(ri->CM_PointContents(p, 0) & (CONTENTS_WATER | CONTENTS_SLIME)))
+		if (!(ri.CM_PointContents(p, 0) & (CONTENTS_WATER | CONTENTS_SLIME)))
 		{
 			*z = p[2] - 6.0f;
 			return true;
@@ -4333,19 +4333,19 @@ static void MC_SolverParams(mcParams_t& prm)
 	static cvar_t* ae = nullptr;
 	if (!xp)
 	{
-		xp = ri->Cvar_Get("r_meshClothXPBD", "1", CVAR_ARCHIVE_ND, "Mesh cloth solver: 1 XPBD (stiffness independent of substeps), 0 old projection");
-		xi = ri->Cvar_Get("r_meshClothXPBDIter", "1", CVAR_ARCHIVE_ND, "Mesh cloth XPBD solver passes per substep (1-8)");
-		fr = ri->Cvar_Get("r_meshClothFriction", "1", CVAR_ARCHIVE_ND, "Scales mesh cloth friction on the body and floor (0 frictionless)");
-		li = ri->Cvar_Get("r_meshClothLift", "-2", CVAR_ARCHIVE_ND, "How high mesh cloth may rise above its attached edge: -2 per surface, -1 no limit, N units");
-		ec = ri->Cvar_Get("r_meshClothEdgeCol", "1", CVAR_ARCHIVE_ND, "Mesh cloth edges collide with arms, fists and saber hilts (1 on, 0 off)");
-		sl = ri->Cvar_Get("r_meshClothSleep", "1", CVAR_ARCHIVE_ND, "Mesh cloth at rest sleeps until the pose, body, wind or a blast moves it (1 on, 0 off)");
-		ss = ri->Cvar_Get("r_meshClothSelfSub", "1", CVAR_ARCHIVE_ND, "Mesh cloth self-collision in every substep with cloth-on-cloth friction (1 on, 0 once per step)");
-		bm = ri->Cvar_Get("r_meshClothBendModel", "0", CVAR_ARCHIVE_ND, "Mesh cloth bending: 0 bend links, 1 isometric (cotangent) bending");
-		ae = ri->Cvar_Get("r_meshClothAero", "0", CVAR_ARCHIVE_ND, "Mesh cloth air: 0 per point, 1 per triangle (drag + lift)");
-		mc_hilt = ri->Cvar_Get("r_meshClothHilt", "1", CVAR_ARCHIVE_ND, "Saber hilts push mesh cloth (1 on, 0 off)");
-		mc_hiltLen = ri->Cvar_Get("r_meshClothHiltLen", "9", CVAR_ARCHIVE_ND, "Mesh cloth hilt collider length in front of the fist");
-		mc_hiltBack = ri->Cvar_Get("r_meshClothHiltBack", "4", CVAR_ARCHIVE_ND, "Mesh cloth hilt collider length behind the fist");
-		mc_hiltRadius = ri->Cvar_Get("r_meshClothHiltRadius", "1.6", CVAR_ARCHIVE_ND, "Mesh cloth hilt collider thickness");
+		xp = ri.Cvar_Get("r_meshClothXPBD", "1", CVAR_ARCHIVE_ND, "Mesh cloth solver: 1 XPBD (stiffness independent of substeps), 0 old projection");
+		xi = ri.Cvar_Get("r_meshClothXPBDIter", "1", CVAR_ARCHIVE_ND, "Mesh cloth XPBD solver passes per substep (1-8)");
+		fr = ri.Cvar_Get("r_meshClothFriction", "1", CVAR_ARCHIVE_ND, "Scales mesh cloth friction on the body and floor (0 frictionless)");
+		li = ri.Cvar_Get("r_meshClothLift", "-2", CVAR_ARCHIVE_ND, "How high mesh cloth may rise above its attached edge: -2 per surface, -1 no limit, N units");
+		ec = ri.Cvar_Get("r_meshClothEdgeCol", "1", CVAR_ARCHIVE_ND, "Mesh cloth edges collide with arms, fists and saber hilts (1 on, 0 off)");
+		sl = ri.Cvar_Get("r_meshClothSleep", "1", CVAR_ARCHIVE_ND, "Mesh cloth at rest sleeps until the pose, body, wind or a blast moves it (1 on, 0 off)");
+		ss = ri.Cvar_Get("r_meshClothSelfSub", "1", CVAR_ARCHIVE_ND, "Mesh cloth self-collision in every substep with cloth-on-cloth friction (1 on, 0 once per step)");
+		bm = ri.Cvar_Get("r_meshClothBendModel", "0", CVAR_ARCHIVE_ND, "Mesh cloth bending: 0 bend links, 1 isometric (cotangent) bending");
+		ae = ri.Cvar_Get("r_meshClothAero", "0", CVAR_ARCHIVE_ND, "Mesh cloth air: 0 per point, 1 per triangle (drag + lift)");
+		mc_hilt = ri.Cvar_Get("r_meshClothHilt", "1", CVAR_ARCHIVE_ND, "Saber hilts push mesh cloth (1 on, 0 off)");
+		mc_hiltLen = ri.Cvar_Get("r_meshClothHiltLen", "9", CVAR_ARCHIVE_ND, "Mesh cloth hilt collider length in front of the fist");
+		mc_hiltBack = ri.Cvar_Get("r_meshClothHiltBack", "4", CVAR_ARCHIVE_ND, "Mesh cloth hilt collider length behind the fist");
+		mc_hiltRadius = ri.Cvar_Get("r_meshClothHiltRadius", "1.6", CVAR_ARCHIVE_ND, "Mesh cloth hilt collider thickness");
 	}
 	prm.xpbd = xp ? xp->integer : 0;
 	prm.xpbdIters = xi ? xi->integer : 1;
@@ -4368,7 +4368,7 @@ static void MC_WeatherWind(const trRefEntity_t* ent, const void* key, const int 
 	static cvar_t* fl = nullptr;
 	if (!fl)
 	{
-		fl = ri->Cvar_Get("r_meshClothFlutter", "0.35", CVAR_ARCHIVE_ND, "Wind ripples across mesh cloth: 0 even push .. 1 strong flapping");
+		fl = ri.Cvar_Get("r_meshClothFlutter", "0.35", CVAR_ARCHIVE_ND, "Wind ripples across mesh cloth: 0 even push .. 1 strong flapping");
 	}
 	prm.flutter = fl ? fl->value : 0.0f;
 
@@ -4377,9 +4377,9 @@ static void MC_WeatherWind(const trRefEntity_t* ent, const void* key, const int 
 	static cvar_t* ra = nullptr;
 	if (!cv)
 	{
-		cv = ri->Cvar_Get("r_meshClothWeatherWind", "1", CVAR_ARCHIVE_ND, "Weather wind blows mesh cloth (outside): 1 as the weather says, 0 off");
-		wa = ri->Cvar_Get("r_meshClothWater", "1", CVAR_ARCHIVE_ND, "Mesh cloth in water: drag and floating (strength, 0 off)");
-		ra = ri->Cvar_Get("r_meshClothRain", "1", CVAR_ARCHIVE_ND, "Mesh cloth soaks in the rain and gets heavier (strength, 0 off)");
+		cv = ri.Cvar_Get("r_meshClothWeatherWind", "1", CVAR_ARCHIVE_ND, "Weather wind blows mesh cloth (outside): 1 as the weather says, 0 off");
+		wa = ri.Cvar_Get("r_meshClothWater", "1", CVAR_ARCHIVE_ND, "Mesh cloth in water: drag and floating (strength, 0 off)");
+		ra = ri.Cvar_Get("r_meshClothRain", "1", CVAR_ARCHIVE_ND, "Mesh cloth soaks in the rain and gets heavier (strength, 0 off)");
 	}
 	if (!tr.world || (s_mcRefdef->rdflags & RDF_NOWORLDMODEL))
 	{
@@ -4427,7 +4427,7 @@ static int MC_OthersNear(const trRefEntity_t* ent, mcCapsule_t* out)
 	static cvar_t* oc = nullptr;
 	if (!oc)
 	{
-		oc = ri->Cvar_Get("r_meshClothOthers", "1", CVAR_ARCHIVE_ND, "Characters close to each other push each other's mesh cloth (0 off)");
+		oc = ri.Cvar_Get("r_meshClothOthers", "1", CVAR_ARCHIVE_ND, "Characters close to each other push each other's mesh cloth (0 off)");
 	}
 	if (!oc->integer || !s_mcRefdef || (s_mcRefdef->rdflags & RDF_NOWORLDMODEL))
 	{
@@ -4472,7 +4472,7 @@ static void MC_FloorUnder(const trRefEntity_t* ent, const int timeMs, mcParams_t
 		VectorCopy(ent->e.origin, end);
 		start[2] += 8.0f;
 		end[2] -= 96.0f;
-		ri->CM_BoxTrace(&tr, start, end, vec3_origin, vec3_origin, 0, CONTENTS_SOLID, qfalse);	// MP: world only
+		ri.CM_BoxTrace(&tr, start, end, vec3_origin, vec3_origin, 0, CONTENTS_SOLID, qfalse);	// MP: world only
 		if (tr.fraction < 1.0f && !tr.startsolid && !tr.allsolid && tr.plane.normal[2] > 0.5f)
 		{
 			c.ok = 1;
@@ -6172,7 +6172,7 @@ qboolean R_LoadMDXM(model_t* mod, void* buffer, const char* mod_name, qboolean& 
 
 	if (!mdxm->animIndex)
 	{
-		ri->Printf(PRINT_ALL, S_COLOR_YELLOW "R_LoadMDXM: missing animation file %s for mesh %s\n",
+		ri.Printf(PRINT_ALL, S_COLOR_YELLOW "R_LoadMDXM: missing animation file %s for mesh %s\n",
 			animNameToUse, mdxm->name);
 		return qfalse;
 	}
@@ -6586,7 +6586,7 @@ qboolean R_LoadMDXA(model_t* mod, void* buffer, const char* mod_name, qboolean& 
 
 	if (version != MDXA_VERSION)
 	{
-		ri->Printf(PRINT_ALL, S_COLOR_YELLOW "R_LoadMDXA: %s has wrong version (%i should be %i)\n", mod_name, version,
+		ri.Printf(PRINT_ALL, S_COLOR_YELLOW "R_LoadMDXA: %s has wrong version (%i should be %i)\n", mod_name, version,
 			MDXA_VERSION);
 		return qfalse;
 	}
@@ -6749,7 +6749,7 @@ qboolean R_LoadMDXA(model_t* mod, void* buffer, const char* mod_name, qboolean& 
 
 	if (mdxa->numFrames < 1)
 	{
-		ri->Printf(PRINT_ALL, S_COLOR_YELLOW "R_LoadMDXA: %s has no frames\n", mod_name);
+		ri.Printf(PRINT_ALL, S_COLOR_YELLOW "R_LoadMDXA: %s has no frames\n", mod_name);
 		return qfalse;
 	}
 

@@ -1,30 +1,28 @@
 /*
-===========================================================================
-Copyright (C) 2016, OpenJK contributors
-
-This file is part of the OpenJK source code.
-
-OpenJK is free software; you can redistribute it and/or modify it
-under the terms of the GNU General Public License version 2 as
-published by the Free Software Foundation.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program; if not, see <http://www.gnu.org/licenses/>.
-===========================================================================
+#============================================================================
+# Copyright (C) 2013 - 2018, SerenityJediEngine2027 contributors
+#
+# This file is part of the SerenityJediEngine2027 source code.
+#
+# SerenityJediEngine2027 is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, see <http://www.gnu.org/licenses/>.
+#============================================================================
 */
 #include "tr_local.h"
 
 void R_PushDebugGroup(annotationLayer_t layer, const char* name)
 {
+	// Track current debug layer
 	static GLuint currentLayer = (GLuint)AL_NONE;
-#ifdef REND2_SP
-	assert(layer <= currentLayer + 1);
-#else // !REND2_SP
 
 	// ----------------------------------------------------------------------
 	// Safety: validate layer ordering
@@ -32,7 +30,7 @@ void R_PushDebugGroup(annotationLayer_t layer, const char* name)
 	if (layer > currentLayer + 1)
 	{
 		// Replace assert with debug warning (rule #9)
-		ri->Printf(
+		ri.Printf(
 			PRINT_WARNING,
 			"R_PushDebugGroup WARNING: invalid layer order (requested %u, current %u)\n",
 			(unsigned int)layer,
@@ -47,33 +45,28 @@ void R_PushDebugGroup(annotationLayer_t layer, const char* name)
 	// ----------------------------------------------------------------------
 	// Pop groups until we reach the requested layer
 	// ----------------------------------------------------------------------
-#endif // REND2_SP
 	while (layer <= currentLayer)
 	{
 		if (currentLayer == AL_NONE)
-#ifndef REND2_SP
 		{
-#endif // !REND2_SP
 			break;
-#ifndef REND2_SP
 		}
 
-#endif // !REND2_SP
 		qglPopDebugGroupKHR();
 		currentLayer--;
 	}
+
+	// ----------------------------------------------------------------------
+	// If layer is AL_NONE, nothing to push
+	// ----------------------------------------------------------------------
 	if (layer == AL_NONE)
-#ifndef REND2_SP
 	{
-#endif // !REND2_SP
 		return;
-#ifndef REND2_SP
 	}
 
 	// ----------------------------------------------------------------------
 	// Push new debug group
 	// ----------------------------------------------------------------------
-#endif // !REND2_SP
 	currentLayer = (GLuint)layer;
 	qglPushDebugGroupKHR(GL_DEBUG_SOURCE_APPLICATION, currentLayer, -1, name);
 }

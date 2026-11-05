@@ -111,8 +111,7 @@ MakeMeshNormals
 Handles all the complicated wrapping and degenerate cases
 =================
 */
-static void MakeMeshNormals(const int width, const int height, srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE])
-{
+static void MakeMeshNormals(const int width, const int height, srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE]) {
 	int		i = 0, j = 0, k = 0, dist = 0;
 	vec3_t	normal;
 	vec3_t	sum;
@@ -217,7 +216,8 @@ static void MakeMeshNormals(const int width, const int height, srfVert_t ctrl[MA
 	}
 }
 
-static void MakeMeshTangentVectors(int width, int height, srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE], int numIndexes, glIndex_t indexes[(MAX_GRID_SIZE - 1) * (MAX_GRID_SIZE - 1) * 2 * 3])
+static void MakeMeshTangentVectors(int width, int height, srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE], int numIndexes,
+	glIndex_t indexes[(MAX_GRID_SIZE - 1) * (MAX_GRID_SIZE - 1) * 2 * 3])
 {
 	int             i = 0, j = 0;
 	srfVert_t* dv[3]{};
@@ -372,8 +372,9 @@ static void PutPointsOnCurve(srfVert_t	ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE],
 R_CreateSurfaceGridMesh
 =================
 */
-static srfBspSurface_t* R_CreateSurfaceGridMesh(int width, int height, srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE], float errorTable[2][MAX_GRID_SIZE], int numIndexes, glIndex_t indexes[(MAX_GRID_SIZE - 1) * (MAX_GRID_SIZE - 1) * 2 * 3])
-{
+static srfBspSurface_t* R_CreateSurfaceGridMesh(int width, int height,
+	srfVert_t ctrl[MAX_GRID_SIZE][MAX_GRID_SIZE], float errorTable[2][MAX_GRID_SIZE],
+	int numIndexes, glIndex_t indexes[(MAX_GRID_SIZE - 1) * (MAX_GRID_SIZE - 1) * 2 * 3]) {
 	int i = 0, j = 0, size = 0;
 	srfVert_t* vert = nullptr;
 	vec3_t		tmpVec;
@@ -382,41 +383,21 @@ static srfBspSurface_t* R_CreateSurfaceGridMesh(int width, int height, srfVert_t
 	// copy the results out to a grid
 	size = (width * height - 1) * sizeof(srfVert_t) + sizeof(*grid);
 
-#ifdef REND2_SP
 	grid = /*ri.Hunk_Alloc*/ (srfBspSurface_t*)R_Malloc(size, TAG_GRIDMESH);
-#else // !REND2_SP
-	grid = /*ri->Hunk_Alloc*/ (srfBspSurface_t*)Z_Malloc(size, TAG_GRIDMESH);
-#endif // REND2_SP
 	memset(grid, 0, size);
 
-#ifdef REND2_SP
 	grid->widthLodError = /*ri.Hunk_Alloc*/ (float*)R_Malloc(width * 4, TAG_GRIDMESH);
-#else // !REND2_SP
-	grid->widthLodError = /*ri->Hunk_Alloc*/ (float*)Z_Malloc(width * 4, TAG_GRIDMESH);
-#endif // REND2_SP
 	memcpy(grid->widthLodError, errorTable[0], width * 4);
 
-#ifdef REND2_SP
 	grid->heightLodError = /*ri.Hunk_Alloc*/ (float*)R_Malloc(height * 4, TAG_GRIDMESH);
-#else // !REND2_SP
-	grid->heightLodError = /*ri->Hunk_Alloc*/ (float*)Z_Malloc(height * 4, TAG_GRIDMESH);
-#endif // REND2_SP
 	memcpy(grid->heightLodError, errorTable[1], height * 4);
 
 	grid->numIndexes = numIndexes;
-#ifdef REND2_SP
 	grid->indexes = (glIndex_t*)R_Malloc(grid->numIndexes * sizeof(glIndex_t), TAG_GRIDMESH);
-#else // !REND2_SP
-	grid->indexes = (glIndex_t*)Z_Malloc(grid->numIndexes * sizeof(glIndex_t), TAG_GRIDMESH);
-#endif // REND2_SP
 	memcpy(grid->indexes, indexes, numIndexes * sizeof(glIndex_t));
 
 	grid->numVerts = (width * height);
-#ifdef REND2_SP
 	grid->verts = (srfVert_t*)R_Malloc(grid->numVerts * sizeof(srfVert_t), TAG_GRIDMESH);
-#else // !REND2_SP
-	grid->verts = (srfVert_t*)Z_Malloc(grid->numVerts * sizeof(srfVert_t), TAG_GRIDMESH);
-#endif // REND2_SP
 
 	grid->width = width;
 	grid->height = height;
@@ -447,8 +428,7 @@ static srfBspSurface_t* R_CreateSurfaceGridMesh(int width, int height, srfVert_t
 R_FreeSurfaceGridMesh
 =================
 */
-void R_FreeSurfaceGridMesh(srfBspSurface_t* grid)
-{
+void R_FreeSurfaceGridMesh(srfBspSurface_t* grid) {
 	Z_Free(grid->widthLodError);
 	Z_Free(grid->heightLodError);
 	Z_Free(grid->indexes);
@@ -461,8 +441,8 @@ void R_FreeSurfaceGridMesh(srfBspSurface_t* grid)
 R_SubdividePatchToGrid
 =================
 */
-srfBspSurface_t* R_SubdividePatchToGrid(int width, int height, srfVert_t points[MAX_PATCH_SIZE * MAX_PATCH_SIZE])
-{
+srfBspSurface_t* R_SubdividePatchToGrid(int width, int height,
+	srfVert_t points[MAX_PATCH_SIZE * MAX_PATCH_SIZE]) {
 	int			i = 0, j = 0, k = 0, l = 0;
 	srfVert_t prev;
 	srfVert_t next;
@@ -646,8 +626,7 @@ srfBspSurface_t* R_SubdividePatchToGrid(int width, int height, srfVert_t points[
 R_GridInsertColumn
 ===============
 */
-srfBspSurface_t* R_GridInsertColumn(srfBspSurface_t* grid, int column, int row, vec3_t point, float loderror)
-{
+srfBspSurface_t* R_GridInsertColumn(srfBspSurface_t* grid, int column, int row, vec3_t point, float loderror) {
 	int i = 0, j = 0;
 	int width = 0, height = 0, oldwidth = 0;
 	// static: this grid is ~660 KB, too big for the 1 MB main-thread stack (map load only, never re-entered)
@@ -709,8 +688,7 @@ srfBspSurface_t* R_GridInsertColumn(srfBspSurface_t* grid, int column, int row, 
 R_GridInsertRow
 ===============
 */
-srfBspSurface_t* R_GridInsertRow(srfBspSurface_t* grid, int row, int column, vec3_t point, float loderror)
-{
+srfBspSurface_t* R_GridInsertRow(srfBspSurface_t* grid, int row, int column, vec3_t point, float loderror) {
 	int i = 0, j = 0;
 	int width = 0, height = 0, oldheight = 0;
 	// static: this grid is ~660 KB, too big for the 1 MB main-thread stack (map load only, never re-entered)

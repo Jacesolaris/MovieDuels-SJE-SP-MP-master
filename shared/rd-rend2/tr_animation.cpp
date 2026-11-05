@@ -41,14 +41,9 @@ R_MDRCullModel
 =============
 */
 
-#ifdef REND2_SP
-static int R_MDRCullModel(mdrHeader_t* header, trRefEntity_t* ent) {
-	vec3_t		bounds[2];
-#else // !REND2_SP
-static int R_MDRCullModel(mdrHeader_t * header, trRefEntity_t * ent)
+static int R_MDRCullModel(mdrHeader_t* header, trRefEntity_t* ent)
 {
 	vec3_t		bounds[2]{};
-#endif // REND2_SP
 	mdrFrame_t* oldFrame = nullptr, * newFrame = nullptr;
 	int			i = 0, frameSize = 0;
 
@@ -141,12 +136,8 @@ R_MDRComputeFogNum
 =================
 */
 
-#ifdef REND2_SP
-int R_MDRComputeFogNum(mdrHeader_t * header, trRefEntity_t * ent) {
-#else // !REND2_SP
-static int R_MDRComputeFogNum(mdrHeader_t * header, trRefEntity_t * ent)
+static int R_MDRComputeFogNum(mdrHeader_t* header, trRefEntity_t* ent)
 {
-#endif // REND2_SP
 	int				i = 0, j = 0;
 	float			frameRadius = 0.0f;
 	fog_t* fog = nullptr;
@@ -199,12 +190,6 @@ static int R_MDRComputeFogNum(mdrHeader_t * header, trRefEntity_t * ent)
 			(localOrigin[0] + frameRadius >= fog->bounds[0][0] && localOrigin[1] + frameRadius >= fog->bounds[0][1] && localOrigin[2] + frameRadius >= fog->bounds[0][2] &&
 				localOrigin[0] + frameRadius <= fog->bounds[1][0] && localOrigin[1] + frameRadius <= fog->bounds[1][1] && localOrigin[2] + frameRadius <= fog->bounds[1][2]))
 		{//partially inside it
-			//if (tr.refdef.fogIndex == i || R_FogParmsMatch(tr.refdef.fogIndex, i))
-			//{//take new one only if it's the same one that the viewpoint is in
-			//	return i;
-			//	break;
-			//}
-			//else
 			if (!partialFog)
 			{//first partialFog
 				partialFog = i;
@@ -223,7 +208,7 @@ R_MDRAddAnimSurfaces
 
 // much stuff in there is just copied from R_AddMd3Surfaces in tr_mesh.c
 
-void R_MDRAddAnimSurfaces(trRefEntity_t * ent, int entityNum)
+void R_MDRAddAnimSurfaces(trRefEntity_t* ent, int entityNum)
 {
 	mdrHeader_t* header = nullptr;
 	mdrSurface_t* surface = nullptr;
@@ -260,18 +245,12 @@ void R_MDRAddAnimSurfaces(trRefEntity_t * ent, int entityNum)
 		|| (ent->e.frame < 0)
 		|| (ent->e.oldframe >= header->numFrames)
 		|| (ent->e.oldframe < 0))
-#ifdef REND2_SP
 	{
 		ri.Printf(PRINT_DEVELOPER, "R_MDRAddAnimSurfaces: no such frame %d to %d for '%s'\n",
 			ent->e.oldframe, ent->e.frame, tr.currentModel->name);
-#else // !REND2_SP
-		{
-			ri->Printf(PRINT_DEVELOPER, "R_MDRAddAnimSurfaces: no such frame %d to %d for '%s'\n",
-				ent->e.oldframe, ent->e.frame, tr.currentModel->name);
-#endif // REND2_SP
-			ent->e.frame = 0;
-			ent->e.oldframe = 0;
-		}
+		ent->e.frame = 0;
+		ent->e.oldframe = 0;
+	}
 
 	//
 	// cull the entire model if merged bounding box of both frames
@@ -335,11 +314,7 @@ void R_MDRAddAnimSurfaces(trRefEntity_t * ent, int entityNum)
 			&& !(ent->e.renderfx & (RF_NOSHADOW | RF_DEPTHHACK))
 			&& shader->sort == SS_OPAQUE)
 		{
-#ifdef REND2_SP
-			R_AddDrawSurf((surfaceType_t*)surface, entityNum, tr.shadowShader, 0, qfalse, R_IsPostRenderEntity(ent), 0);
-#else // !REND2_SP
 			R_AddDrawSurf(reinterpret_cast<surfaceType_t*>(surface), entityNum, tr.shadowShader, 0, qfalse, R_IsPostRenderEntity(ent), 0);
-#endif // REND2_SP
 		}
 
 		// projection shadows work fine with personal models
@@ -348,32 +323,24 @@ void R_MDRAddAnimSurfaces(trRefEntity_t * ent, int entityNum)
 			&& (ent->e.renderfx & RF_SHADOW_PLANE)
 			&& shader->sort == SS_OPAQUE)
 		{
-#ifdef REND2_SP
-			R_AddDrawSurf((surfaceType_t*)surface, entityNum, tr.projectionShadowShader, 0, qfalse, R_IsPostRenderEntity(ent), 0);
-#else // !REND2_SP
 			R_AddDrawSurf(reinterpret_cast<surfaceType_t*>(surface), entityNum, tr.projectionShadowShader, 0, qfalse, R_IsPostRenderEntity(ent), 0);
-#endif // REND2_SP
 		}
 
 		if (!personalModel)
-#ifndef REND2_SP
 		{
-#endif // !REND2_SP
 			R_AddDrawSurf((surfaceType_t*)surface, entityNum, shader, fogNum, qfalse, R_IsPostRenderEntity(ent), cubemapIndex);
-#ifndef REND2_SP
 		}
-#endif // !REND2_SP
 
 		surface = (mdrSurface_t*)((byte*)surface + surface->ofsEnd);
 	}
-	}
+}
 
 /*
 ==============
 RB_MDRSurfaceAnim
 ==============
 */
-void RB_MDRSurfaceAnim(mdrSurface_t * surface)
+void RB_MDRSurfaceAnim(mdrSurface_t* surface)
 {
 	int				i = 0, j = 0, k = 0;
 	float			frontlerp = 0.0f, backlerp = 0.0f;
@@ -385,11 +352,7 @@ void RB_MDRSurfaceAnim(mdrSurface_t * surface)
 	mdrHeader_t* header = nullptr;
 	mdrFrame_t* frame = nullptr;
 	mdrFrame_t* oldFrame = nullptr;
-#ifdef REND2_SP
-	mdrBone_t		bones[MDR_MAX_BONES], * bonePtr = nullptr, * bone = nullptr;
-#else // !REND2_SP
 	mdrBone_t		bones[MDR_MAX_BONES]{}, * bonePtr = nullptr, * bone = nullptr;
-#endif // REND2_SP
 
 	int			frameSize = 0;
 

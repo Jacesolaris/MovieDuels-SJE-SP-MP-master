@@ -47,13 +47,10 @@ use the shader system.
 RB_CheckOverflow
 ==============
 */
-#ifdef REND2_SP
-void RB_CheckOverflow(const int verts, const int indexes)
-#else // !REND2_SP
 void RB_CheckOverflow(int verts, int indexes)
-#endif // REND2_SP
 {
-	if ((tess.numVertexes + verts) < SHADER_MAX_VERTEXES && (tess.numIndexes + indexes) < SHADER_MAX_INDEXES)
+	if ((tess.numVertexes + verts) < SHADER_MAX_VERTEXES &&
+		(tess.numIndexes + indexes) < SHADER_MAX_INDEXES)
 	{
 		return;
 	}
@@ -61,18 +58,10 @@ void RB_CheckOverflow(int verts, int indexes)
 	RB_EndSurface();
 
 	if (verts >= SHADER_MAX_VERTEXES) {
-#ifdef REND2_SP
 		ri.Error(ERR_DROP, "RB_CheckOverflow: verts > MAX (%d > %d)", verts, SHADER_MAX_VERTEXES);
-#else // !REND2_SP
-		ri->Error(ERR_DROP, "RB_CheckOverflow: verts > MAX (%d > %d)", verts, SHADER_MAX_VERTEXES);
-#endif // REND2_SP
 	}
 	if (indexes >= SHADER_MAX_INDEXES) {
-#ifdef REND2_SP
 		ri.Error(ERR_DROP, "RB_CheckOverflow: indices > MAX (%d > %d)", indexes, SHADER_MAX_INDEXES);
-#else // !REND2_SP
-		ri->Error(ERR_DROP, "RB_CheckOverflow: indices > MAX (%d > %d)", indexes, SHADER_MAX_INDEXES);
-#endif // REND2_SP
 	}
 
 	RB_BeginSurface(tess.shader, tess.fogNum, tess.cubemapIndex);
@@ -109,7 +98,8 @@ static void RB_CheckVBOandIBO(VBO_t* vbo, IBO_t* ibo)
 RB_AddQuadStampExt
 ==============
 */
-void RB_AddQuadStampExt(vec3_t origin, vec3_t left, vec3_t up, float color[4], float s1, float t1, float s2, float t2) {
+void RB_AddQuadStampExt(vec3_t origin, vec3_t left, vec3_t up, float color[4], float s1, float t1, float s2, float t2)
+{
 	vec3_t		normal;
 	int			ndx = 0;
 
@@ -192,8 +182,6 @@ based on Tess_InstantQuad from xreal
 */
 void RB_InstantQuad2(vec4_t quadVerts[4], vec2_t texCoords[4])
 {
-	//	GLimp_LogComment("--- RB_InstantQuad2 ---\n");					// FIXME: REIMPLEMENT (wasn't implemented in ioq3 to begin with) --eez
-
 	tess.numVertexes = 0;
 	tess.numIndexes = 0;
 	tess.firstIndex = 0;
@@ -267,12 +255,8 @@ void RB_InstantTriangle()
 RB_SurfaceSprite
 ==============
 */
-#ifdef REND2_SP
-static void RB_SurfaceSprite() {
-#else // !REND2_SP
 static void RB_SurfaceSprite(void)
 {
-#endif // REND2_SP
 	vec3_t		left, up;
 	float		radius = 0.0f;
 	float			colors[4]{};
@@ -368,7 +352,8 @@ static void RB_SurfaceOrientedQuad(void)
 RB_SurfacePolychain
 =============
 */
-static void RB_SurfacePolychain(srfPoly_t * p) {
+static void RB_SurfacePolychain(srfPoly_t* p)
+{
 	int		i = 0;
 	int		numv = 0;
 
@@ -399,7 +384,7 @@ static void RB_SurfacePolychain(srfPoly_t * p) {
 	tess.numVertexes = numv;
 }
 
-static void RB_SurfaceVertsAndIndexes(int numVerts, srfVert_t * verts, int numIndexes, glIndex_t * indexes, int dlightBits, int pshadowBits)
+static void RB_SurfaceVertsAndIndexes(int numVerts, srfVert_t* verts, int numIndexes, glIndex_t* indexes, int dlightBits, int pshadowBits)
 {
 	int             i = 0;
 	glIndex_t* inIndex = nullptr;
@@ -494,17 +479,10 @@ static void RB_SurfaceVertsAndIndexes(int numVerts, srfVert_t * verts, int numIn
 	tess.numVertexes += numVerts;
 }
 
-#ifdef REND2_SP
 static qboolean RB_SurfaceVbo(
-	VBO_t * vbo, IBO_t * ibo, int numVerts, int numIndexes, int firstIndex,
-	int minIndex, int maxIndex, int dlightBits, int pshadowBits, qboolean shaderCheck)
-{
-#else // !REND2_SP
-static qboolean RB_SurfaceVbo(
-	VBO_t * vbo, IBO_t * ibo, uint32_t numVerts, uint32_t numIndexes, uint32_t firstIndex,
+	VBO_t* vbo, IBO_t* ibo, uint32_t numVerts, uint32_t numIndexes, uint32_t firstIndex,
 	uint32_t minIndex, uint32_t maxIndex, int dlightBits, int pshadowBits, qboolean shaderCheck)
 {
-#endif // REND2_SP
 	int i = 0, mergeForward = 0, mergeBack = 0;
 	GLvoid* firstIndexOffset = nullptr, * lastIndexOffset = nullptr;
 
@@ -615,7 +593,8 @@ static qboolean RB_SurfaceVbo(
 RB_SurfaceBSPTriangles
 =============
 */
-static void RB_SurfaceBSPTriangles(srfBspSurface_t * srf) {
+static void RB_SurfaceBSPTriangles(srfBspSurface_t* srf)
+{
 	if (RB_SurfaceVbo(srf->vbo, srf->ibo, srf->numVerts, srf->numIndexes,
 		srf->firstIndex, srf->minIndex, srf->maxIndex, srf->dlightBits, srf->pshadowBits, qtrue))
 	{
@@ -634,6 +613,7 @@ RB_SurfaceBeam
 static void RB_SurfaceBeam(void)
 {
 #define NUM_BEAM_SEGS 6
+
 	refEntity_t* e = nullptr;
 	shaderProgram_t* sp = &tr.textureColorShader[TEXCOLORDEF_USE_VERTICES];
 	int	i = 0;
@@ -666,7 +646,6 @@ static void RB_SurfaceBeam(void)
 	for (i = 0; i < NUM_BEAM_SEGS; i++)
 	{
 		RotatePointAroundVector(start_points[i], normalized_direction, perpvec, (360.0 / NUM_BEAM_SEGS) * i);
-		//		VectorAdd( start_points[i], origin, start_points[i] );
 		VectorAdd(start_points[i], direction, end_points[i]);
 	}
 
@@ -725,20 +704,12 @@ static void RB_SurfaceBeam(void)
 //------------------
 // DoSprite
 //------------------
-#ifdef REND2_SP
-static void DoSprite(vec3_t origin, const float radius, const float rotation)
-#else // !REND2_SP
 static void DoSprite(vec3_t origin, float radius, float rotation)
-#endif // REND2_SP
 {
 	float	s = 0.0f, c = 0.0f;
 	float	ang = 0.0f;
 	vec3_t	left, up;
-#ifdef REND2_SP
-	float	color[4]{};
-#else // !REND2_SP
 	float	color[4];
-#endif // REND2_SP
 
 	ang = M_PI * rotation / 180.0f;
 	s = sin(ang);
@@ -765,35 +736,22 @@ static void DoSprite(vec3_t origin, float radius, float rotation)
 //------------------
 static void RB_SurfaceSaberGlow()
 {
-#ifdef REND2_SP
-	refEntity_t* e = &backEnd.currentEntity->e;
-#else // !REND2_SP
 	vec3_t		end;
 	refEntity_t* e = nullptr;
 
 	e = &backEnd.currentEntity->e;
-#endif // REND2_SP
 
 	// Render the glow part of the blade
 	for (float i = e->saberLength; i > 0; i -= e->radius * 0.65f)
 	{
-#ifdef REND2_SP
-		vec3_t end;
-#endif // REND2_SP
 		VectorMA(e->origin, i, e->axis[0], end);
 
-		DoSprite(end, e->radius, 0.0f);//Q_flrand(0.0f, 1.0f) * 360.0f );
+		DoSprite(end, e->radius, 0.0f);//random() * 360.0f );
 		e->radius += 0.017f;
 	}
 
 	// Big hilt sprite
-#ifdef REND2_SP
-	// Please don't kill me Pat...I liked the hilt glow blob, but wanted a subtle pulse.:)  Feel free to ditch it if you don't like it.  --Jeff
-	// Please don't kill me Jeff...  The pulse is good, but now I want the halo bigger if the saber is shorter...  --Pat
-	DoSprite(e->origin, 2.5f + Q_flrand(0.0f, 0.5f) * 0.15f, 0.0f);
-#else // !REND2_SP
 	DoSprite(e->origin, 5.5f + Q_flrand(0.0f, 1.0f) * 0.25f, 0.0f);//random() * 360.0f );
-#endif // REND2_SP
 }
 
 /*
@@ -860,11 +818,7 @@ static void DoLine(const vec3_t start, const vec3_t end, const vec3_t up, float 
 	tess.indexes[tess.numIndexes++] = vbase + 3;
 }
 
-#ifdef REND2_SP
-static void DoLine2(const vec3_t start, const vec3_t end, const vec3_t up, const float spanWidth, const float spanWidth2, const float tcStart = 0.0f, const float tcEnd = 1.0f)
-#else // !REND2_SP
 static void DoLine2(const vec3_t start, const vec3_t end, const vec3_t up, float spanWidth, float spanWidth2, const float tcStart = 0.0f, const float tcEnd = 1.0f)
-#endif // REND2_SP
 {
 	int			vbase = 0;
 
@@ -1000,7 +954,7 @@ RB_SurfaceCylinder
 #define NUM_CYLINDER_SEGMENTS 32
 
 // FIXME: use quad stamp?
-static void DoCylinderPart(polyVert_t * verts)
+static void DoCylinderPart(polyVert_t* verts)
 {
 	int			vbase = 0;
 	int			i = 0;
@@ -1135,24 +1089,6 @@ static void RB_SurfaceCylinder(void)
 }
 
 static vec3_t sh1, sh2;
-#ifdef REND2_SP
-static float f_count;
-
-#define LIGHTNING_RECURSION_LEVEL 1 // was 2
-// Up front, we create a random "shape", then apply that to each line segment...and then again to each of those segments...kind of like a fractal
-//----------------------------------------------------------------------------
-static void CreateShape()
-//----------------------------------------------------------------------------
-{
-	VectorSet(sh1, 0.66f,// + Q_flrand(-1.0f, 1.0f) * 0.1f,	// fwd
-		0.08f + Q_flrand(-1.0f, 1.0f) * 0.02f,
-		0.08f + Q_flrand(-1.0f, 1.0f) * 0.02f);
-
-	// it seems to look best to have a point on one side of the ideal line, then the other point on the other side.
-	VectorSet(sh2, 0.33f,// + Q_flrand(-1.0f, 1.0f) * 0.1f,	// fwd
-		-sh1[1] + Q_flrand(-1.0f, 1.0f) * 0.02f,	// forcing point to be on the opposite side of the line -- right
-		-sh1[2] + Q_flrand(-1.0f, 1.0f) * 0.02f);// up
-#else // !REND2_SP
 static float f_count;
 
 #define LIGHTNING_RECURSION_LEVEL 1 // was 2
@@ -1162,6 +1098,7 @@ static float f_count;
 static void CreateShape()
 //----------------------------------------------------------------------------
 {
+#ifndef REND2_SP
 	VectorSet(sh1, 0.66f + Q_flrand(-1.0f, 1.0f) * 0.1f,	// fwd
 		0.07f + Q_flrand(-1.0f, 1.0f) * 0.025f,
 		0.07f + Q_flrand(-1.0f, 1.0f) * 0.025f);
@@ -1170,72 +1107,58 @@ static void CreateShape()
 	VectorSet(sh2, 0.33f + Q_flrand(-1.0f, 1.0f) * 0.1f,	// fwd
 		-sh1[1] + Q_flrand(-1.0f, 1.0f) * 0.02f,	// forcing point to be on the opposite side of the line -- right
 		-sh1[2] + Q_flrand(-1.0f, 1.0f) * 0.02f);// up
-#endif // REND2_SP
+#else
+	VectorSet(sh1, 0.66f,// + Q_flrand(-1.0f, 1.0f) * 0.1f,	// fwd
+		0.08f + Q_flrand(-1.0f, 1.0f) * 0.02f,
+		0.08f + Q_flrand(-1.0f, 1.0f) * 0.02f);
+
+	// it seems to look best to have a point on one side of the ideal line, then the other point on the other side.
+	VectorSet(sh2, 0.33f,// + Q_flrand(-1.0f, 1.0f) * 0.1f,	// fwd
+		-sh1[1] + Q_flrand(-1.0f, 1.0f) * 0.02f,	// forcing point to be on the opposite side of the line -- right
+		-sh1[2] + Q_flrand(-1.0f, 1.0f) * 0.02f);// up
+#endif
 }
 
 //----------------------------------------------------------------------------
-#ifdef REND2_SP
-static void ApplyShape(vec3_t start, vec3_t end, vec3_t right, const float sradius, const float eradius, const int count, const float start_perc, const float end_perc)
-#else // !REND2_SP
 static void ApplyShape(vec3_t start, vec3_t end, vec3_t right, float sradius, float eradius, int count, float startPerc = 0.0f, float endPerc = 1.0f)
-#endif // REND2_SP
 //----------------------------------------------------------------------------
 {
 	vec3_t	point1, point2, fwd;
 	vec3_t	rt, up;
-#ifndef REND2_SP
 	float	perc = 0.0f, dis = 0.0f;
-#endif // !REND2_SP
 
 	if (count < 1)
 	{
 		// done recursing
-#ifdef REND2_SP
-		DoLine2(start, end, right, sradius, eradius, start_perc, end_perc);
-#else // !REND2_SP
 		DoLine2(start, end, right, sradius, eradius, startPerc, endPerc);
-#endif // REND2_SP
 		return;
 	}
 
 	CreateShape();
 
 	VectorSubtract(end, start, fwd);
-#ifdef REND2_SP
-	const float dis = VectorNormalize(fwd) * 0.7f;
-#else // !REND2_SP
 	dis = VectorNormalize(fwd) * 0.7f;
-#endif // REND2_SP
 	MakeNormalVectors(fwd, rt, up);
 
-#ifdef REND2_SP
-	float perc = sh1[0];
-#else // !REND2_SP
 	perc = sh1[0];
-#endif // REND2_SP
 
 	VectorScale(start, perc, point1);
 	VectorMA(point1, 1.0f - perc, end, point1);
 	VectorMA(point1, dis * sh1[1], rt, point1);
 	VectorMA(point1, dis * sh1[2], up, point1);
 
-#ifdef REND2_SP
-	const float rads1 = sradius * 0.666f + eradius * 0.333f;
-	const float rads2 = sradius * 0.333f + eradius * 0.666f;
-#else // !REND2_SP
 	// do a quick and dirty interpolation of the radius at that point
 	float rads1 = 0.0f, rads2 = 0.0f;
 
 	rads1 = sradius * 0.666f + eradius * 0.333f;
 	rads2 = sradius * 0.333f + eradius * 0.666f;
-#endif // REND2_SP
 
 	// recursion
-#ifdef REND2_SP
-	ApplyShape(start, point1, right, sradius, rads1, count - 1, start_perc, start_perc * 0.666f + end_perc * 0.333f);
-#else // !REND2_SP
+#ifndef REND2_SP
 	ApplyShape(start, point1, right, sradius, rads1, count - 1);
-#endif // REND2_SP
+#else
+	ApplyShape(start, point1, right, sradius, rads1, count - 1, startPerc, startPerc * 0.666f + endPerc * 0.333f);
+#endif
 
 	perc = sh2[0];
 
@@ -1245,55 +1168,21 @@ static void ApplyShape(vec3_t start, vec3_t end, vec3_t right, float sradius, fl
 	VectorMA(point2, dis * sh2[2], up, point2);
 
 	// recursion
-#ifdef REND2_SP
-	ApplyShape(point2, point1, right, rads1, rads2, count - 1, start_perc * 0.333f + end_perc * 0.666f, start_perc * 0.666f + end_perc * 0.333f);
-	ApplyShape(point2, end, right, rads2, eradius, count - 1, start_perc * 0.333f + end_perc * 0.666f, end_perc);
-#else // !REND2_SP
+#ifndef REND2_SP
 	ApplyShape(point2, point1, right, rads1, rads2, count - 1);
 	ApplyShape(point2, end, right, rads2, eradius, count - 1);
-#endif // REND2_SP
+#else
+	ApplyShape(point2, point1, right, rads1, rads2, count - 1, startPerc * 0.333f + endPerc * 0.666f, startPerc * 0.666f + endPerc * 0.333f);
+	ApplyShape(point2, end, right, rads2, eradius, count - 1, startPerc * 0.333f + endPerc * 0.666f, endPerc);
+#endif
 }
 
 //----------------------------------------------------------------------------
-#ifdef REND2_SP
-static void DoBoltSeg(vec3_t start, vec3_t end, vec3_t right, const float radius)
-#else // !REND2_SP
 static void DoBoltSeg(vec3_t start, vec3_t end, vec3_t right, float radius)
-#endif // REND2_SP
 //----------------------------------------------------------------------------
 {
-#ifndef REND2_SP
 	refEntity_t* e = nullptr;
-#endif // !REND2_SP
 	vec3_t fwd, old;
-#ifdef REND2_SP
-	vec3_t off = { 10,10,10 };
-	vec3_t rt, up;
-	float oldPerc = 0.0f, perc = 0.0f, oldRadius = 0.0f;
-
-	refEntity_t* e = &backEnd.currentEntity->e;
-
-	VectorSubtract(end, start, fwd);
-	float dis = VectorNormalize(fwd);
-
-	if (dis > 2000)	//freaky long
-	{
-		//		ri.Printf( PRINT_WARNING, "DoBoltSeg: insane distance.\n" );
-		dis = 2000;
-	}
-	MakeNormalVectors(fwd, rt, up);
-
-	VectorCopy(start, old);
-
-	float newRadius = oldRadius = radius;
-
-	for (int i = 16; i <= dis; i += 16)
-	{
-		vec3_t temp;
-		vec3_t cur;
-		// because of our large step size, we may not actually draw to the end.  In this case, fudge our percent so that we are basically complete
-		if (i + 16 > dis)
-#else // !REND2_SP
 	vec3_t cur, off = { 10,10,10 };
 	vec3_t rt, up;
 	vec3_t temp;
@@ -1304,45 +1193,56 @@ static void DoBoltSeg(vec3_t start, vec3_t end, vec3_t right, float radius)
 
 	VectorSubtract(end, start, fwd);
 	dis = VectorNormalize(fwd);
+
+#ifdef REND2_SP
+	if (dis > 2000)	//freaky long
+	{
+		//		ri.Printf( PRINT_WARNING, "DoBoltSeg: insane distance.\n" );
+		dis = 2000;
+	}
+#endif
+
+#ifndef REND2_SP
 	if (!(dis <= 2000.0f))	// freaky long (or NaN): SP already capped this; MP drew it in full (2026-11-01)
 	{
 		dis = 2000.0f;
 	}
-
+#endif
 	MakeNormalVectors(fwd, rt, up);
 
 	VectorCopy(start, old);
 
+#ifndef REND2_SP
 	oldRadius = newRadius = radius;
 	for (i = 20; i <= dis; i += 20)
 	{
 		// because of our large step size, we may not actually draw to the end.  In this case, fudge our percent so that we are basically complete
 		if (i + 20 > dis)
-#endif // REND2_SP
+#else
+	newRadius = oldRadius = radius;
+	for (i = 16; i <= dis; i += 16)
+	{
+		// because of our large step size, we may not actually draw to the end.  In this case, fudge our percent so that we are basically complete
+		if (i + 16 > dis)
+#endif
 		{
 			perc = 1.0f;
 		}
 		else
 		{
 			// percentage of the amount of line completed
-#ifdef REND2_SP
-			perc = static_cast<float>(i) / dis;
-#else // !REND2_SP
 			perc = (float)i / dis;
-#endif // REND2_SP
 		}
 
-#ifdef REND2_SP
 		// create our level of deviation for this point
 		VectorScale(fwd, Q_crandom(&e->frame) * 3.0f, temp);				// move less in fwd direction, chaos also does not affect this
-		VectorMA(temp, Q_crandom(&e->frame) * 7.0f * e->angles[0], rt, temp);	// move more in direction perpendicular to line, angles is really the chaos
-		VectorMA(temp, Q_crandom(&e->frame) * 7.0f * e->angles[0], up, temp);	// move more in direction perpendicular to line
-#else // !REND2_SP
-		// create our level of deviation for this point
-		VectorScale(fwd, Q_crandom(&e->frame) * 3.0f, temp);				// move less in fwd direction, chaos also does not affect this
+#ifndef REND2_SP
 		VectorMA(temp, Q_crandom(&e->frame) * 7.0f * e->axis[0][0], rt, temp);	// move more in direction perpendicular to line, angles is really the chaos
 		VectorMA(temp, Q_crandom(&e->frame) * 7.0f * e->axis[0][0], up, temp);	// move more in direction perpendicular to line
-#endif // REND2_SP
+#else
+		VectorMA(temp, Q_crandom(&e->frame) * 7.0f * e->angles[0], rt, temp);	// move more in direction perpendicular to line, angles is really the chaos
+		VectorMA(temp, Q_crandom(&e->frame) * 7.0f * e->angles[0], up, temp);	// move more in direction perpendicular to line
+#endif
 
 		// track our total level of offset from the ideal line
 		VectorAdd(off, temp, off);
@@ -1361,107 +1261,79 @@ static void DoBoltSeg(vec3_t start, vec3_t end, vec3_t right, float radius)
 			newRadius = radius * (1.0f - perc * perc);
 		}
 
-#ifdef REND2_SP
 		// Apply the random shape to our line seg to give it some micro-detail-jaggy-coolness.
-		ApplyShape(cur, old, right, newRadius, oldRadius, 2 - r_lodbias->integer, 0, 1);
-#else // !REND2_SP
-		// Apply the random shape to our line seg to give it some micro-detail-jaggy-coolness.
+#ifndef REND2_SP
 		ApplyShape(cur, old, right, newRadius, oldRadius, LIGHTNING_RECURSION_LEVEL);
-#endif // REND2_SP
+#else
+		ApplyShape(cur, old, right, newRadius, oldRadius, 2 - r_lodbias->integer, 0, 1);
+#endif
 
 		// randomly split off to create little tendrils, but don't do it too close to the end and especially if we are not even of the forked variety
-#ifdef REND2_SP
-		if (e->renderfx & RF_FORKED && f_count > 0 && Q_random(&e->frame) > 0.93f && 1.0f - perc > 0.8f)
-#else // !REND2_SP
 		if ((e->renderfx & RF_FORKED) && f_count > 0 && Q_random(&e->frame) > 0.94f && radius * (1.0f - perc) > 0.2f)
-#endif // REND2_SP
 		{
-#ifdef REND2_SP
-			vec3_t new_dest;
-#else // !REND2_SP
 			vec3_t newDest;
-#endif // REND2_SP
 
 			f_count--;
 
 			// Pick a point somewhere between the current point and the final endpoint
-#ifdef REND2_SP
-			VectorAdd(cur, e->oldorigin, new_dest);
-			VectorScale(new_dest, 0.5f, new_dest);
-#else // !REND2_SP
 			VectorAdd(cur, e->oldorigin, newDest);
 			VectorScale(newDest, 0.5f, newDest);
-#endif // REND2_SP
 
 			// And then add some crazy offset
-#ifdef REND2_SP
-			for (float& t : new_dest)
-#else // !REND2_SP
 			for (int t = 0; t < 3; t++)
-#endif // REND2_SP
 			{
-#ifdef REND2_SP
-				t += Q_crandom(&e->frame) * 80;
-#else // !REND2_SP
 				newDest[t] += Q_crandom(&e->frame) * 80;
-#endif // REND2_SP
 			}
 
 			// we could branch off using OLD and NEWDEST, but that would allow multiple forks...whereas, we just want simpler brancing
-#ifdef REND2_SP
-			DoBoltSeg(cur, new_dest, right, newRadius);
-#else // !REND2_SP
 			DoBoltSeg(cur, newDest, right, newRadius);
-#endif // REND2_SP
 		}
 
 		// Current point along the line becomes our new old attach point
 		VectorCopy(cur, old);
 		oldPerc = perc;
 	}
-#ifdef REND2_SP
 	}
 
+//------------------------------------------
+// RT_LIGHTNING: four rail cores rotated 45 degrees around the bolt (from MD9 SP, SJE/MD9 shared renderer (2026-11-05): colours are 0..1
+// in rend2, the outer edge at a quarter of the entity colour, as vanilla)
 static void DoRailCore(const vec3_t start, const vec3_t end, const vec3_t up, const float len, const float spanWidth)
 {
-	const float		t = len / 256.0f;
+	const float t = len / 256.0f;
+	byte rgbaBytes[4];
+	vec4_t edge, core;
+
+	RB_CHECKOVERFLOW(4, 6);
+
+	Com_Memcpy(rgbaBytes, backEnd.currentEntity->e.shaderRGBA, sizeof(rgbaBytes));
+	VectorSet4(core, rgbaBytes[0] / 255.0f, rgbaBytes[1] / 255.0f, rgbaBytes[2] / 255.0f, 1.0f);
+	VectorSet4(edge, core[0] * 0.25f, core[1] * 0.25f, core[2] * 0.25f, 1.0f);
 
 	const int vbase = tess.numVertexes;
 
-	const float spanWidth2 = -spanWidth;
-
-	// FIXME: use quad stamp?
 	VectorMA(start, spanWidth, up, tess.xyz[tess.numVertexes]);
 	tess.texCoords[tess.numVertexes][0][0] = 0;
 	tess.texCoords[tess.numVertexes][0][1] = 0;
-	tess.vertexColors[tess.numVertexes][0] = backEnd.currentEntity->e.shaderRGBA[0] * 0.25;
-	tess.vertexColors[tess.numVertexes][1] = backEnd.currentEntity->e.shaderRGBA[1] * 0.25;
-	tess.vertexColors[tess.numVertexes][2] = backEnd.currentEntity->e.shaderRGBA[2] * 0.25;
+	VectorCopy4(edge, tess.vertexColors[tess.numVertexes]);
 	tess.numVertexes++;
 
-	VectorMA(start, spanWidth2, up, tess.xyz[tess.numVertexes]);
+	VectorMA(start, -spanWidth, up, tess.xyz[tess.numVertexes]);
 	tess.texCoords[tess.numVertexes][0][0] = 0;
 	tess.texCoords[tess.numVertexes][0][1] = 1;
-	tess.vertexColors[tess.numVertexes][0] = backEnd.currentEntity->e.shaderRGBA[0];
-	tess.vertexColors[tess.numVertexes][1] = backEnd.currentEntity->e.shaderRGBA[1];
-	tess.vertexColors[tess.numVertexes][2] = backEnd.currentEntity->e.shaderRGBA[2];
+	VectorCopy4(core, tess.vertexColors[tess.numVertexes]);
 	tess.numVertexes++;
 
 	VectorMA(end, spanWidth, up, tess.xyz[tess.numVertexes]);
-
 	tess.texCoords[tess.numVertexes][0][0] = t;
 	tess.texCoords[tess.numVertexes][0][1] = 0;
-	tess.vertexColors[tess.numVertexes][0] = backEnd.currentEntity->e.shaderRGBA[0];
-	tess.vertexColors[tess.numVertexes][1] = backEnd.currentEntity->e.shaderRGBA[1];
-	tess.vertexColors[tess.numVertexes][2] = backEnd.currentEntity->e.shaderRGBA[2];
+	VectorCopy4(core, tess.vertexColors[tess.numVertexes]);
 	tess.numVertexes++;
 
-	VectorMA(end, spanWidth2, up, tess.xyz[tess.numVertexes]);
+	VectorMA(end, -spanWidth, up, tess.xyz[tess.numVertexes]);
 	tess.texCoords[tess.numVertexes][0][0] = t;
 	tess.texCoords[tess.numVertexes][0][1] = 1;
-	tess.vertexColors[tess.numVertexes][0] = backEnd.currentEntity->e.shaderRGBA[0];
-	tess.vertexColors[tess.numVertexes][1] = backEnd.currentEntity->e.shaderRGBA[1];
-	tess.vertexColors[tess.numVertexes][2] = backEnd.currentEntity->e.shaderRGBA[2];
+	VectorCopy4(core, tess.vertexColors[tess.numVertexes]);
 	tess.numVertexes++;
 
 	tess.indexes[tess.numIndexes++] = vbase;
@@ -1471,10 +1343,38 @@ static void DoRailCore(const vec3_t start, const vec3_t end, const vec3_t up, co
 	tess.indexes[tess.numIndexes++] = vbase + 2;
 	tess.indexes[tess.numIndexes++] = vbase + 1;
 	tess.indexes[tess.numIndexes++] = vbase + 3;
-#endif // REND2_SP
 }
 
-//------------------------------------------
+static void RB_SurfaceLightningBolt()
+{
+	vec3_t right, vec, start, end, v1, v2;
+	const refEntity_t* e = &backEnd.currentEntity->e;
+
+	VectorCopy(e->oldorigin, end);
+	VectorCopy(e->origin, start);
+
+	// compute variables
+	VectorSubtract(end, start, vec);
+	const float len = VectorNormalize(vec);
+
+	// compute side vector
+	VectorSubtract(start, backEnd.viewParms.ori.origin, v1);
+	VectorNormalize(v1);
+	VectorSubtract(end, backEnd.viewParms.ori.origin, v2);
+	VectorNormalize(v2);
+	CrossProduct(v1, v2, right);
+	VectorNormalize(right);
+
+	for (int i = 0; i < 4; i++)
+	{
+		vec3_t temp;
+
+		DoRailCore(start, end, right, len, 8);
+		RotatePointAroundVector(temp, vec, right, 45);
+		VectorCopy(temp, right);
+	}
+}
+
 static void RB_SurfaceElectricity()
 //------------------------------------------
 {
@@ -1522,41 +1422,6 @@ static void RB_SurfaceElectricity()
 	f_count = 3;
 #endif
 	DoBoltSeg(start, end, right, radius);
-#ifdef REND2_SP
-}
-
-static void RB_SurfaceLightningBolt()
-{
-	vec3_t		right;
-	vec3_t		vec;
-	vec3_t		start, end;
-	vec3_t		v1, v2;
-
-	const refEntity_t* e = &backEnd.currentEntity->e;
-
-	VectorCopy(e->oldorigin, end);
-	VectorCopy(e->origin, start);
-
-	// compute variables
-	VectorSubtract(end, start, vec);
-	const int len = VectorNormalize(vec);
-
-	// compute side vector
-	VectorSubtract(start, backEnd.viewParms.ori.origin, v1);
-	VectorNormalize(v1);
-	VectorSubtract(end, backEnd.viewParms.ori.origin, v2);
-	VectorNormalize(v2);
-	CrossProduct(v1, v2, right);
-	VectorNormalize(right);
-
-	for (int i = 0; i < 4; i++) {
-		vec3_t	temp;
-
-		DoRailCore(start, end, right, len, 8);
-		RotatePointAroundVector(temp, vec, right, 45);
-		VectorCopy(temp, right);
-	}
-#endif // REND2_SP
 }
 
 //================================================================================
@@ -1902,7 +1767,6 @@ static void LerpMeshVertexes_scalar(mdvSurface_t * surf, float backlerp)
 
 			*outNormal = R_VboPackNormal(normal);
 
-#ifdef REND2_SP
 			newVerts++;
 			oldVerts++;
 			outXyz += 4;
@@ -1913,617 +1777,15 @@ static void LerpMeshVertexes_scalar(mdvSurface_t * surf, float backlerp)
 
 static void LerpMeshVertexes(mdvSurface_t * surf, float backlerp)
 {
-	LerpMeshVertexes_scalar(surf, backlerp);
-}
-
-/*
-=============
-RB_SurfaceMesh
-=============
-*/
-static void RB_SurfaceMesh(mdvSurface_t * surface) {
-	int				j = 0;
-	float			backlerp = 0.0f;
-	mdvSt_t* texCoords = nullptr;
-	int				Bob = 0, Doug = 0;
-	int				numVerts = 0;
-
-	if (backEnd.currentEntity->e.oldframe == backEnd.currentEntity->e.frame) {
-		backlerp = 0;
-	}
-	else {
-		backlerp = backEnd.currentEntity->e.backlerp;
-	}
-
-	RB_CHECKOVERFLOW(surface->numVerts, surface->numIndexes);
-
-	LerpMeshVertexes(surface, backlerp);
-
-	Bob = tess.numIndexes;
-	Doug = tess.numVertexes;
-	for (j = 0; j < surface->numIndexes; j++) {
-		tess.indexes[Bob + j] = Doug + surface->indexes[j];
-	}
-	tess.numIndexes += surface->numIndexes;
-
-	texCoords = surface->st;
-
-	numVerts = surface->numVerts;
-	for (j = 0; j < numVerts; j++) {
-		tess.texCoords[Doug + j][0][0] = texCoords[j].st[0];
-		tess.texCoords[Doug + j][0][1] = texCoords[j].st[1];
-		// FIXME: fill in lightmapST for completeness?
-	}
-
-	tess.numVertexes += surface->numVerts;
-}
-
-/*
-==============
-RB_SurfaceFace
-==============
-*/
-static void RB_SurfaceBSPFace(srfBspSurface_t * srf)
-{
-	if (RB_SurfaceVbo(srf->vbo, srf->ibo, srf->numVerts, srf->numIndexes,
-		srf->firstIndex, srf->minIndex, srf->maxIndex, srf->dlightBits, srf->pshadowBits, qtrue))
-	{
+#if 0
+#if idppc_altivec
+	if (com_altivec->integer) {
+		// must be in a seperate function or G3 systems will crash.
+		LerpMeshVertexes_altivec(surf, backlerp);
 		return;
 	}
-
-	RB_SurfaceVertsAndIndexes(srf->numVerts, srf->verts, srf->numIndexes,
-		srf->indexes, srf->dlightBits, srf->pshadowBits);
-}
-
-static float	LodErrorForVolume(vec3_t local, float radius) {
-	vec3_t		world{};
-	float		d = 0.0f;
-
-	// never let it go negative
-	if (r_lodCurveError->value < 0) {
-		return 0;
-	}
-
-	world[0] = local[0] * backEnd.ori.axis[0][0] + local[1] * backEnd.ori.axis[1][0] +
-		local[2] * backEnd.ori.axis[2][0] + backEnd.ori.origin[0];
-	world[1] = local[0] * backEnd.ori.axis[0][1] + local[1] * backEnd.ori.axis[1][1] +
-		local[2] * backEnd.ori.axis[2][1] + backEnd.ori.origin[1];
-	world[2] = local[0] * backEnd.ori.axis[0][2] + local[1] * backEnd.ori.axis[1][2] +
-		local[2] * backEnd.ori.axis[2][2] + backEnd.ori.origin[2];
-
-	VectorSubtract(world, backEnd.viewParms.ori.origin, world);
-	d = DotProduct(world, backEnd.viewParms.ori.axis[0]);
-
-	if (d < 0) {
-		d = -d;
-	}
-	d -= radius;
-	if (d < 1) {
-		d = 1;
-	}
-
-	return r_lodCurveError->value / d;
-}
-
-/*
-=============
-RB_SurfaceGrid
-
-Just copy the grid of points and triangulate
-=============
-*/
-static void RB_SurfaceBSPGrid(srfBspSurface_t * srf) {
-	int		i = 0, j = 0;
-	float* xyz = nullptr;
-	float* texCoords = nullptr, * lightCoords[MAXLIGHTMAPS]{};
-	uint32_t* normal = nullptr;
-	uint32_t* tangent = nullptr;
-	float* color = nullptr;
-	uint32_t* lightdir = nullptr;
-	srfVert_t* dv = nullptr;
-	int		rows = 0, irows = 0, vrows = 0;
-	int		used = 0;
-	int		widthTable[MAX_GRID_SIZE]{};
-	int		heightTable[MAX_GRID_SIZE]{};
-	float	lodError = 0.0f;
-	int		lodWidth = 0, lodHeight = 0;
-	int		numVertexes = 0;
-	int		dlightBits = 0;
-	int     pshadowBits = 0;
-	//int		*vDlightBits;
-
-	if (RB_SurfaceVbo(srf->vbo, srf->ibo, srf->numVerts, srf->numIndexes,
-		srf->firstIndex, srf->minIndex, srf->maxIndex, srf->dlightBits, srf->pshadowBits, qtrue))
-	{
-		return;
-	}
-
-	dlightBits = srf->dlightBits;
-	tess.dlightBits |= dlightBits;
-
-	pshadowBits = srf->pshadowBits;
-	tess.pshadowBits |= pshadowBits;
-
-	// determine the allowable discrepance
-	lodError = LodErrorForVolume(srf->lodOrigin, srf->lodRadius);
-
-	// determine which rows and columns of the subdivision
-	// we are actually going to use
-	widthTable[0] = 0;
-	lodWidth = 1;
-	for (i = 1; i < srf->width - 1; i++) {
-		if (srf->widthLodError[i] <= lodError) {
-			widthTable[lodWidth] = i;
-			lodWidth++;
-		}
-	}
-	widthTable[lodWidth] = srf->width - 1;
-	lodWidth++;
-
-	heightTable[0] = 0;
-	lodHeight = 1;
-	for (i = 1; i < srf->height - 1; i++) {
-		if (srf->heightLodError[i] <= lodError) {
-			heightTable[lodHeight] = i;
-			lodHeight++;
-		}
-	}
-	heightTable[lodHeight] = srf->height - 1;
-	lodHeight++;
-
-	// very large grids may have more points or indexes than can be fit
-	// in the tess structure, so we may have to issue it in multiple passes
-
-	used = 0;
-	while (used < lodHeight - 1) {
-		// see how many rows of both verts and indexes we can add without overflowing
-		do {
-			vrows = (SHADER_MAX_VERTEXES - tess.numVertexes) / lodWidth;
-			irows = (SHADER_MAX_INDEXES - tess.numIndexes) / (lodWidth * 6);
-
-			// if we don't have enough space for at least one strip, flush the buffer
-			if (vrows < 2 || irows < 1) {
-				RB_EndSurface();
-				RB_BeginSurface(tess.shader, tess.fogNum, tess.cubemapIndex);
-			}
-			else {
-				break;
-			}
-		} while (1);
-
-		rows = irows;
-		if (vrows < irows + 1) {
-			rows = vrows - 1;
-		}
-		if (used + rows > lodHeight) {
-			rows = lodHeight - used;
-		}
-
-		numVertexes = tess.numVertexes;
-
-		xyz = tess.xyz[numVertexes];
-		normal = &tess.normal[numVertexes];
-		tangent = &tess.tangent[numVertexes];
-		texCoords = tess.texCoords[numVertexes][0];
-		for (int tc = 0; tc < MAXLIGHTMAPS; ++tc)
-			lightCoords[tc] = tess.texCoords[numVertexes][1 + tc];
-		color = tess.vertexColors[numVertexes];
-		lightdir = &tess.lightdir[numVertexes];
-		//vDlightBits = &tess.vertexDlightBits[numVertexes];
-
-		for (i = 0; i < rows; i++) {
-			for (j = 0; j < lodWidth; j++) {
-				dv = srf->verts + heightTable[used + i] * srf->width
-					+ widthTable[j];
-
-				if (tess.shader->vertexAttribs & ATTR_POSITION)
-				{
-					VectorCopy(dv->xyz, xyz);
-					xyz += 4;
-				}
-
-				if (tess.shader->vertexAttribs & ATTR_NORMAL)
-				{
-					*normal++ = R_VboPackNormal(dv->normal);
-				}
-
-				if (tess.shader->vertexAttribs & ATTR_TANGENT)
-				{
-					*tangent++ = R_VboPackTangent(dv->tangent);
-				}
-
-				if (tess.shader->vertexAttribs & ATTR_TEXCOORD0)
-				{
-					VectorCopy2(dv->st, texCoords);
-					texCoords += NUM_TESS_TEXCOORDS * 2;
-				}
-
-				for (int tc = 0; tc < MAXLIGHTMAPS; ++tc)
-				{
-					if (tess.shader->vertexAttribs & (ATTR_TEXCOORD1 + tc))
-					{
-						VectorCopy2(dv->lightmap[tc], lightCoords[tc]);
-						lightCoords[tc] += NUM_TESS_TEXCOORDS * 2;
-					}
-				}
-
-				if (tess.shader->vertexAttribs & ATTR_COLOR)
-				{
-					VectorCopy4(dv->vertexColors[0], color);
-					color += 4;
-				}
-
-				if (tess.shader->vertexAttribs & ATTR_LIGHTDIRECTION)
-				{
-					*lightdir++ = R_VboPackNormal(dv->lightdir);
-				}
-
-				//*vDlightBits++ = dlightBits;
-			}
-		}
-
-		// add the indexes
-		{
-			int		numIndexes = 0;
-			int		w = 0, h = 0;
-
-			h = rows - 1;
-			w = lodWidth - 1;
-			numIndexes = tess.numIndexes;
-			for (i = 0; i < h; i++) {
-				for (j = 0; j < w; j++) {
-					int		v1 = 0, v2 = 0, v3 = 0, v4 = 0;
-
-					// vertex order to be reckognized as tristrips
-					v1 = numVertexes + i * lodWidth + j + 1;
-					v2 = v1 - 1;
-					v3 = v2 + lodWidth;
-					v4 = v3 + 1;
-
-					tess.indexes[numIndexes] = v2;
-					tess.indexes[numIndexes + 1] = v3;
-					tess.indexes[numIndexes + 2] = v1;
-
-					tess.indexes[numIndexes + 3] = v1;
-					tess.indexes[numIndexes + 4] = v3;
-					tess.indexes[numIndexes + 5] = v4;
-					numIndexes += 6;
-				}
-			}
-
-			tess.numIndexes = numIndexes;
-		}
-
-		tess.numVertexes += rows * lodWidth;
-
-		used += rows - 1;
-	}
-}
-
-#define LATHE_SEG_STEP	10
-#define BEZIER_STEP		0.05f	// must be in the range of 0 to 1
-
-// FIXME: This function is horribly expensive
-static void RB_SurfaceLathe()
-{
-	refEntity_t* e;
-	vec2_t		pt{}, oldpt{}, l_oldpt{};
-	vec2_t		pt2{}, oldpt2{}, l_oldpt2{};
-	float		bezierStep, latheStep;
-	float		temp, mu, mum1;
-	float		mum13, mu3, group1, group2;
-	float		s, c, d = 1.0f, pain = 0.0f;
-	int			i, t, vbase;
-
-	e = &backEnd.currentEntity->e;
-
-	if (e->endTime && e->endTime > backEnd.refdef.time)
-	{
-		d = 1.0f - (e->endTime - backEnd.refdef.time) / 1000.0f;
-	}
-
-	if (e->frame && e->frame + 1000 > backEnd.refdef.time)
-	{
-		pain = (backEnd.refdef.time - e->frame) / 1000.0f;
-		//		pain *= pain;
-		pain = (1.0f - pain) * 0.08f;
-	}
-
-	VectorSet2(l_oldpt, e->axis[0][0], e->axis[0][1]);
-
-	// do scalability stuff...r_lodbias 0-3
-	int lod = r_lodbias->integer + 1;
-	if (lod > 4)
-	{
-		lod = 4;
-	}
-	if (lod < 1)
-	{
-		lod = 1;
-	}
-	bezierStep = BEZIER_STEP * lod;
-	latheStep = LATHE_SEG_STEP * lod;
-
-	// Do bezier profile strip, then lathe this around to make a 3d model
-	for (mu = 0.0f; mu <= 1.01f * d; mu += bezierStep)
-	{
-		// Four point curve
-		mum1 = 1 - mu;
-		mum13 = mum1 * mum1 * mum1;
-		mu3 = mu * mu * mu;
-		group1 = 3 * mu * mum1 * mum1;
-		group2 = 3 * mu * mu * mum1;
-
-		// Calc the current point on the curve
-		for (i = 0; i < 2; i++)
-		{
-			l_oldpt2[i] = mum13 * e->axis[0][i] + group1 * e->axis[1][i] + group2 * e->axis[2][i] + mu3 * e->oldorigin[i];
-		}
-
-		VectorSet2(oldpt, l_oldpt[0], 0);
-		VectorSet2(oldpt2, l_oldpt2[0], 0);
-
-		// lathe patch section around in a complete circle
-		for (t = latheStep; t <= 360; t += latheStep)
-		{
-			VectorSet2(pt, l_oldpt[0], 0);
-			VectorSet2(pt2, l_oldpt2[0], 0);
-
-			s = sin(DEG2RAD(t));
-			c = cos(DEG2RAD(t));
-
-			// rotate lathe points
-//c -s 0
-//s  c 0
-//0  0 1
-			temp = c * pt[0] - s * pt[1];
-			pt[1] = s * pt[0] + c * pt[1];
-			pt[0] = temp;
-			temp = c * pt2[0] - s * pt2[1];
-			pt2[1] = s * pt2[0] + c * pt2[1];
-			pt2[0] = temp;
-
-			RB_CHECKOVERFLOW(4, 6);
-
-			vbase = tess.numVertexes;
-
-			vec3_t normal;
-
-			// Actually generate the necessary verts
-			VectorSet(normal, oldpt[0], oldpt[1], l_oldpt[1]);
-			VectorAdd(e->origin, normal, tess.xyz[tess.numVertexes]);
-			VectorNormalize(normal);
-			tess.normal[tess.numVertexes] = R_VboPackNormal(normal);
-			i = oldpt[0] * 0.1f + oldpt[1] * 0.1f;
-			tess.texCoords[tess.numVertexes][0][0] = (t - latheStep) / 360.0f;
-			tess.texCoords[tess.numVertexes][0][1] = mu - bezierStep + cos(i + backEnd.refdef.floatTime) * pain;
-			VectorScale4(e->shaderRGBA, 1.0f / 255.0f, tess.vertexColors[tess.numVertexes]);
-			tess.numVertexes++;
-
-			VectorSet(normal, oldpt2[0], oldpt2[1], l_oldpt2[1]);
-			VectorAdd(e->origin, normal, tess.xyz[tess.numVertexes]);
-			VectorNormalize(normal);
-			tess.normal[tess.numVertexes] = R_VboPackNormal(normal);
-			i = oldpt2[0] * 0.1f + oldpt2[1] * 0.1f;
-			tess.texCoords[tess.numVertexes][0][0] = (t - latheStep) / 360.0f;
-			tess.texCoords[tess.numVertexes][0][1] = mu + cos(i + backEnd.refdef.floatTime) * pain;
-			VectorScale4(e->shaderRGBA, 1.0f / 255.0f, tess.vertexColors[tess.numVertexes]);
-			tess.numVertexes++;
-
-			VectorSet(normal, pt[0], pt[1], l_oldpt[1]);
-			VectorAdd(e->origin, normal, tess.xyz[tess.numVertexes]);
-			VectorNormalize(normal);
-			tess.normal[tess.numVertexes] = R_VboPackNormal(normal);
-			i = pt[0] * 0.1f + pt[1] * 0.1f;
-			tess.texCoords[tess.numVertexes][0][0] = t / 360.0f;
-			tess.texCoords[tess.numVertexes][0][1] = mu - bezierStep + cos(i + backEnd.refdef.floatTime) * pain;
-			VectorScale4(e->shaderRGBA, 1.0f / 255.0f, tess.vertexColors[tess.numVertexes]);
-			tess.numVertexes++;
-
-			VectorSet(normal, pt2[0], pt2[1], l_oldpt2[1]);
-			VectorAdd(e->origin, normal, tess.xyz[tess.numVertexes]);
-			VectorNormalize(normal);
-			tess.normal[tess.numVertexes] = R_VboPackNormal(normal);
-			i = pt2[0] * 0.1f + pt2[1] * 0.1f;
-			tess.texCoords[tess.numVertexes][0][0] = t / 360.0f;
-			tess.texCoords[tess.numVertexes][0][1] = mu + cos(i + backEnd.refdef.floatTime) * pain;
-			VectorScale4(e->shaderRGBA, 1.0f / 255.0f, tess.vertexColors[tess.numVertexes]);
-			tess.numVertexes++;
-
-			tess.indexes[tess.numIndexes++] = vbase;
-			tess.indexes[tess.numIndexes++] = vbase + 1;
-			tess.indexes[tess.numIndexes++] = vbase + 3;
-
-			tess.indexes[tess.numIndexes++] = vbase + 3;
-			tess.indexes[tess.numIndexes++] = vbase + 2;
-			tess.indexes[tess.numIndexes++] = vbase;
-
-			// Shuffle new points to old
-			VectorCopy2(pt, oldpt);
-			VectorCopy2(pt2, oldpt2);
-		}
-
-		// shuffle lathe points
-		VectorCopy2(l_oldpt2, l_oldpt);
-	}
-}
-
-#define DISK_DEF	4
-#define TUBE_DEF	6
-
-static void RB_SurfaceClouds()
-{
-	// Disk definition
-	float diskStripDef[DISK_DEF] = {
-				0.0f,
-				0.4f,
-				0.7f,
-				1.0f };
-
-	float diskAlphaDef[DISK_DEF] = {
-				1.0f,
-				1.0f,
-				0.4f,
-				0.0f };
-
-	float diskCurveDef[DISK_DEF] = {
-				0.0f,
-				0.0f,
-				0.008f,
-				0.02f };
-
-	// tube definition
-	float tubeStripDef[TUBE_DEF] = {
-				0.0f,
-				0.05f,
-				0.1f,
-				0.5f,
-				0.7f,
-				1.0f };
-
-	float tubeAlphaDef[TUBE_DEF] = {
-				0.0f,
-				0.45f,
-				1.0f,
-				1.0f,
-				0.45f,
-				0.0f };
-
-	float tubeCurveDef[TUBE_DEF] = {
-				0.0f,
-				0.004f,
-				0.006f,
-				0.01f,
-				0.006f,
-				0.0f };
-
-	refEntity_t* e;
-	vec3_t		pt, oldpt;
-	vec3_t		pt2, oldpt2;
-	float		latheStep = 30.0f;
-	float		s, c, temp;
-	float* stripDef, * alphaDef, * curveDef, ct;
-	int			i, t, vbase;
-
-	e = &backEnd.currentEntity->e;
-
-	// select which type we shall be doing
-	if (e->renderfx & RF_GROW) // doing tube type
-	{
-		ct = TUBE_DEF;
-		stripDef = tubeStripDef;
-		alphaDef = tubeAlphaDef;
-		curveDef = tubeCurveDef;
-		e->backlerp *= -1; // needs to be reversed
-	}
-	else
-	{
-		ct = DISK_DEF;
-		stripDef = diskStripDef;
-		alphaDef = diskAlphaDef;
-		curveDef = diskCurveDef;
-	}
-
-	// do the strip def, then lathe this around to make a 3d model
-	for (i = 0; i < ct - 1; i++)
-	{
-		VectorSet(oldpt, (stripDef[i] * (e->radius - e->rotation)) + e->rotation, 0, curveDef[i] * e->radius * e->backlerp);
-		VectorSet(oldpt2, (stripDef[i + 1] * (e->radius - e->rotation)) + e->rotation, 0, curveDef[i + 1] * e->radius * e->backlerp);
-
-		// lathe section around in a complete circle
-		for (t = latheStep; t <= 360; t += latheStep)
-		{
-			// rotate every time except last seg
-			if (t < 360.0f)
-			{
-				VectorCopy(oldpt, pt);
-				VectorCopy(oldpt2, pt2);
-
-				s = sin(DEG2RAD(latheStep));
-				c = cos(DEG2RAD(latheStep));
-
-				// rotate lathe points
-				temp = c * pt[0] - s * pt[1];	// c -s 0
-				pt[1] = s * pt[0] + c * pt[1];	// s  c 0
-				pt[0] = temp;					// 0  0 1
-
-				temp = c * pt2[0] - s * pt2[1];	 // c -s 0
-				pt2[1] = s * pt2[0] + c * pt2[1];// s  c 0
-				pt2[0] = temp;					 // 0  0 1
-			}
-			else
-			{
-				// just glue directly to the def points.
-				VectorSet(pt, (stripDef[i] * (e->radius - e->rotation)) + e->rotation, 0, curveDef[i] * e->radius * e->backlerp);
-				VectorSet(pt2, (stripDef[i + 1] * (e->radius - e->rotation)) + e->rotation, 0, curveDef[i + 1] * e->radius * e->backlerp);
-			}
-
-			RB_CHECKOVERFLOW(4, 6);
-
-			vbase = tess.numVertexes;
-
-			// Actually generate the necessary verts
-			VectorAdd(e->origin, oldpt, tess.xyz[tess.numVertexes]);
-			tess.texCoords[tess.numVertexes][0][0] = tess.xyz[tess.numVertexes][0] * 0.1f;
-			tess.texCoords[tess.numVertexes][0][1] = tess.xyz[tess.numVertexes][1] * 0.1f;
-			tess.vertexColors[tess.numVertexes][0] =
-				tess.vertexColors[tess.numVertexes][1] =
-				tess.vertexColors[tess.numVertexes][2] = e->shaderRGBA[0] * alphaDef[i] / 255.0f;
-			tess.vertexColors[tess.numVertexes][3] = e->shaderRGBA[3] / 255.0f;
-			tess.numVertexes++;
-
-			VectorAdd(e->origin, oldpt2, tess.xyz[tess.numVertexes]);
-			tess.texCoords[tess.numVertexes][0][0] = tess.xyz[tess.numVertexes][0] * 0.1f;
-			tess.texCoords[tess.numVertexes][0][1] = tess.xyz[tess.numVertexes][1] * 0.1f;
-			tess.vertexColors[tess.numVertexes][0] =
-				tess.vertexColors[tess.numVertexes][1] =
-				tess.vertexColors[tess.numVertexes][2] = e->shaderRGBA[0] * alphaDef[i + 1] / 255.0f;
-			tess.vertexColors[tess.numVertexes][3] = e->shaderRGBA[3] / 255.0f;
-			tess.numVertexes++;
-
-			VectorAdd(e->origin, pt, tess.xyz[tess.numVertexes]);
-			tess.texCoords[tess.numVertexes][0][0] = tess.xyz[tess.numVertexes][0] * 0.1f;
-			tess.texCoords[tess.numVertexes][0][1] = tess.xyz[tess.numVertexes][1] * 0.1f;
-			tess.vertexColors[tess.numVertexes][0] =
-				tess.vertexColors[tess.numVertexes][1] =
-				tess.vertexColors[tess.numVertexes][2] = e->shaderRGBA[0] * alphaDef[i] / 255.0f;
-			tess.vertexColors[tess.numVertexes][3] = e->shaderRGBA[3] / 255.0f;
-			tess.numVertexes++;
-
-			VectorAdd(e->origin, pt2, tess.xyz[tess.numVertexes]);
-			tess.texCoords[tess.numVertexes][0][0] = tess.xyz[tess.numVertexes][0] * 0.1f;
-			tess.texCoords[tess.numVertexes][0][1] = tess.xyz[tess.numVertexes][1] * 0.1f;
-			tess.vertexColors[tess.numVertexes][0] =
-				tess.vertexColors[tess.numVertexes][1] =
-				tess.vertexColors[tess.numVertexes][2] = e->shaderRGBA[0] * alphaDef[i + 1] / 255.0f;
-			tess.vertexColors[tess.numVertexes][3] = e->shaderRGBA[3] / 255.0f;
-			tess.numVertexes++;
-
-			tess.indexes[tess.numIndexes++] = vbase;
-			tess.indexes[tess.numIndexes++] = vbase + 1;
-			tess.indexes[tess.numIndexes++] = vbase + 3;
-
-			tess.indexes[tess.numIndexes++] = vbase + 3;
-			tess.indexes[tess.numIndexes++] = vbase + 2;
-			tess.indexes[tess.numIndexes++] = vbase;
-
-			// Shuffle new points to old
-			VectorCopy2(pt, oldpt);
-			VectorCopy2(pt2, oldpt2);
-		}
-	}
-}
-#else // !REND2_SP
-			newVerts++;
-			oldVerts++;
-			outXyz += 4;
-			outNormal++;
-}
-}
-}
-
-static void LerpMeshVertexes(mdvSurface_t * surf, float backlerp)
-{
+#endif // idppc_altivec
+#endif
 	LerpMeshVertexes_scalar(surf, backlerp);
 }
 
@@ -3124,7 +2386,6 @@ static void RB_SurfaceClouds()
 		}
 	}
 }
-#endif // REND2_SP
 
 /*
 ===========================================================================
@@ -3196,11 +2457,9 @@ static void RB_SurfaceEntity(surfaceType_t * surfType)
 	case RT_CYLINDER:
 		RB_SurfaceCylinder();
 		break;
-#ifdef REND2_SP
 	case RT_LIGHTNING:
 		RB_SurfaceLightningBolt();
 		break;
-#endif // REND2_SP
 	case RT_ORIENTEDLINE:
 		RB_SurfaceOrientedLine();
 		break;
@@ -3242,7 +2501,8 @@ static void RB_SurfaceEntity(surfaceType_t * surfType)
 	// Tell the backend to merge the drawcalls except
 	// for types that can't be merged
 	// TODO: Create RT_BEAM internal shader and make it compatible with pass system
-	switch (backEnd.currentEntity->e.reType) {
+	switch (backEnd.currentEntity->e.reType)
+	{
 	case RT_BEAM:
 	case RT_ENT_CHAIN:
 		break;
@@ -3253,11 +2513,7 @@ static void RB_SurfaceEntity(surfaceType_t * surfType)
 }
 
 static void RB_SurfaceBad(surfaceType_t * surfType) {
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "Bad surface tesselated.\n");
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, "Bad surface tesselated.\n");
-#endif // REND2_SP
 }
 
 static void RB_SurfaceFlare(srfFlare_t * surf)
@@ -3404,8 +2660,8 @@ extern cvar_t* r_grassForceWave;
 #define GRASSCUT_CVAR_GET(name, value) ri.Cvar_Get(name, value, CVAR_ARCHIVE)
 #define GRASSCUT_RI ri.
 #else
-#define GRASSCUT_CVAR_GET(name, value) ri->Cvar_Get(name, value, CVAR_ARCHIVE, "")
-#define GRASSCUT_RI ri->
+#define GRASSCUT_CVAR_GET(name, value) ri.Cvar_Get(name, value, CVAR_ARCHIVE, "")
+#define GRASSCUT_RI ri.
 #endif
 #include "rd-common/tr_grasscut.h"
 
@@ -3809,17 +3065,10 @@ static void RB_SurfaceSpritesPass(srfSprites_t * surf, const float cutMode)
 	const GLuint currentSpriteUbo = shader->spriteUbo;
 	const UniformBlockBinding uniformBlockBindings[] = {
 		{ currentSpriteUbo, ss->spriteUboOffset, UNIFORM_BLOCK_SURFACESPRITE },
-#ifdef REND2_SP
-		{ currentFrameUbo, tr.sceneUboOffset, UNIFORM_BLOCK_SCENE },
-		{ currentFrameUbo, tr.cameraUboOffsets[tr.viewParms.currentViewParm], UNIFORM_BLOCK_CAMERA },
-		{ currentFrameUbo, tr.fogsUboOffset, UNIFORM_BLOCK_FOGS },
-		{ currentFrameUbo, tr.temporalInfoUboOffset, UNIFORM_BLOCK_TEMPORAL_INFO }
-#else // !REND2_SP
 		{ currentFrameUbo, (size_t)tr.sceneUboOffset, UNIFORM_BLOCK_SCENE },
 		{ currentFrameUbo, (size_t)tr.cameraUboOffsets[tr.viewParms.currentViewParm], UNIFORM_BLOCK_CAMERA },
 		{ currentFrameUbo, (size_t)tr.fogsUboOffset, UNIFORM_BLOCK_FOGS },
 		{ currentFrameUbo, (size_t)tr.temporalInfoUboOffset, UNIFORM_BLOCK_TEMPORAL_INFO }
-#endif // REND2_SP
 	};
 
 	uint32_t numBindings = 0;

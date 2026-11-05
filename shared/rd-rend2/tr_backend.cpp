@@ -40,75 +40,57 @@ static float	s_flipMatrix[16] = {
 /*
 ** GL_Bind
 */
-void GL_Bind(image_t* image) {
+void GL_Bind(image_t* image)
+{
 	int texnum = 0;
 
-#ifdef REND2_SP
-	if (!image) {
-		ri.Printf(PRINT_WARNING, "GL_Bind: NULL image\n");
-#else // !REND2_SP
 	if (!image)
 	{
 		// (a shader whose image did not load, drawn every frame: named once, for developers)
 		static const shader_t* null_image_shader;
-		if (ri->Cvar_VariableIntegerValue("developer") && tess.shader != null_image_shader)
+		if (ri.Cvar_VariableIntegerValue("developer") && tess.shader != null_image_shader)
 		{
 			null_image_shader = tess.shader;
-			ri->Printf(PRINT_WARNING, S_COLOR_YELLOW "GL_Bind: NULL image in shader %s\n", tess.shader ? tess.shader->name : "?");
+			ri.Printf(PRINT_WARNING, S_COLOR_YELLOW "GL_Bind: NULL image in shader %s\n", tess.shader ? tess.shader->name : "?");
 		}
-#endif // REND2_SP
 		texnum = tr.defaultImage->texnum;
 	}
-	else {
+	else
+	{
 		texnum = image->texnum;
 	}
 
-	if (r_nobind->integer && tr.dlightImage) {		// performance evaluation option
+	if (r_nobind->integer && tr.dlightImage)
+	{// performance evaluation option
 		texnum = tr.dlightImage->texnum;
 	}
 
-	if (glState.currenttextures[glState.currenttmu] != texnum) {
-		if (image) {
+	if (glState.currenttextures[glState.currenttmu] != texnum)
+	{
+		if (image)
+		{
 			image->frameUsed = tr.frameCount;
 		}
 		glState.currenttextures[glState.currenttmu] = texnum;
-#ifdef REND2_SP
-		if (image && image->flags & IMGFLAG_CUBEMAP)
-#else // !REND2_SP
 
 		if (image && (image->flags & IMGFLAG_CUBEMAP))
 		{
-#endif // REND2_SP
 			qglBindTexture(GL_TEXTURE_CUBE_MAP, texnum);
-#ifdef REND2_SP
-		else if (image && image->flags & IMGFLAG_3D)
-#else // !REND2_SP
 		}
 		else if (image && (image->flags & IMGFLAG_3D))
 		{
-#endif // REND2_SP
 			qglBindTexture(GL_TEXTURE_3D, texnum);
-#ifdef REND2_SP
-		else if (image && image->flags & IMGFLAG_2D_ARRAY)
-#else // !REND2_SP
 		}
 		else if (image && (image->flags & IMGFLAG_2D_ARRAY))
 		{
-#endif // REND2_SP
 			qglBindTexture(GL_TEXTURE_2D_ARRAY, texnum);
-#ifndef REND2_SP
 		}
-#endif // !REND2_SP
 		else
-#ifndef REND2_SP
 		{
-#endif // !REND2_SP
 			qglBindTexture(GL_TEXTURE_2D, texnum);
-#ifndef REND2_SP
 		}
-#endif // !REND2_SP
 	}
-	}
+}
 
 /*
 ** GL_SelectTexture
@@ -121,11 +103,7 @@ void GL_SelectTexture(int unit)
 	}
 
 	if (!(unit >= 0 && unit <= 31))
-#ifdef REND2_SP
 		ri.Error(ERR_DROP, "GL_SelectTexture: unit = %i", unit);
-#else // !REND2_SP
-		ri->Error(ERR_DROP, "GL_SelectTexture: unit = %i", unit);
-#endif // REND2_SP
 
 	qglActiveTexture(GL_TEXTURE0 + unit);
 
@@ -135,7 +113,7 @@ void GL_SelectTexture(int unit)
 /*
 ** GL_BindToTMU
 */
-void GL_BindToTMU(image_t * image, int tmu)
+void GL_BindToTMU(image_t* image, int tmu)
 {
 	int		texnum = 0;
 
@@ -279,11 +257,7 @@ void GL_State(uint32_t stateBits)
 				srcFactor = GL_SRC_ALPHA_SATURATE;
 				break;
 			default:
-#ifdef REND2_SP
 				ri.Error(ERR_DROP, "GL_State: invalid src blend state bits");
-#else // !REND2_SP
-				ri->Error(ERR_DROP, "GL_State: invalid src blend state bits");
-#endif // REND2_SP
 				break;
 			}
 
@@ -314,11 +288,7 @@ void GL_State(uint32_t stateBits)
 				dstFactor = GL_ONE_MINUS_DST_ALPHA;
 				break;
 			default:
-#ifdef REND2_SP
 				ri.Error(ERR_DROP, "GL_State: invalid dst blend state bits");
-#else // !REND2_SP
-				ri->Error(ERR_DROP, "GL_State: invalid dst blend state bits");
-#endif // REND2_SP
 				break;
 			}
 
@@ -356,6 +326,8 @@ void GL_State(uint32_t stateBits)
 		else
 		{
 			qglColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+			if (tr.ssrMaskImage)
+				qglColorMaski(2, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE); // r_ssr material mask (Jace 2026-11-04)
 		}
 	}
 
@@ -461,7 +433,7 @@ void GL_State(uint32_t stateBits)
 
 void GL_VertexAttribPointers(
 	size_t numAttributes,
-	vertexAttribute_t * attributes)
+	vertexAttribute_t* attributes)
 {
 	assert(attributes != nullptr || numAttributes == 0);
 
@@ -543,7 +515,7 @@ void GL_DrawIndexed(
 void GL_MultiDrawIndexed(
 	GLenum primitiveType,
 	int* numIndices,
-	glIndex_t * *offsets,
+	glIndex_t** offsets,
 	int numDraws)
 {
 	assert(numDraws > 0);
@@ -619,7 +591,8 @@ Any mirrored or portaled views have already been drawn, so prepare
 to actually render the visible surfaces for this view
 =================
 */
-static void RB_BeginDrawingView(void) {
+static void RB_BeginDrawingView(void)
+{
 	PROFILE_ZONE("View setup + clear");
 	int clearBits = 0;
 
@@ -745,10 +718,10 @@ static void RB_BeginDrawingView(void) {
 #define	MAC_EVENT_PUMP_MSEC		5
 
 void DrawItemSetVertexAttributes(
-	DrawItem & drawItem,
-	const vertexAttribute_t * attributes,
+	DrawItem& drawItem,
+	const vertexAttribute_t* attributes,
 	uint32_t count,
-	Allocator & allocator)
+	Allocator& allocator)
 {
 	drawItem.numAttributes = count;
 	drawItem.attributes = ojkAllocArray<vertexAttribute_t>(allocator, count);
@@ -762,10 +735,10 @@ void DrawItemSetVertexAttributes(
 }
 
 void DrawItemSetSamplerBindings(
-	DrawItem & drawItem,
-	const SamplerBinding * bindings,
+	DrawItem& drawItem,
+	const SamplerBinding* bindings,
 	uint32_t count,
-	Allocator & allocator)
+	Allocator& allocator)
 {
 	drawItem.numSamplerBindings = count;
 	drawItem.samplerBindings = ojkAllocArray<SamplerBinding>(allocator, count);
@@ -781,10 +754,10 @@ void DrawItemSetSamplerBindings(
 }
 
 void DrawItemSetUniformBlockBindings(
-	DrawItem & drawItem,
-	const UniformBlockBinding * bindings,
+	DrawItem& drawItem,
+	const UniformBlockBinding* bindings,
 	uint32_t count,
-	Allocator & allocator)
+	Allocator& allocator)
 {
 	drawItem.numUniformBlockBindings = count;
 	drawItem.uniformBlockBindings = ojkAllocArray<UniformBlockBinding>(
@@ -806,7 +779,7 @@ UniformDataWriter::UniformDataWriter()
 	, scratch(scratchBuffer, sizeof(scratchBuffer), 1)
 {}
 
-void UniformDataWriter::Start(shaderProgram_t * sp)
+void UniformDataWriter::Start(shaderProgram_t* sp)
 {
 	shaderProgram = sp;
 }
@@ -976,7 +949,7 @@ UniformDataWriter& UniformDataWriter::SetUniformMatrix4x4(uniform_t uniform, con
 	return *this;
 }
 
-UniformData* UniformDataWriter::Finish(Allocator & destHeap)
+UniformData* UniformDataWriter::Finish(Allocator& destHeap)
 {
 	UniformData* endSentinel = ojkAlloc<UniformData>(scratch);
 	if (failed || !endSentinel)
@@ -1029,7 +1002,7 @@ SamplerBindingsWriter::SamplerBindingsWriter()
 	, count(0)
 {}
 
-SamplerBindingsWriter& SamplerBindingsWriter::AddStaticImage(image_t * image, int unit)
+SamplerBindingsWriter& SamplerBindingsWriter::AddStaticImage(image_t* image, int unit)
 {
 	SamplerBinding* binding = &scratch[count];
 	if (!binding)
@@ -1046,7 +1019,7 @@ SamplerBindingsWriter& SamplerBindingsWriter::AddStaticImage(image_t * image, in
 	return *this;
 }
 
-SamplerBindingsWriter& SamplerBindingsWriter::AddAnimatedImage(textureBundle_t * bundle, int unit)
+SamplerBindingsWriter& SamplerBindingsWriter::AddAnimatedImage(textureBundle_t* bundle, int unit)
 {
 	int index = 0;
 
@@ -1105,7 +1078,7 @@ SamplerBindingsWriter& SamplerBindingsWriter::AddAnimatedImage(textureBundle_t *
 	return AddStaticImage(bundle->image[index], unit);
 }
 
-SamplerBinding* SamplerBindingsWriter::Finish(Allocator & destHeap, uint32_t * numBindings)
+SamplerBinding* SamplerBindingsWriter::Finish(Allocator& destHeap, uint32_t* numBindings)
 {
 	if (failed)
 	{
@@ -1146,7 +1119,7 @@ struct Pass
 	uint32_t* sortKeys;
 };
 
-static void RB_BindTextures(size_t numBindings, const SamplerBinding * bindings)
+static void RB_BindTextures(size_t numBindings, const SamplerBinding* bindings)
 {
 	for (size_t i = 0; i < numBindings; ++i)
 	{
@@ -1155,13 +1128,8 @@ static void RB_BindTextures(size_t numBindings, const SamplerBinding * bindings)
 		{
 			int oldtmu = glState.currenttmu;
 			GL_SelectTexture(binding.slot);
-#ifdef REND2_SP
 			ri.CIN_RunCinematic(binding.videoMapHandle - 1);
 			ri.CIN_UploadCinematic(binding.videoMapHandle - 1);
-#else // !REND2_SP
-			ri->CIN_RunCinematic(binding.videoMapHandle - 1);
-			ri->CIN_UploadCinematic(binding.videoMapHandle - 1);
-#endif // REND2_SP
 			GL_SelectTexture(oldtmu);
 		}
 		else
@@ -1173,7 +1141,7 @@ static void RB_BindTextures(size_t numBindings, const SamplerBinding * bindings)
 
 static void RB_BindUniformBlocks(
 	size_t numBindings,
-	const UniformBlockBinding * bindings)
+	const UniformBlockBinding* bindings)
 {
 	for (size_t i = 0; i < numBindings; ++i)
 	{
@@ -1185,10 +1153,20 @@ static void RB_BindUniformBlocks(
 	}
 }
 
-static void RB_SetRenderState(const RenderState & renderState)
+static void RB_SetRenderState(const RenderState& renderState)
 {
 	GL_Cull(renderState.cullType);
 	GL_State(renderState.stateBits);
+
+	// r_ssr material mask (Jace 2026-11-04): attachment 2 of the render FBO is written only by opaque colour draws
+	// (blended decals / effects / fog keep what the surface under them wrote)
+	if (tr.ssrMaskImage && glState.currentFBO && glState.currentFBO == tr.renderFbo)
+	{
+		const GLboolean write = !backEnd.depthFill
+			&& !(renderState.stateBits & (GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS | GLS_COLORMASK_BITS | GLS_COLORMASK_BUF1))
+			? GL_TRUE : GL_FALSE;
+		qglColorMaski(2, write, write, write, write);
+	}
 	GL_DepthRange(
 		renderState.depthRange.minDepth,
 		renderState.depthRange.maxDepth);
@@ -1200,7 +1178,7 @@ static void RB_SetRenderState(const RenderState & renderState)
 	}
 }
 
-static void RB_BindTransformFeedbackBuffer(const bufferBinding_t & binding)
+static void RB_BindTransformFeedbackBuffer(const bufferBinding_t& binding)
 {
 	if (memcmp(&glState.currentXFBBO, &binding, sizeof(binding)) != 0)
 	{
@@ -1260,7 +1238,7 @@ static void RB_SliceForgetEntityUbos(GLuint ubo)
 	s_numSliceEntityUbos = n;
 }
 
-static int RB_SliceCountForDrawItem(const DrawItem & drawItem)
+static int RB_SliceCountForDrawItem(const DrawItem& drawItem)
 {
 	if (!s_numSliceEntityUbos)
 		return 0;
@@ -1307,8 +1285,8 @@ static int RB_SliceCvar(const int which)
 		flatCap = ri.Cvar_Get("r_saberSliceFlatCap", "1", CVAR_ARCHIVE_ND);
 		seam = ri.Cvar_Get("r_saberSliceSeam", "1", CVAR_ARCHIVE_ND);
 #else
-		flatCap = ri->Cvar_Get("r_saberSliceFlatCap", "1", CVAR_ARCHIVE_ND, "Saber cuts: the cut face is drawn as a flat cap (1) or as the inside of the body (0)");
-		seam = ri->Cvar_Get("r_saberSliceSeam", "1", CVAR_ARCHIVE_ND, "Saber cuts: glowing band along the cut edge that cools with the cut (1 on, 0 off)");
+		flatCap = ri.Cvar_Get("r_saberSliceFlatCap", "1", CVAR_ARCHIVE_ND, "Saber cuts: the cut face is drawn as a flat cap (1) or as the inside of the body (0)");
+		seam = ri.Cvar_Get("r_saberSliceSeam", "1", CVAR_ARCHIVE_ND, "Saber cuts: glowing band along the cut edge that cools with the cut (1 on, 0 off)");
 #endif
 	}
 	const cvar_t* c = which == 0 ? flatCap : seam;
@@ -1317,8 +1295,8 @@ static int RB_SliceCvar(const int which)
 
 static void RB_DrawItems(
 	int numDrawItems,
-	const DrawItem * drawItems,
-	uint32_t * drawOrder)
+	const DrawItem* drawItems,
+	uint32_t* drawOrder)
 {
 	for (int i = 0; i < numDrawItems; ++i)
 	{
@@ -1434,7 +1412,7 @@ RB_PassValid
 overwritten by uniform data. Check it before use, report once in a while, and skip instead of crashing.
 =====================
 */
-static bool RB_PassValid(const Pass * pass, const char* where)
+static bool RB_PassValid(const Pass* pass, const char* where)
 {
 	if (pass->magic == RB_PASS_MAGIC
 		&& pass->numDrawItems >= 0
@@ -1463,7 +1441,7 @@ Adds a draw item to a pass, or draws immediately if no pass is provided.
 Replaces assert with a debug print to avoid hard crashes.
 =====================
 */
-void RB_AddDrawItem(Pass * pass, uint32_t sortKey, const DrawItem & drawItem)
+void RB_AddDrawItem(Pass* pass, uint32_t sortKey, const DrawItem& drawItem)
 {
 	// There will be no pass if we are drawing a 2D object.
 	if (pass)
@@ -1506,7 +1484,7 @@ void RB_AddDrawItem(Pass * pass, uint32_t sortKey, const DrawItem & drawItem)
 	}
 }
 
-static Pass* RB_CreatePass(Allocator & allocator, int capacity)
+static Pass* RB_CreatePass(Allocator& allocator, int capacity)
 {
 	Pass* pass = ojkAlloc<Pass>(*backEndData->perFrameMemory);
 	if (!pass)
@@ -1546,7 +1524,7 @@ static void RB_PrepareForEntity(int entityNum, float originalTime)
 }
 
 static void RB_SubmitDrawSurfsForDepthFill(
-	drawSurf_t * drawSurfs,
+	drawSurf_t* drawSurfs,
 	int numDrawSurfs,
 	float originalTime)
 {
@@ -1634,7 +1612,7 @@ static void RB_SubmitDrawSurfsForDepthFill(
 }
 
 static void RB_SubmitDrawSurfs(
-	drawSurf_t * drawSurfs,
+	drawSurf_t* drawSurfs,
 	int numDrawSurfs,
 	float originalTime)
 {
@@ -1741,8 +1719,8 @@ static void RB_SubmitDrawSurfs(
 }
 
 static void RB_SubmitRenderPass(
-	Pass & renderPass,
-	Allocator & allocator)
+	Pass& renderPass,
+	Allocator& allocator)
 {
 	if (!RB_PassValid(&renderPass, "RB_SubmitRenderPass"))
 	{
@@ -1774,7 +1752,7 @@ static void RB_SubmitRenderPass(
 RB_RenderDrawSurfList
 ==================
 */
-static void RB_RenderDrawSurfList(drawSurf_t * drawSurfs, int numDrawSurfs)
+static void RB_RenderDrawSurfList(drawSurf_t* drawSurfs, int numDrawSurfs)
 {
 	/*
 	merging surfaces together that share the same shader (e.g. polys, patches)
@@ -1945,11 +1923,7 @@ void	RB_SetGL2D(void) {
 	GL_Cull(CT_TWO_SIDED);
 
 	// set time for 2D shaders
-#ifdef REND2_SP
 	backEnd.refdef.time = ri.Milliseconds();
-#else // !REND2_SP
-	backEnd.refdef.time = ri->Milliseconds();
-#endif // REND2_SP
 	backEnd.refdef.floatTime = backEnd.refdef.time * 0.001f;
 
 	// reset color scaling
@@ -1965,12 +1939,8 @@ Stretches a raw 32 bit power of 2 bitmap image over the given screen rectangle.
 Used for cinematics.
 =============
 */
-#ifdef REND2_SP
-void RE_StretchRaw(int x, int y, int w, int h, int cols, int rows, const byte * data, int client, qboolean dirty) {
-#else // !REND2_SP
-void RE_StretchRaw(const int x, const int y, const int w, const int h, const int cols, const int rows, const byte * data, const int client, const qboolean dirty)
+void RE_StretchRaw(const int x, const int y, const int w, const int h, const int cols, const int rows, const byte* data, const int client, const qboolean dirty)
 {
-#endif // REND2_SP
 	int			i = 0, j = 0;
 	int			start = 0, end = 0;
 	vec4_t quadVerts[4]; // all set below; no {} (it made /analyze report a NULL dereference, C6011)
@@ -1990,11 +1960,7 @@ void RE_StretchRaw(const int x, const int y, const int w, const int h, const int
 
 	start = 0;
 	if (r_speeds->integer) {
-#ifdef REND2_SP
 		start = ri.Milliseconds();
-#else // !REND2_SP
-		start = ri->Milliseconds();
-#endif // REND2_SP
 	}
 
 	// make sure rows and cols are powers of 2
@@ -2003,23 +1969,14 @@ void RE_StretchRaw(const int x, const int y, const int w, const int h, const int
 	for (j = 0; (1 << j) < rows; j++) {
 	}
 	if ((1 << i) != cols || (1 << j) != rows) {
-#ifdef REND2_SP
 		ri.Error(ERR_DROP, "Draw_StretchRaw: size not a power of 2: %i by %i", cols, rows);
-#else // !REND2_SP
-		ri->Error(ERR_DROP, "Draw_StretchRaw: size not a power of 2: %i by %i", cols, rows);
-#endif // REND2_SP
 	}
 
 	RE_UploadCinematic(cols, rows, data, client, dirty);
 
 	if (r_speeds->integer) {
-#ifdef REND2_SP
 		end = ri.Milliseconds();
 		ri.Printf(PRINT_ALL, "qglTexSubImage2D %i, %i: %i msec\n", cols, rows, end - start);
-#else // !REND2_SP
-		end = ri->Milliseconds();
-		ri->Printf(PRINT_ALL, "qglTexSubImage2D %i, %i: %i msec\n", cols, rows, end - start);
-#endif // REND2_SP
 	}
 
 	// FIXME: HUGE hack
@@ -2052,7 +2009,7 @@ void RE_StretchRaw(const int x, const int y, const int w, const int h, const int
 	RB_InstantQuad2(quadVerts, texCoords);
 }
 
-void RE_UploadCinematic(int cols, int rows, const byte * data, int client, qboolean dirty) {
+void RE_UploadCinematic(int cols, int rows, const byte* data, int client, qboolean dirty) {
 	GL_Bind(tr.scratchImage[client]);
 
 	// if the scratchImage isn't in the format we want, specify it as a new texture
@@ -2520,7 +2477,7 @@ static void RB_RenderSSAO()
 	RB_InstantTriangle();
 }
 
-static void RB_RenderDepthOnly(drawSurf_t * drawSurfs, int numDrawSurfs)
+static void RB_RenderDepthOnly(drawSurf_t* drawSurfs, int numDrawSurfs)
 {
 	backEnd.depthFill = qtrue;
 
@@ -2588,14 +2545,28 @@ static void RB_RenderDepthOnly(drawSurf_t * drawSurfs, int numDrawSurfs)
 	}
 }
 
-static void RB_RenderMainPass(drawSurf_t * drawSurfs, int numDrawSurfs)
+static void RB_RenderMainPass(drawSurf_t* drawSurfs, int numDrawSurfs)
 {
 	if (backEnd.viewParms.flags & VPF_DEPTHSHADOW)
 	{
 		return;
 	}
 
+	// r_ssr material mask (Jace 2026-11-04): start the view with "reflections allowed" everywhere
+	const bool ssrMask = tr.ssrMaskImage && glState.currentFBO && glState.currentFBO == tr.renderFbo;
+	if (ssrMask)
+	{
+		const GLfloat zero[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		qglColorMaski(2, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+		qglClearBufferfv(GL_COLOR, 2, zero);
+	}
+
 	RB_RenderDrawSurfList(drawSurfs, numDrawSurfs);
+
+	if (ssrMask)
+	{
+		qglColorMaski(2, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE); // sun, flares... never touch it
+	}
 
 	if (r_drawSun->integer)
 	{
@@ -2626,7 +2597,7 @@ static void RB_RenderMainPass(drawSurf_t * drawSurfs, int numDrawSurfs)
 	RB_RenderFlares();
 }
 
-static void RB_RenderAllDepthRelatedPasses(drawSurf_t * drawSurfs, int numDrawSurfs)
+static void RB_RenderAllDepthRelatedPasses(drawSurf_t* drawSurfs, int numDrawSurfs)
 {
 	if (backEnd.refdef.rdflags & RDF_NOWORLDMODEL)
 	{
@@ -2664,7 +2635,7 @@ static void RB_RenderAllDepthRelatedPasses(drawSurf_t * drawSurfs, int numDrawSu
 	}
 }
 
-static void RB_UpdateCameraConstants(gpuFrame_t * frame)
+static void RB_UpdateCameraConstants(gpuFrame_t* frame)
 {
 	for (int i = 0; i < tr.numCachedViewParms; i++)
 	{
@@ -2704,7 +2675,7 @@ static void RB_UpdateCameraConstants(gpuFrame_t * frame)
 	}
 }
 
-static void RB_UpdateTemporalConstants(gpuFrame_t * frame, gpuFrame_t * previousFrame)
+static void RB_UpdateTemporalConstants(gpuFrame_t* frame, gpuFrame_t* previousFrame)
 {
 	if (tr.depthVelocityFbo == nullptr || !frame || !previousFrame)
 	{
@@ -2735,7 +2706,7 @@ static void RB_UpdateTemporalConstants(gpuFrame_t * frame, gpuFrame_t * previous
 		frame, &tempBlock, sizeof(tempBlock));
 }
 
-static void RB_UpdateSceneConstants(gpuFrame_t * frame, const trRefdef_t * refdef)
+static void RB_UpdateSceneConstants(gpuFrame_t* frame, const trRefdef_t* refdef)
 {
 	SceneBlock sceneBlock = {};
 	VectorCopy4(refdef->sunDir, sceneBlock.primaryLightOrigin);
@@ -2757,7 +2728,7 @@ static void RB_UpdateSceneConstants(gpuFrame_t * frame, const trRefdef_t * refde
 // r_baseRoughness = surface roughness for textures without a material map (1 = matte as before)
 extern cvar_t* r_dlightIntensity;
 
-static void RB_UpdateLightsConstants(gpuFrame_t * frame, const trRefdef_t * refdef)
+static void RB_UpdateLightsConstants(gpuFrame_t* frame, const trRefdef_t* refdef)
 {
 	LightsBlock lightsBlock = {};
 
@@ -2789,7 +2760,7 @@ static void RB_UpdateLightsConstants(gpuFrame_t * frame, const trRefdef_t * refd
 		frame, &lightsBlock, sizeof(lightsBlock));
 }
 
-static void RB_UpdateFogsConstants(gpuFrame_t * frame)
+static void RB_UpdateFogsConstants(gpuFrame_t* frame)
 {
 	FogsBlock fogsBlock = {};
 	if (tr.world == nullptr)
@@ -2803,11 +2774,7 @@ static void RB_UpdateFogsConstants(gpuFrame_t * frame)
 
 	if (fogsBlock.numFogs > MAX_GPU_FOGS)
 	{
-#ifdef REND2_SP
 		ri.Printf(PRINT_DEVELOPER, "Too many fogs in current map. Increase MAX_GPU_FOGS\n");
-#else // !REND2_SP
-		ri->Printf(PRINT_DEVELOPER, "Too many fogs in current map. Increase MAX_GPU_FOGS\n");
-#endif // REND2_SP
 		fogsBlock.numFogs = MAX_GPU_FOGS;
 	}
 
@@ -2854,8 +2821,8 @@ static void RB_UpdateFogsConstants(gpuFrame_t * frame)
 }
 
 static void RB_UpdateEntityLightConstants(
-	EntityBlock & entityBlock,
-	const trRefEntity_t * refEntity)
+	EntityBlock& entityBlock,
+	const trRefEntity_t* refEntity)
 {
 	static const float normalizeFactor = 1.0f / 255.0f;
 
@@ -2879,10 +2846,39 @@ static void RB_UpdateEntityLightConstants(
 	entityBlock.lightOrigin[3] = lightRadius;
 }
 
+static void RB_UpdateEntityMatrixConstants(
+	EntityBlock& entityBlock,
+	const trRefEntity_t* refEntity)
+{
+	orientationr_t ori;
+	R_RotateForEntity(refEntity, &backEnd.viewParms, &ori);
+	Matrix16Copy(ori.modelMatrix, entityBlock.modelMatrix);
+}
+
+static void RB_UpdateEntityModelConstants(
+	EntityBlock& entityBlock,
+	const trRefEntity_t* refEntity)
+{
+	static const float normalizeFactor = 1.0f / 255.0f;
+
+	entityBlock.fxVolumetricBase = -1.0f;
+	if (refEntity->e.renderfx & RF_VOLUMETRIC)
+		entityBlock.fxVolumetricBase = refEntity->e.shaderRGBA[0] * normalizeFactor;
+
+	entityBlock.vertexLerp = 0.0f;
+	if (refEntity->e.oldframe || refEntity->e.frame)
+		if (refEntity->e.oldframe != refEntity->e.frame)
+			entityBlock.vertexLerp = refEntity->e.backlerp;
+
+	entityBlock.entityTime = 0.0f;
+	if (refEntity != &tr.worldEntity)
+		entityBlock.entityTime = -refEntity->e.shaderTime;
+}
+
 // saber slice: the cut planes of a sliced ghoul2 model (world space, the positive side is cut away)
 static void RB_UpdateEntitySliceConstants(
-	EntityBlock & entityBlock,
-	const trRefEntity_t * refEntity)
+	EntityBlock& entityBlock,
+	const trRefEntity_t* refEntity)
 {
 	const refEntity_t& e = refEntity->e;
 	entityBlock.sliceCount = 0;
@@ -2914,36 +2910,7 @@ static void RB_UpdateEntitySliceConstants(
 	entityBlock.sliceHeat = Com_Clamp(0.0f, 1.0f, e.sliceHeat) + (metal ? 2.0f : 0.0f);
 }
 
-static void RB_UpdateEntityMatrixConstants(
-	EntityBlock & entityBlock,
-	const trRefEntity_t * refEntity)
-{
-	orientationr_t ori;
-	R_RotateForEntity(refEntity, &backEnd.viewParms, &ori);
-	Matrix16Copy(ori.modelMatrix, entityBlock.modelMatrix);
-}
-
-static void RB_UpdateEntityModelConstants(
-	EntityBlock & entityBlock,
-	const trRefEntity_t * refEntity)
-{
-	static const float normalizeFactor = 1.0f / 255.0f;
-
-	entityBlock.fxVolumetricBase = -1.0f;
-	if (refEntity->e.renderfx & RF_VOLUMETRIC)
-		entityBlock.fxVolumetricBase = refEntity->e.shaderRGBA[0] * normalizeFactor;
-
-	entityBlock.vertexLerp = 0.0f;
-	if (refEntity->e.oldframe || refEntity->e.frame)
-		if (refEntity->e.oldframe != refEntity->e.frame)
-			entityBlock.vertexLerp = refEntity->e.backlerp;
-
-	entityBlock.entityTime = 0.0f;
-	if (refEntity != &tr.worldEntity)
-		entityBlock.entityTime = -refEntity->e.shaderTime;
-}
-
-static void RB_UpdateSkyEntityConstants(gpuFrame_t * frame, const trRefdef_t * refdef)
+static void RB_UpdateSkyEntityConstants(gpuFrame_t* frame, const trRefdef_t* refdef)
 {
 	EntityBlock skyEntityBlock = {};
 	skyEntityBlock.fxVolumetricBase = -1.0f;
@@ -2958,9 +2925,9 @@ static void RB_UpdateSkyEntityConstants(gpuFrame_t * frame, const trRefdef_t * r
 
 static void ComputeDeformValues(
 	//const trRefEntity_t *refEntity,
-	const shader_t * shader,
-	deform_t * type,
-	genFunc_t * waveFunc,
+	const shader_t* shader,
+	deform_t* type,
+	genFunc_t* waveFunc,
 	vec4_t deformParams0,
 	vec4_t deformParams1)
 {
@@ -3062,7 +3029,7 @@ static void ComputeDeformValues(
 	}
 }
 
-void RB_AddShaderToShaderInstanceUBO(shader_t * shader)
+void RB_AddShaderToShaderInstanceUBO(shader_t* shader)
 {
 	if (shader->numDeforms != 1 && !shader->portalRange && !shader->timeOffset && !shader->grassCutPlant)
 	{
@@ -3084,7 +3051,7 @@ void RB_AddShaderToShaderInstanceUBO(shader_t * shader)
 }
 
 static void RB_UpdateEntityConstants(
-	gpuFrame_t * frame, const trRefdef_t * refdef)
+	gpuFrame_t* frame, const trRefdef_t* refdef)
 {
 	memset(tr.entityUboOffsets, 0, sizeof(tr.entityUboOffsets));
 	memset(tr.previousEntityUboOffsets, 0, sizeof(tr.previousEntityUboOffsets));
@@ -3147,11 +3114,7 @@ static void RB_UpdateEntityConstants(
 
 		if (frame->numCachedModelUboOffsets >= MAX_REFENTITIES)
 		{
-#ifdef REND2_SP
 			ri.Printf(PRINT_DEVELOPER, "Too many models to cache, skipping now.\n");
-#else // !REND2_SP
-			ri->Printf(PRINT_DEVELOPER, "Too many models to cache, skipping now.\n");
-#endif // REND2_SP
 		}
 		else
 		{
@@ -3223,7 +3186,7 @@ static void RB_UpdateEntityConstants(
 	RB_UpdateSkyEntityConstants(frame, refdef);
 }
 
-static void RB_UpdateGhoul2Constants(gpuFrame_t * frame, const trRefdef_t * refdef)
+static void RB_UpdateGhoul2Constants(gpuFrame_t* frame, const trRefdef_t* refdef)
 {
 	for (int i = 0; i < refdef->num_entities; i++)
 	{
@@ -3251,8 +3214,9 @@ static void RB_UpdateGhoul2Constants(gpuFrame_t * frame, const trRefdef_t * refd
 	}
 }
 
-void RB_UpdateConstants(const trRefdef_t * refdef)
+void RB_UpdateConstants(const trRefdef_t* refdef)
 {
+	PROFILE_ZONE("R: constants (camera, lights, bones, entities)");
 	gpuFrame_t* frame = backEndData->currentFrame;
 	RB_BeginConstantsUpdate(frame);
 
@@ -3307,11 +3271,7 @@ void RB_ShowImages(void) {
 
 	qglFinish();
 
-#ifdef REND2_SP
 	start = ri.Milliseconds();
-#else // !REND2_SP
-	start = ri->Milliseconds();
-#endif // REND2_SP
 
 	image = tr.images;
 	for (i = 0; i < tr.numImages; i++, image = image->poolNext) {
@@ -3342,13 +3302,8 @@ void RB_ShowImages(void) {
 
 	qglFinish();
 
-#ifdef REND2_SP
 	end = ri.Milliseconds();
 	ri.Printf(PRINT_ALL, "%i msec to draw all images\n", end - start);
-#else // !REND2_SP
-	end = ri->Milliseconds();
-	ri->Printf(PRINT_ALL, "%i msec to draw all images\n", end - start);
-#endif // REND2_SP
 }
 
 /*
@@ -3492,13 +3447,8 @@ static const void* RB_SwapBuffers(const void* data) {
 		tr.numFramesToCapture--;
 		if (!tr.numFramesToCapture)
 		{
-#ifdef REND2_SP
 			ri.Printf(PRINT_ALL, "Frames captured\n");
 			ri.FS_FCloseFile(tr.debugFile);
-#else // !REND2_SP
-			ri->Printf(PRINT_ALL, "Frames captured\n");
-			ri->FS_FCloseFile(tr.debugFile);
-#endif // REND2_SP
 			tr.debugFile = 0;
 		}
 	}
@@ -3509,11 +3459,7 @@ static const void* RB_SwapBuffers(const void* data) {
 
 	R_PushDebugGroup(AL_NONE, "Done with frame");
 
-#ifdef REND2_SP
 	ri.WIN_Present(&window);
-#else // !REND2_SP
-	ri->WIN_Present(&window);
-#endif // REND2_SP
 
 	return (const void*)(cmd + 1);
 }
@@ -3549,6 +3495,11 @@ static const void* RB_PostProcess(const void* data)
 		// Can't resolve just part of the MSAA FBO, so multiple views will suffer a performance hit here
 		FBO_FastBlit(tr.renderFbo, NULL, tr.msaaResolveFbo, NULL, GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 		srcFbo = tr.msaaResolveFbo;
+
+		if (r_ssr->integer > 0 && tr.ssrMaskImage)
+		{
+			FBO_FastBlitIndexed(tr.renderFbo, tr.msaaResolveFbo, 2, 2, GL_COLOR_BUFFER_BIT, GL_NEAREST); // r_ssr material mask (Jace 2026-11-04)
+		}
 
 		if (r_dynamicGlow->integer)
 		{
@@ -3823,6 +3774,7 @@ static const void* RB_PostProcess(const void* data)
 		GLSL_BindProgram(&tr.ssrShader);
 		GL_BindToTMU(tr.sharpenImage, TB_COLORMAP);
 		GL_BindToTMU(tr.renderDepthImage, TB_LIGHTMAP);
+		if (tr.ssrMaskImage) GL_BindToTMU(tr.ssrMaskImage, TB_NORMALMAP); // r_ssr material mask (Jace 2026-11-04)
 		GLSL_SetUniformVec4(&tr.ssrShader, UNIFORM_SSRPROJECTION, ssrProjection);
 		GLSL_SetUniformVec4(&tr.ssrShader, UNIFORM_SSRPARAMS, ssrParams);
 		GLSL_SetUniformVec4(&tr.ssrShader, UNIFORM_SSRVIEWPORT, ssrViewport);
@@ -4002,11 +3954,7 @@ void RB_ExecuteRenderCommands(const void* data) {
 	PROFILE_ZONE("R back end");
 	int		t1 = 0, t2 = 0;
 
-#ifdef REND2_SP
 	t1 = ri.Milliseconds();
-#else // !REND2_SP
-	t1 = ri->Milliseconds();
-#endif // REND2_SP
 
 	while (1) {
 		data = PADP(data, sizeof(void*));
@@ -4069,11 +4017,7 @@ void RB_ExecuteRenderCommands(const void* data) {
 				RB_EndSurface();
 
 			// stop rendering
-#ifdef REND2_SP
 			t2 = ri.Milliseconds();
-#else // !REND2_SP
-			t2 = ri->Milliseconds();
-#endif // REND2_SP
 			backEnd.pc.msec = t2 - t1;
 			return;
 		}

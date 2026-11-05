@@ -91,17 +91,10 @@ qboolean Matrix16Compare(const matrix_t a, const matrix_t b)
 
 void Matrix16Dump(const matrix_t in)
 {
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "%3.5f %3.5f %3.5f %3.5f\n", in[0], in[4], in[8], in[12]);
 	ri.Printf(PRINT_ALL, "%3.5f %3.5f %3.5f %3.5f\n", in[1], in[5], in[9], in[13]);
 	ri.Printf(PRINT_ALL, "%3.5f %3.5f %3.5f %3.5f\n", in[2], in[6], in[10], in[14]);
 	ri.Printf(PRINT_ALL, "%3.5f %3.5f %3.5f %3.5f\n", in[3], in[7], in[11], in[15]);
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, "%3.5f %3.5f %3.5f %3.5f\n", in[0], in[4], in[8], in[12]);
-	ri->Printf(PRINT_ALL, "%3.5f %3.5f %3.5f %3.5f\n", in[1], in[5], in[9], in[13]);
-	ri->Printf(PRINT_ALL, "%3.5f %3.5f %3.5f %3.5f\n", in[2], in[6], in[10], in[14]);
-	ri->Printf(PRINT_ALL, "%3.5f %3.5f %3.5f %3.5f\n", in[3], in[7], in[11], in[15]);
-#endif // REND2_SP
 }
 
 void Matrix16Translation(const vec3_t vec, matrix_t out)
@@ -214,40 +207,36 @@ unsigned short FloatToHalf(float in)
 	{
 		float f;
 		unsigned int i;
-#ifdef REND2_SP
-	} f32;
-#else // !REND2_SP
-} f32{};
-#endif // REND2_SP
+	} f32{};
 
-int sign = 0, inExponent = 0, inFraction = 0;
-int outExponent = 0, outFraction = 0;
+	int sign = 0, inExponent = 0, inFraction = 0;
+	int outExponent = 0, outFraction = 0;
 
-f32.f = in;
+	f32.f = in;
 
-sign = (f32.i & 0x80000000) >> 31;
-inExponent = (f32.i & 0x7F800000) >> 23;
-inFraction = f32.i & 0x007FFFFF;
+	sign = (f32.i & 0x80000000) >> 31;
+	inExponent = (f32.i & 0x7F800000) >> 23;
+	inFraction = f32.i & 0x007FFFFF;
 
-outExponent = CLAMP(inExponent - 127, -15, 16) + 15;
+	outExponent = CLAMP(inExponent - 127, -15, 16) + 15;
 
-outFraction = 0;
-if (outExponent == 0x1F)
-{
-	if (inExponent == 0xFF && inFraction != 0)
-		outFraction = 0x3FF;
-}
-else if (outExponent == 0x00)
-{
-	if (inExponent == 0x00 && inFraction != 0)
-		outFraction = 0x3FF;
-}
-else
-outFraction = inFraction >> 13;
+	outFraction = 0;
+	if (outExponent == 0x1F)
+	{
+		if (inExponent == 0xFF && inFraction != 0)
+			outFraction = 0x3FF;
+	}
+	else if (outExponent == 0x00)
+	{
+		if (inExponent == 0x00 && inFraction != 0)
+			outFraction = 0x3FF;
+	}
+	else
+		outFraction = inFraction >> 13;
 
-out = (sign << 15) | (outExponent << 10) | outFraction;
+	out = (sign << 15) | (outExponent << 10) | outFraction;
 
-return out;
+	return out;
 }
 
 uint32_t ReverseBits(uint32_t v)

@@ -2,6 +2,8 @@
 
 #include <qcommon/q_shared.h>
 #include <vector>
+#include <cstdint>
+#include <unordered_map>
 
 /*
  * This stores the loaded file information that we need on retrieval
@@ -80,15 +82,12 @@ public:
 
 private:
 	AssetCache::iterator FindAsset(const char* name);
+	void		RemoveAsset(const char* path);	// its file was freed: the next lookup loads the model again
 	FileCache::iterator	FindFile(const char* name);
-	void ClearHandleMemo();
 
 	AssetCache assets;
-	FileCache files;
-
-	// Remembers GetModelHandle results per exact name string, so repeated lookups (every ghoul2 call
-	// re-registers its models by name) skip the lower-casing and the linear search over all assets.
-	// Cleared whenever an asset is removed; appending assets keeps earlier results valid.
+	std::unordered_multimap<uint32_t, size_t> assetIndex;	// path hash -> index in assets: GetModelHandle runs thousands of times a frame (G2_SetupModelPointers)
+	// GetModelHandle results per exact name string; cleared whenever assets are removed
 	struct HandleMemo
 	{
 		char name[MAX_QPATH];
@@ -96,6 +95,7 @@ private:
 	};
 	static constexpr int HANDLE_MEMO_SIZE = 1024;
 	HandleMemo handleMemo[HANDLE_MEMO_SIZE]{};
+	FileCache files;
 };
 
 qboolean C_Models_LevelLoadEnd(qboolean deleteUnusedByLevel);

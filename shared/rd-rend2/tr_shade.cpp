@@ -41,7 +41,6 @@ R_DrawElements
 
 ==================
 */
-#ifdef REND2_SP
 
 void R_DrawElementsVBO(int numIndexes, glIndex_t firstIndex, glIndex_t minIndex, glIndex_t maxIndex)
 {
@@ -51,6 +50,7 @@ void R_DrawElementsVBO(int numIndexes, glIndex_t firstIndex, glIndex_t minIndex,
 	GL_DrawIndexed(GL_TRIANGLES, numIndexes, GL_INDEX_TYPE, offset, 1, 0);
 }
 
+#if 0
 static void R_DrawMultiElementsVBO(int multiDrawPrimitives, glIndex_t* multiDrawMinIndex, glIndex_t* multiDrawMaxIndex,
 	GLsizei* multiDrawNumIndexes, glIndex_t** multiDrawFirstIndex)
 {
@@ -60,17 +60,7 @@ static void R_DrawMultiElementsVBO(int multiDrawPrimitives, glIndex_t* multiDraw
 		multiDrawFirstIndex,
 		multiDrawPrimitives);
 }
-#else // !REND2_SP
-
-void R_DrawElementsVBO(int numIndexes, glIndex_t firstIndex, glIndex_t minIndex, glIndex_t maxIndex)
-{
-	size_t offset = firstIndex * sizeof(glIndex_t) +
-		(tess.useInternalVBO ? backEndData->currentFrame->dynamicIboCommitOffset : 0);
-
-	GL_DrawIndexed(GL_TRIANGLES, numIndexes, GL_INDEX_TYPE, offset, 1, 0);
-}
-
-#endif // REND2_SP
+#endif
 
 /*
 =============================================================
@@ -94,13 +84,8 @@ void R_BindAnimatedImageToTMU(textureBundle_t* bundle, int tmu) {
 	if (bundle->isVideoMap) {
 		int oldtmu = glState.currenttmu;
 		GL_SelectTexture(tmu);
-#ifdef REND2_SP
 		ri.CIN_RunCinematic(bundle->videoMapHandle);
 		ri.CIN_UploadCinematic(bundle->videoMapHandle);
-#else // !REND2_SP
-		ri->CIN_RunCinematic(bundle->videoMapHandle);
-		ri->CIN_UploadCinematic(bundle->videoMapHandle);
-#endif // REND2_SP
 		GL_SelectTexture(oldtmu);
 		return;
 	}
@@ -187,11 +172,7 @@ extern float EvalWaveFormClamped(const waveForm_t* wf);
 static void ComputeTexMods(shaderStage_t* pStage, int bundleNum, float* outMatrix, float* outOffTurb)
 {
 	int tm = 0;
-#ifdef REND2_SP
-	float matrix[6], currentmatrix[6];
-#else // !REND2_SP
 	float matrix[6]{}, currentmatrix[6]{};
-#endif // REND2_SP
 	textureBundle_t* bundle = &pStage->bundle[bundleNum];
 
 	matrix[0] = 1.0f; matrix[2] = 0.0f; matrix[4] = 0.0f;
@@ -246,11 +227,7 @@ static void ComputeTexMods(shaderStage_t* pStage, int bundleNum, float* outMatri
 			break;
 
 		default:
-#ifdef REND2_SP
 			ri.Error(ERR_DROP, "ERROR: unknown texmod '%d' in shader '%s'", bundle->texMods[tm].type, tess.shader->name);
-#else // !REND2_SP
-			ri->Error(ERR_DROP, "ERROR: unknown texmod '%d' in shader '%s'", bundle->texMods[tm].type, tess.shader->name);
-#endif // REND2_SP
 			break;
 		}
 
@@ -484,7 +461,7 @@ static void ComputeShaderColors(shaderStage_t* pStage, vec4_t baseColor, vec4_t 
 		&& !((blend & GLS_SRCBLEND_BITS) == GLS_SRCBLEND_ONE_MINUS_DST_COLOR)
 		&& !((blend & GLS_DSTBLEND_BITS) == GLS_DSTBLEND_SRC_COLOR)
 		&& !((blend & GLS_DSTBLEND_BITS) == GLS_DSTBLEND_ONE_MINUS_SRC_COLOR)
-		&& (backEnd.framePostProcessed || !tr.world)) // rend2 792feb58
+		&& (backEnd.framePostProcessed || !tr.world))
 	{
 		float scale = powf(2.0f, tr.overbright);
 
@@ -566,11 +543,7 @@ static void CaptureDrawData(const shaderCommands_t* input, shaderStage_t* stage,
 			glState.currentVBO->vertexesVBO,
 			glState.currentIBO->indexesVBO,
 			numIndexes / 3);
-#ifdef REND2_SP
 		ri.FS_Write(data, int(strlen(data)), tr.debugFile);
-#else // !REND2_SP
-		ri->FS_Write(data, int(strlen(data)), tr.debugFile);
-#endif // REND2_SP
 	}
 	else
 	{
@@ -586,11 +559,7 @@ static void CaptureDrawData(const shaderCommands_t* input, shaderStage_t* stage,
 			glState.currentVBO->vertexesVBO,
 			glState.currentIBO->indexesVBO,
 			input->numIndexes / 3);
-#ifdef REND2_SP
 		ri.FS_Write(data, int(strlen(data)), tr.debugFile);
-#else // !REND2_SP
-		ri->FS_Write(data, int(strlen(data)), tr.debugFile);
-#endif // REND2_SP
 	}
 }
 
@@ -863,29 +832,16 @@ static UniformBlockBinding GetEntityBlockUniformBinding(
 		binding.ubo = currentFrameUbo;
 		if (!refEntity || refEntity == &tr.worldEntity)
 		{
-#ifdef REND2_SP
-			binding.offset = tr.entityUboOffsets[REFENTITYNUM_WORLD];
-#else // !REND2_SP
 			long offset = tr.entityUboOffsets[REFENTITYNUM_WORLD];
 			binding.offset = offset == -1 ? 0 : offset;
-#endif // REND2_SP
 		}
 		else
 		{
 			const int refEntityNum = refEntity - backEnd.refdef.entities;
-#ifdef REND2_SP
-			binding.offset = tr.entityUboOffsets[refEntityNum];
-#else // !REND2_SP
 			long offset = tr.entityUboOffsets[refEntityNum];
 			binding.offset = offset == -1 ? 0 : offset;
-#endif // REND2_SP
 		}
 	}
-#ifdef REND2_SP
-
-	if (binding.offset == -1)
-		binding.offset = 0;
-#endif // REND2_SP
 
 	return binding;
 }
@@ -914,29 +870,16 @@ static UniformBlockBinding GetPreviousEntityBlockUniformBinding(
 		if (!refEntity || refEntity == &tr.worldEntity)
 		{
 			binding.ubo = backEndData->currentFrame->ubo[currentFrameScene];
-#ifdef REND2_SP
-			binding.offset = tr.entityUboOffsets[REFENTITYNUM_WORLD];
-#else // !REND2_SP
 			long offset = tr.entityUboOffsets[REFENTITYNUM_WORLD];
 			binding.offset = offset == -1 ? 0 : offset;
-#endif // REND2_SP
 		}
 		else
 		{
 			const int refEntityNum = refEntity - backEnd.refdef.entities;
-#ifdef REND2_SP
-			binding.offset = tr.previousEntityUboOffsets[refEntityNum];
-#else // !REND2_SP
 			long offset = tr.previousEntityUboOffsets[refEntityNum];
 			binding.offset = offset == -1 ? 0 : offset;
-#endif // REND2_SP
 		}
 	}
-#ifdef REND2_SP
-
-	if (binding.offset == -1)
-		binding.offset = 0;
-#endif // REND2_SP
 
 	return binding;
 }
@@ -952,11 +895,6 @@ static UniformBlockBinding GetBonesBlockUniformBinding()
 	if (glState.skeletalAnimation)
 		binding.offset = tr.animationBoneUboOffset;
 	else
-#ifdef REND2_SP
-		binding.offset = 0;
-
-	if (binding.offset == -1)
-#endif // REND2_SP
 		binding.offset = 0;
 
 	return binding;
@@ -975,24 +913,12 @@ static UniformBlockBinding GetPreviousBonesBlockUniformBinding()
 	else
 		binding.offset = 0;
 
-#ifdef REND2_SP
-	if (binding.offset == -1)
-		binding.offset = 0;
-
-#endif // REND2_SP
 	return binding;
 }
 
 static UniformBlockBinding GetShaderInstanceBlockUniformBinding(
 	const trRefEntity_t* refEntity, const shader_t* shader)
 {
-#ifdef REND2_SP
-	const byte currentFrameScene = backEndData->currentFrame->currentScene;
-	const GLuint currentFrameUbo = backEndData->currentFrame->ubo[currentFrameScene];
-#else // !REND2_SP
-	//const byte currentFrameScene = backEndData->currentFrame->currentScene;
-	//const GLuint currentFrameUbo = backEndData->currentFrame->ubo[currentFrameScene];
-#endif // REND2_SP
 	UniformBlockBinding binding = {};
 	binding.ubo = tr.shaderInstanceUbo;
 	binding.block = UNIFORM_BLOCK_SHADER_INSTANCE;
@@ -1144,7 +1070,7 @@ static void ProjectPshadowVBOGLSL(const shaderCommands_t* input, const VertexArr
 		VectorScale(ps->lightViewAxis[2], 1.0f / ps->viewRadius, vector);
 		uniformDataWriter.SetUniformVec3(UNIFORM_LIGHTUP, vector);
 
-		uniformDataWriter.SetUniformFloat(UNIFORM_LIGHTRADIUS, radius);
+		uniformDataWriter.SetUniformFloat(UNIFORM_LIGHTRADIUS, radius);
 
 		// pshadow.glsl u_Color: x = edge blur scale, y = darkest shadow. cg_shadows 2 = softer and lighter,
 		// 3 = sharp and darker (DH 2026-10-26)
@@ -1644,11 +1570,7 @@ RB_ShadowTessEnd
 */
 void RB_ShadowTessEnd(shaderCommands_t* input, const VertexArraysProperties* vertexArrays) {
 	if (glConfig.stencilBits < 4) {
-#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, "no stencil bits for stencil writing\n");
-#else // !REND2_SP
-		ri->Printf(PRINT_ALL, "no stencil bits for stencil writing\n");
-#endif // REND2_SP
 		return;
 	}
 
@@ -1861,6 +1783,8 @@ static void RB_IterateStagesGeneric(shaderCommands_t* input, const VertexArraysP
 
 		uniformDataWriter.Start(sp);
 		RB_GrassCutPlantUniforms(input, sp, uniformDataWriter, samplerBindingsWriter);
+		// r_ssr material mask (Jace 2026-11-04): grass, sand, mud... mark their pixels so r_ssr leaves them alone
+		uniformDataWriter.SetUniformFloat(UNIFORM_SSRNOREFLECT, input->shader->noSsr ? 1.0f : 0.0f);
 
 		if (input->fogNum
 			&& pStage->glslShaderGroup != tr.lightallShader
@@ -2090,10 +2014,9 @@ static void RB_IterateStagesGeneric(shaderCommands_t* input, const VertexArraysP
 				r_sunlightMode->integer)
 			{
 				samplerBindingsWriter.AddStaticImage(tr.sunShadowArrayImage, TB_SHADOWMAP);
-				// 2D pics keep the last 3D view's flags; sunlight there has no ambient and draws them black
-				// (the light amp goggles and binoculars window)
 				if (backEnd.viewParms.flags & VPF_USESUNLIGHT && !backEnd.projection2D)
-				{
+				{// 2D pics keep the last 3D view's flags; sunlight there has no ambient and draws them black
+				 // (the light amp goggles and binoculars window) - from MD9 (SJE/MD9 shared renderer (2026-11-05))
 					enableTextures[2] = 1.0f;
 				}
 			}
@@ -2423,18 +2346,10 @@ void RB_EndSurface(void) {
 	}
 
 	if (input->indexes[SHADER_MAX_INDEXES - 1] != 0) {
-#ifdef REND2_SP
 		ri.Error(ERR_DROP, "RB_EndSurface() - SHADER_MAX_INDEXES hit");
-#else // !REND2_SP
-		ri->Error(ERR_DROP, "RB_EndSurface() - SHADER_MAX_INDEXES hit");
-#endif // REND2_SP
 	}
 	if (input->xyz[SHADER_MAX_VERTEXES - 1][0] != 0) {
-#ifdef REND2_SP
 		ri.Error(ERR_DROP, "RB_EndSurface() - SHADER_MAX_VERTEXES hit");
-#else // !REND2_SP
-		ri->Error(ERR_DROP, "RB_EndSurface() - SHADER_MAX_VERTEXES hit");
-#endif // REND2_SP
 	}
 
 	// for debugging of sort order issues, stop rendering after a given sort value

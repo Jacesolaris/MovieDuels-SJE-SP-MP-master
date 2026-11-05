@@ -32,19 +32,7 @@ extern "C" {
 #define GLAPI extern
 #endif
 
-#define GL_GLEXT_VERSION 20240327
-
 #include <KHR/khrplatform.h>
-
-	/* Generated C header for:
-	 * API: gl
-	 * Profile: compatibility
-	 * Versions considered: .*
-	 * Versions emitted: 1\.[2-9]|[234]\.[0-9]
-	 * Default extensions included: gl
-	 * Additional extensions included: _nomatch_^
-	 * Extensions removed: _nomatch_^
-	 */
 
 #ifndef GL_VERSION_1_2
 #define GL_VERSION_1_2 1

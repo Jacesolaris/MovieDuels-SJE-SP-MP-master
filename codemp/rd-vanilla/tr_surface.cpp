@@ -1981,7 +1981,7 @@ static void RB_SurfaceEntity(surfaceType_t* surfType)
 
 static void RB_SurfaceBad(surfaceType_t* surfType)
 {
-	ri->Printf(PRINT_ALL, "Bad surface tesselated.\n");
+	ri.Printf(PRINT_ALL, "Bad surface tesselated.\n");
 }
 
 // Flare visibility used a synchronous glReadPixels of the depth under every flare on screen: each read stalls the CPU until
@@ -2008,11 +2008,11 @@ static bool R_FlarePbosReady()
 		if (glConfig.extensions_string && strstr(glConfig.extensions_string, "GL_ARB_pixel_buffer_object")
 			&& strstr(glConfig.extensions_string, "GL_ARB_vertex_buffer_object"))
 		{
-			flare_glGenBuffers = reinterpret_cast<PFNGLGENBUFFERSARBPROC>(ri->GL_GetProcAddress("glGenBuffersARB"));
-			flare_glDeleteBuffers = reinterpret_cast<PFNGLDELETEBUFFERSARBPROC>(ri->GL_GetProcAddress("glDeleteBuffersARB"));
-			flare_glBindBuffer = reinterpret_cast<PFNGLBINDBUFFERARBPROC>(ri->GL_GetProcAddress("glBindBufferARB"));
-			flare_glBufferData = reinterpret_cast<PFNGLBUFFERDATAARBPROC>(ri->GL_GetProcAddress("glBufferDataARB"));
-			flare_glGetBufferSubData = reinterpret_cast<PFNGLGETBUFFERSUBDATAARBPROC>(ri->GL_GetProcAddress("glGetBufferSubDataARB"));
+			flare_glGenBuffers = reinterpret_cast<PFNGLGENBUFFERSARBPROC>(ri.GL_GetProcAddress("glGenBuffersARB"));
+			flare_glDeleteBuffers = reinterpret_cast<PFNGLDELETEBUFFERSARBPROC>(ri.GL_GetProcAddress("glDeleteBuffersARB"));
+			flare_glBindBuffer = reinterpret_cast<PFNGLBINDBUFFERARBPROC>(ri.GL_GetProcAddress("glBindBufferARB"));
+			flare_glBufferData = reinterpret_cast<PFNGLBUFFERDATAARBPROC>(ri.GL_GetProcAddress("glBufferDataARB"));
+			flare_glGetBufferSubData = reinterpret_cast<PFNGLGETBUFFERSUBDATAARBPROC>(ri.GL_GetProcAddress("glGetBufferSubDataARB"));
 			if (flare_glGenBuffers && flare_glDeleteBuffers && flare_glBindBuffer && flare_glBufferData && flare_glGetBufferSubData)
 			{
 				flare_glGenBuffers(2 * FLARE_PBO_SLOTS, &flare_pbos[0][0]);

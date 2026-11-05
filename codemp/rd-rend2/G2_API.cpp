@@ -227,7 +227,7 @@ qboolean G2API_OverrideServerWithClientData(CGhoul2Info_v& ghoul2, int modelInde
 	CGhoul2Info* serverInstance = &ghoul2[modelIndex];
 	CGhoul2Info* clientInstance;
 
-	if (ri->Cvar_VariableIntegerValue("dedicated"))
+	if (ri.Cvar_VariableIntegerValue("dedicated"))
 	{ //No client to get from!
 		return qfalse;
 	}
@@ -660,7 +660,7 @@ void RestoreGhoul2InfoArray()
 		TheGhoul2InfoArray();
 
 		size_t size = 0;
-		const void* data = ri->PD_Load(PERSISTENT_G2DATA, &size);
+		const void* data = ri.PD_Load(PERSISTENT_G2DATA, &size);
 		if (data == NULL)
 		{
 			return;
@@ -681,7 +681,7 @@ void SaveGhoul2InfoArray()
 
 	assert(written == size);
 
-	if (!ri->PD_Store(PERSISTENT_G2DATA, data, size))
+	if (!ri.PD_Store(PERSISTENT_G2DATA, data, size))
 	{
 		Com_Printf(S_COLOR_RED "ERROR: Failed to store persistent renderer data.\n");
 	}
@@ -768,12 +768,12 @@ void G2API_CleanGhoul2Models(CGhoul2Info_v** ghoul2Ptr)
 
 qboolean G2_ShouldRegisterServer(void)
 {
-	vm_t* currentVM = ri->GetCurrentVM();
+	vm_t* currentVM = ri.GetCurrentVM();
 
 	if (currentVM && currentVM->slot == VM_GAME)
 	{
-		if (ri->Cvar_VariableIntegerValue("cl_running") &&
-			ri->Com_TheHunkMarkHasBeenMade() && ShaderHashTableExists())
+		if (ri.Cvar_VariableIntegerValue("cl_running") &&
+			ri.Com_TheHunkMarkHasBeenMade() && ShaderHashTableExists())
 		{ //if the hunk has been marked then we are now loading client assets so don't load on server.
 			return qfalse;
 		}
@@ -2488,7 +2488,7 @@ void G2API_CopySpecificG2Model(CGhoul2Info_v& ghoul2From,
 	if (ghoul2To.size() <= modelTo)
 	{
 #ifdef _DEBUG
-		if (modelTo >= 5 && ri->Cvar_VariableIntegerValue("developer")) // (the holstered weapons take more: only for developers)
+		if (modelTo >= 5 && ri.Cvar_VariableIntegerValue("developer")) // (the holstered weapons take more: only for developers)
 		{
 			Com_Printf("G2API_CopySpecificG2Model: WARNING — modelTo index %d exceeds expected limit (max 4)\n",
 				modelTo);
@@ -2779,14 +2779,14 @@ void G2API_AddSkinGore(CGhoul2Info_v& ghoul2, SSkinGoreData& gore)
 
 	int lod = 0;
 	ResetGoreTag();
-	const int lodbias = Com_Clamp(0, 2, G2_DecideTraceLod(ghoul2[0], ri->Cvar_VariableIntegerValue("r_lodbias")));
+	const int lodbias = Com_Clamp(0, 2, G2_DecideTraceLod(ghoul2[0], ri.Cvar_VariableIntegerValue("r_lodbias")));
 	const int maxLod = Com_Clamp(0, ghoul2[0].currentModel->numLods, 3);	//limit to the number of lods the main model has
 	for (lod = lodbias; lod < maxLod; lod++)
 	{
 		// now having done that, time to build the model
-		ri->GetG2VertSpaceServer()->ResetHeap();
+		ri.GetG2VertSpaceServer()->ResetHeap();
 
-		G2_TransformModel(ghoul2, gore.currentTime, gore.scale, ri->GetG2VertSpaceServer(), lod, true);
+		G2_TransformModel(ghoul2, gore.currentTime, gore.scale, ri.GetG2VertSpaceServer(), lod, true);
 
 		// now walk each model and compute new texture coordinates
 		G2_TraceModels(ghoul2, transHitLocation, transRayDirection, 0, gore.entNum, 0, lod, 0.0f, gore.SSize, gore.TSize, gore.theta, gore.shader, &gore, qtrue);
@@ -2804,7 +2804,7 @@ qboolean G2_TestModelPointers(CGhoul2Info* ghlInfo) // returns true if the model
 	ghlInfo->mValid = false;
 	if (ghlInfo->mModelindex != -1)
 	{
-		if (ri->Cvar_VariableIntegerValue("dedicated") ||
+		if (ri.Cvar_VariableIntegerValue("dedicated") ||
 			(G2_ShouldRegisterServer())) //supreme hackery!
 		{
 			ghlInfo->mModel = RE_RegisterServerModel(ghlInfo->mFileName);
@@ -2898,7 +2898,7 @@ qboolean G2_SetupModelPointers(CGhoul2Info* ghlInfo) // returns true if the mode
 		// RJ - experimental optimization!
 		if (!ghlInfo->mModel || 1)
 		{
-			if (ri->Cvar_VariableIntegerValue("dedicated") ||
+			if (ri.Cvar_VariableIntegerValue("dedicated") ||
 				(G2_ShouldRegisterServer())) //supreme hackery!
 			{
 				ghlInfo->mModel = RE_RegisterServerModel(ghlInfo->mFileName);

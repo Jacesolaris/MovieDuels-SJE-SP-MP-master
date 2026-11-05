@@ -254,7 +254,7 @@ static void R_LoadLightmaps(const lump_t* l, const char* ps_map_name, world_t& w
 	}
 
 	if (r_lightmap->integer == 2) {
-		ri->Printf(PRINT_ALL, "Brightest lightmap value: %d\n", static_cast<int>(maxIntensity * 255));
+		ri.Printf(PRINT_ALL, "Brightest lightmap value: %d\n", static_cast<int>(maxIntensity * 255));
 	}
 }
 
@@ -340,7 +340,7 @@ static shader_t* ShaderForShaderNum(int shaderNum, const int* lightmapNum, const
 			static qboolean warned = qfalse;
 			if (!warned)
 			{
-				ri->Printf(PRINT_WARNING, "ShaderForShaderNum: light style %i out of range (max %i), using the normal style\n",
+				ri.Printf(PRINT_WARNING, "ShaderForShaderNum: light style %i out of range (max %i), using the normal style\n",
 					safe_styles[i], MAX_LIGHT_STYLES - 1);
 				warned = qtrue;
 			}
@@ -387,7 +387,7 @@ static void ParseFace(const dsurface_t* ds, mapVert_t* verts, msurface_t* surf, 
 
 	int numPoints = ds->numVerts;
 	if (numPoints > MAX_FACE_POINTS) {
-		ri->Printf(PRINT_ALL, S_COLOR_YELLOW  "WARNING: MAX_FACE_POINTS exceeded: %i\n", numPoints);
+		ri.Printf(PRINT_ALL, S_COLOR_YELLOW  "WARNING: MAX_FACE_POINTS exceeded: %i\n", numPoints);
 		numPoints = MAX_FACE_POINTS;
 		surf->shader = tr.defaultShader;
 	}
@@ -850,7 +850,7 @@ static int R_StitchPatches(int grid1_num, int grid2_num, world_t& worldData) {
 						fabs(v1[2] - v2[2]) < .01)
 						continue;
 					//
-					//ri->Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
+					//ri.Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
 					// insert column into grid2 right after after column l
 					if (m) row = grid2->height - 1;
 					else row = 0;
@@ -895,7 +895,7 @@ static int R_StitchPatches(int grid1_num, int grid2_num, world_t& worldData) {
 						fabs(v1[2] - v2[2]) < .01)
 						continue;
 					//
-					//ri->Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
+					//ri.Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
 					// insert row into grid2 right after after row l
 					if (m) column = grid2->width - 1;
 					else column = 0;
@@ -949,7 +949,7 @@ static int R_StitchPatches(int grid1_num, int grid2_num, world_t& worldData) {
 						fabs(v1[2] - v2[2]) < .01)
 						continue;
 					//
-					//ri->Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
+					//ri.Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
 					// insert column into grid2 right after after column l
 					if (m) row = grid2->height - 1;
 					else row = 0;
@@ -994,7 +994,7 @@ static int R_StitchPatches(int grid1_num, int grid2_num, world_t& worldData) {
 						fabs(v1[2] - v2[2]) < .01)
 						continue;
 					//
-					//ri->Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
+					//ri.Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
 					// insert row into grid2 right after after row l
 					if (m) column = grid2->width - 1;
 					else column = 0;
@@ -1048,7 +1048,7 @@ static int R_StitchPatches(int grid1_num, int grid2_num, world_t& worldData) {
 						fabs(v1[2] - v2[2]) < .01)
 						continue;
 					//
-					//ri->Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
+					//ri.Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
 					// insert column into grid2 right after after column l
 					if (m) row = grid2->height - 1;
 					else row = 0;
@@ -1093,7 +1093,7 @@ static int R_StitchPatches(int grid1_num, int grid2_num, world_t& worldData) {
 						fabs(v1[2] - v2[2]) < .01)
 						continue;
 					//
-					//ri->Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
+					//ri.Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
 					// insert row into grid2 right after after row l
 					if (m) column = grid2->width - 1;
 					else column = 0;
@@ -1149,7 +1149,7 @@ static int R_StitchPatches(int grid1_num, int grid2_num, world_t& worldData) {
 						fabs(v1[2] - v2[2]) < .01)
 						continue;
 					//
-					//ri->Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
+					//ri.Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
 					// insert column into grid2 right after after column l
 					if (m) row = grid2->height - 1;
 					else row = 0;
@@ -1194,7 +1194,7 @@ static int R_StitchPatches(int grid1_num, int grid2_num, world_t& worldData) {
 						fabs(v1[2] - v2[2]) < .01)
 						continue;
 					//
-					//ri->Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
+					//ri.Printf( PRINT_ALL, "found highest LoD crack between two patches\n" );
 					// insert row into grid2 right after after row l
 					if (m) column = grid2->width - 1;
 					else column = 0;
@@ -1274,7 +1274,7 @@ static void R_StitchAllPatches(world_t& worldData) {
 			numstitches += R_TryStitchingPatch(i, worldData);
 		}
 	} while (stitched);
-	//	ri->Printf( PRINT_ALL, "stitched %d LoD cracks\n", numstitches );
+	//	ri.Printf( PRINT_ALL, "stitched %d LoD cracks\n", numstitches );
 }
 
 /*
@@ -1370,7 +1370,7 @@ static void R_LoadSurfaces(const lump_t* surfs, const lump_t* verts, const lump_
 		R_MovePatchSurfacesToHunk(worldData);
 	}
 
-	ri->Printf(PRINT_ALL, "...loaded %d faces, %i meshes, %i trisurfs, %i flares\n", numFaces, numMeshes, numTriSurfs, numFlares);
+	ri.Printf(PRINT_ALL, "...loaded %d faces, %i meshes, %i trisurfs, %i flares\n", numFaces, numMeshes, numTriSurfs, numFlares);
 }
 
 /*
@@ -1393,7 +1393,7 @@ static void R_LoadSubmodels(const lump_t* l, world_t& worldData, const int index
 
 		assert(model != nullptr);			// this should never happen
 		if (model == nullptr) {
-			ri->Error(ERR_DROP, "R_LoadSubmodels: R_AllocModel() failed");
+			ri.Error(ERR_DROP, "R_LoadSubmodels: R_AllocModel() failed");
 			return;
 		}
 
@@ -1819,7 +1819,7 @@ static qboolean R_FindCompilerGridSize(world_t* w, const int numElements)
 				w->lightGridBounds[i] = bounds[i];
 			}
 			w->numGridArrayElements = numElements;
-			ri->Printf(PRINT_DEVELOPER, "light grid: the map was lit with gridsize %g %g %g\n", size[0], size[1], size[2]);
+			ri.Printf(PRINT_DEVELOPER, "light grid: the map was lit with gridsize %g %g %g\n", size[0], size[1], size[2]);
 			return qtrue;
 		}
 		if (count < numElements)
@@ -1849,7 +1849,7 @@ static void R_LoadLightGridArray(const lump_t* l, world_t& worldData) {
 
 	if (static_cast<unsigned>(l->filelen) != w->numGridArrayElements * sizeof * w->lightGridArray
 		&& !R_FindCompilerGridSize(w, l->filelen / static_cast<int>(sizeof * w->lightGridArray))) {
-		ri->Printf(PRINT_ALL, S_COLOR_YELLOW  "WARNING: light grid array mismatch\n");
+		ri.Printf(PRINT_ALL, S_COLOR_YELLOW  "WARNING: light grid array mismatch\n");
 		w->lightGridData = nullptr;
 		return;
 	}
@@ -1919,7 +1919,7 @@ static void R_LoadEntities(const lump_t* l, world_t& worldData) {
 		if (!Q_strncmp(keyname, s, strlen(s))) {
 			s = strchr(value, ';');
 			if (!s) {
-				ri->Printf(PRINT_ALL, S_COLOR_YELLOW  "WARNING: no semi colon in vertexshaderremap '%s'\n", value);
+				ri.Printf(PRINT_ALL, S_COLOR_YELLOW  "WARNING: no semi colon in vertexshaderremap '%s'\n", value);
 				break;
 			}
 			*s++ = 0;
@@ -1933,7 +1933,7 @@ static void R_LoadEntities(const lump_t* l, world_t& worldData) {
 		if (!Q_strncmp(keyname, s, strlen(s))) {
 			s = strchr(value, ';');
 			if (!s) {
-				ri->Printf(PRINT_ALL, S_COLOR_YELLOW  "WARNING: no semi colon in shaderremap '%s'\n", value);
+				ri.Printf(PRINT_ALL, S_COLOR_YELLOW  "WARNING: no semi colon in shaderremap '%s'\n", value);
 				break;
 			}
 			*s++ = 0;
@@ -1943,7 +1943,7 @@ static void R_LoadEntities(const lump_t* l, world_t& worldData) {
 		if (!Q_stricmp(keyname, "distanceCull")) {
 			if (sscanf(value, "%f", &tr.distanceCull) != 1)
 			{
-				ri->Printf(PRINT_DEVELOPER, "WARNING: bad worldspawn value '%s'\n", value);
+				ri.Printf(PRINT_DEVELOPER, "WARNING: bad worldspawn value '%s'\n", value);
 			}
 			continue;
 		}
@@ -1958,7 +1958,7 @@ static void R_LoadEntities(const lump_t* l, world_t& worldData) {
 			}
 			else
 			{
-				ri->Printf(PRINT_WARNING, "WARNING: bad gridsize '%s' in worldspawn, using the default\n", value);
+				ri.Printf(PRINT_WARNING, "WARNING: bad gridsize '%s' in worldspawn, using the default\n", value);
 			}
 			continue;
 		}
@@ -1966,14 +1966,14 @@ static void R_LoadEntities(const lump_t* l, world_t& worldData) {
 		if (!Q_stricmp(keyname, "_color")) {
 			if (sscanf(value, "%f %f %f", &tr.sunAmbient[0], &tr.sunAmbient[1], &tr.sunAmbient[2]) != 3)
 			{
-				ri->Printf(PRINT_DEVELOPER, "WARNING: bad worldspawn value '%s'\n", value);
+				ri.Printf(PRINT_DEVELOPER, "WARNING: bad worldspawn value '%s'\n", value);
 			}
 			continue;
 		}
 		if (!Q_stricmp(keyname, "ambient")) {
 			if (sscanf(value, "%f", &ambient) != 1)
 			{
-				ri->Printf(PRINT_DEVELOPER, "WARNING: bad worldspawn value '%s'\n", value);
+				ri.Printf(PRINT_DEVELOPER, "WARNING: bad worldspawn value '%s'\n", value);
 			}
 		}
 	}
@@ -2037,15 +2037,15 @@ void RE_LoadWorldMap_Actual(const char* name, world_t& worldData, const int inde
 
 	// check for cached disk file from the server first...
 	//
-	if (ri->CM_GetCachedMapDiskImage())
+	if (ri.CM_GetCachedMapDiskImage())
 	{
-		buffer = static_cast<byte*>(ri->CM_GetCachedMapDiskImage());
+		buffer = static_cast<byte*>(ri.CM_GetCachedMapDiskImage());
 	}
 	else
 	{
 		// still needs loading...
 		//
-		ri->FS_ReadFile(name, (void**)&buffer);
+		ri.FS_ReadFile(name, (void**)&buffer);
 		if (!buffer) {
 			Com_Error(ERR_DROP, "RE_LoadWorldMap: %s not found", name);
 		}
@@ -2104,14 +2104,14 @@ void RE_LoadWorldMap_Actual(const char* name, world_t& worldData, const int inde
 		tr.world = &worldData;
 	}
 
-	if (ri->CM_GetCachedMapDiskImage())
+	if (ri.CM_GetCachedMapDiskImage())
 	{
-		Z_Free(ri->CM_GetCachedMapDiskImage());
-		ri->CM_SetCachedMapDiskImage(nullptr);
+		Z_Free(ri.CM_GetCachedMapDiskImage());
+		ri.CM_SetCachedMapDiskImage(nullptr);
 	}
 	else
 	{
-		ri->FS_FreeFile(buffer);
+		ri.FS_FreeFile(buffer);
 	}
 }
 
@@ -2122,7 +2122,7 @@ void RE_LoadWorldMap(const char* name)
 	R_SyncRenderThread();	// r_smp: the back end reads the world
 	PROFILE_ZONE("Load: world map (BSP)");
 	R_ImagePrefetch_Begin(name, "gl_mp");	// this map's JPGs decoded ahead on the job workers
-	ri->CM_SetUsingCache(qtrue);
+	ri.CM_SetUsingCache(qtrue);
 	RE_LoadWorldMap_Actual(name, s_worldData, 0);
-	ri->CM_SetUsingCache(qfalse);
+	ri.CM_SetUsingCache(qfalse);
 }

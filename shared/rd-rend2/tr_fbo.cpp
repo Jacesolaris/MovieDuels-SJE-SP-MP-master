@@ -28,11 +28,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 R_CheckFBO
 =============
 */
-#ifdef REND2_SP
-qboolean R_CheckFBO(const FBO_t* fbo)
-#else // !REND2_SP
 static qboolean R_CheckFBO(const FBO_t* fbo)
-#endif // REND2_SP
 {
 	int             code = 0;
 	int             id = 0;
@@ -56,78 +52,40 @@ static qboolean R_CheckFBO(const FBO_t* fbo)
 		break;
 
 	case GL_FRAMEBUFFER_UNSUPPORTED:
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Unsupported framebuffer format\n", fbo->name);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Unsupported framebuffer format\n", fbo->name);
-#endif // REND2_SP
 		break;
 
 	case GL_FRAMEBUFFER_UNDEFINED:
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Default framebuffer was checked, but does not exist\n", fbo->name);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Default framebuffer was checked, but does not exist\n", fbo->name);
-#endif // REND2_SP
 		break;
 
 	case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete attachment\n", fbo->name);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete attachment\n", fbo->name);
-#endif // REND2_SP
 		break;
 
 	case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, no attachments attached\n", fbo->name);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, no attachments attached\n", fbo->name);
-#endif // REND2_SP
 		break;
 
 	case GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE:
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, mismatched multisampling values\n", fbo->name);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, mismatched multisampling values\n", fbo->name);
-#endif // REND2_SP
 		break;
 
-#ifdef REND2_SP
 	case GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS:
 		ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, mismatched layer targets\n",
 			fbo->name);
-#else // !REND2_SP
-	case GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS:
-		ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, mismatched layer targets\n",
-			fbo->name);
-#endif // REND2_SP
 		break;
 
 	case GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER:
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, missing draw buffer\n", fbo->name);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, missing draw buffer\n", fbo->name);
-#endif // REND2_SP
 		break;
 
 	case GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER:
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, missing read buffer\n", fbo->name);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) Framebuffer incomplete, missing read buffer\n", fbo->name);
-#endif // REND2_SP
 		break;
 
 	default:
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_CheckFBO: (%s) unknown error 0x%X\n", fbo->name, code);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "R_CheckFBO: (%s) unknown error 0x%X\n", fbo->name, code);
-#endif // REND2_SP
 		//ri.Error(ERR_FATAL, "R_CheckFBO: (%s) unknown error 0x%X", fbo->name, code);
 		//assert(0);
 		break;
@@ -141,56 +99,49 @@ static qboolean R_CheckFBO(const FBO_t* fbo)
 FBO_Create
 ============
 */
-#ifdef REND2_SP
-FBO_t* FBO_Create(const char* name, int width, int height)
-#else // !REND2_SP
 static FBO_t* FBO_Create(const char* name, int width, int height)
-#endif // REND2_SP
 {
 	FBO_t* fbo = nullptr;
 
+	// ----------------------------------------------------------------------
+	// Safety: validate name length
+	// ----------------------------------------------------------------------
 	if (strlen(name) >= MAX_QPATH)
 	{
-#ifdef REND2_SP
 		ri.Error(ERR_DROP, "FBO_Create: \"%s\" is too long", name);
-#else // !REND2_SP
-		ri->Error(ERR_DROP, "FBO_Create: \"%s\" is too long", name);
-#endif // REND2_SP
+		return nullptr;    // REQUIRED to satisfy MSVC
 	}
 
+	// ----------------------------------------------------------------------
+	// Safety: validate dimensions
+	// ----------------------------------------------------------------------
 	if (width <= 0 || width > glRefConfig.maxRenderbufferSize)
 	{
-#ifdef REND2_SP
 		ri.Error(ERR_DROP, "FBO_Create: bad width %i", width);
-#else // !REND2_SP
-		ri->Error(ERR_DROP, "FBO_Create: bad width %i", width);
-#endif // REND2_SP
+		return nullptr;
 	}
 
 	if (height <= 0 || height > glRefConfig.maxRenderbufferSize)
 	{
-#ifdef REND2_SP
 		ri.Error(ERR_DROP, "FBO_Create: bad height %i", height);
-#else // !REND2_SP
-		ri->Error(ERR_DROP, "FBO_Create: bad height %i", height);
-#endif // REND2_SP
+		return nullptr;
 	}
 
+	// ----------------------------------------------------------------------
+	// Safety: prevent out-of-bounds write to tr.fbos[]
+	// ----------------------------------------------------------------------
 	if (tr.numFBOs >= MAX_FBOS)
 	{
-#ifdef REND2_SP
 		ri.Error(ERR_DROP, "FBO_Create: MAX_FBOS hit");
-#else // !REND2_SP
-		ri->Error(ERR_DROP, "FBO_Create: MAX_FBOS hit");
-#endif // REND2_SP
-		return nullptr; // not reached: ri.Error never returns (function pointer, so it cannot be noreturn)
+		return nullptr;    // REQUIRED to eliminate C6386
 	}
 
-#ifdef REND2_SP
-	fbo = tr.fbos[tr.numFBOs] = (FBO_t*)Hunk_Alloc(sizeof(*fbo), h_low);
-#else // !REND2_SP
-	fbo = tr.fbos[tr.numFBOs] = (FBO_t*)ri->Hunk_Alloc(sizeof(*fbo), h_low);
-#endif // REND2_SP
+	// ----------------------------------------------------------------------
+	// Allocate FBO struct
+	// ----------------------------------------------------------------------
+	fbo = static_cast<FBO_t*>(Hunk_Alloc(sizeof(*fbo), h_low));
+	tr.fbos[tr.numFBOs] = fbo;
+
 	Q_strncpyz(fbo->name, name, sizeof(fbo->name));
 	fbo->index = tr.numFBOs++;
 	fbo->width = width;
@@ -198,19 +149,10 @@ static FBO_t* FBO_Create(const char* name, int width, int height)
 
 	qglGenFramebuffers(1, &fbo->frameBuffer);
 
-#ifdef REND2_SP
-	FBO_Bind(fbo);
-	if (glRefConfig.annotateResources) qglObjectLabel(GL_FRAMEBUFFER, fbo->frameBuffer, -1, name);
-
-#endif // REND2_SP
 	return fbo;
 }
 
-#ifdef REND2_SP
-void FBO_CreateBuffer(FBO_t* fbo, int format, int index, int multisample)
-#else // !REND2_SP
 static void FBO_CreateBuffer(FBO_t* fbo, int format, int index, int multisample)
-#endif // REND2_SP
 {
 	uint32_t* pRenderBuffer = nullptr;
 	GLenum attachment = 0;
@@ -218,13 +160,11 @@ static void FBO_CreateBuffer(FBO_t* fbo, int format, int index, int multisample)
 
 	switch (format)
 	{
-#ifdef REND2_SP
-	case GL_RG16F:
-#endif // REND2_SP
 	case GL_RGB:
 	case GL_RGBA:
 	case GL_RGB8:
 	case GL_RGBA8:
+	case GL_RG16F: // SJE/MD9 shared renderer (2026-11-05) (MD9 SP)
 	case GL_RGB16F:
 	case GL_RGBA16F:
 	case GL_RGB32F:
@@ -261,11 +201,7 @@ static void FBO_CreateBuffer(FBO_t* fbo, int format, int index, int multisample)
 		break;
 
 	default:
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "FBO_CreateBuffer: invalid format %d\n", format);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "FBO_CreateBuffer: invalid format %d\n", format);
-#endif // REND2_SP
 		return;
 	}
 
@@ -293,10 +229,6 @@ static void FBO_CreateBuffer(FBO_t* fbo, int format, int index, int multisample)
 		else
 			qglFramebufferRenderbuffer(GL_FRAMEBUFFER, attachment, GL_RENDERBUFFER, *pRenderBuffer);
 	}
-#ifdef REND2_SP
-
-	if (glRefConfig.annotateResources) qglObjectLabel(GL_RENDERBUFFER, *pRenderBuffer, -1, va("%s_%i_MS%i", fbo->name, index, multisample));
-#endif // REND2_SP
 }
 
 /*
@@ -304,19 +236,11 @@ static void FBO_CreateBuffer(FBO_t* fbo, int format, int index, int multisample)
 R_AttachFBOTexture1D
 =================
 */
-#ifdef REND2_SP
-void R_AttachFBOTexture1D(int texId, int index)
-#else // !REND2_SP
 static void R_AttachFBOTexture1D(int texId, int index)
-#endif // REND2_SP
 {
 	if (index < 0 || index >= glRefConfig.maxColorAttachments)
 	{
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_AttachFBOTexture1D: invalid attachment index %i\n", index);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "R_AttachFBOTexture1D: invalid attachment index %i\n", index);
-#endif // REND2_SP
 		return;
 	}
 
@@ -328,31 +252,19 @@ static void R_AttachFBOTexture1D(int texId, int index)
 R_AttachFBOTexture2D
 =================
 */
-#ifdef REND2_SP
-void R_AttachFBOTexture2D(int target, int texId, int index)
-#else // !REND2_SP
 static void R_AttachFBOTexture2D(int target, int texId, int index)
-#endif // REND2_SP
 {
 	if (target != GL_TEXTURE_2D &&
 		(target < GL_TEXTURE_CUBE_MAP_POSITIVE_X ||
 			target > GL_TEXTURE_CUBE_MAP_NEGATIVE_Z))
 	{
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_AttachFBOTexture2D: invalid target %i\n", target);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "R_AttachFBOTexture2D: invalid target %i\n", target);
-#endif // REND2_SP
 		return;
 	}
 
 	if (index < 0 || index >= glRefConfig.maxColorAttachments)
 	{
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_AttachFBOTexture2D: invalid attachment index %i\n", index);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "R_AttachFBOTexture2D: invalid attachment index %i\n", index);
-#endif // REND2_SP
 		return;
 	}
 
@@ -364,19 +276,11 @@ static void R_AttachFBOTexture2D(int target, int texId, int index)
 R_AttachFBOTexture3D
 =================
 */
-#ifdef REND2_SP
-void R_AttachFBOTexture3D(int texId, int index, int zOffset)
-#else // !REND2_SP
 static void R_AttachFBOTexture3D(int texId, int index, int zOffset)
-#endif // REND2_SP
 {
 	if (index < 0 || index >= glRefConfig.maxColorAttachments)
 	{
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "R_AttachFBOTexture3D: invalid attachment index %i\n", index);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "R_AttachFBOTexture3D: invalid attachment index %i\n", index);
-#endif // REND2_SP
 		return;
 	}
 
@@ -388,11 +292,7 @@ static void R_AttachFBOTexture3D(int texId, int index, int zOffset)
 R_AttachFBOTextureDepth
 =================
 */
-#ifdef REND2_SP
-void R_AttachFBOTextureDepth(int texId)
-#else // !REND2_SP
 static void R_AttachFBOTextureDepth(int texId)
-#endif // REND2_SP
 {
 	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, texId, 0);
 }
@@ -402,28 +302,16 @@ static void R_AttachFBOTextureDepth(int texId)
 R_AttachFBOTexturePackedDepthStencil
 =================
 */
-#ifdef REND2_SP
-void R_AttachFBOTexturePackedDepthStencil(int texId)
-#else // !REND2_SP
 static void R_AttachFBOTexturePackedDepthStencil(int texId)
-#endif // REND2_SP
 {
 	qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, texId, 0);
 }
 
-#ifdef REND2_SP
-void FBO_AttachTextureImage(image_t* img, int index)
-#else // !REND2_SP
 static void FBO_AttachTextureImage(image_t* img, int index)
-#endif // REND2_SP
 {
 	if (!glState.currentFBO)
 	{
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "FBO: attempted to attach a texture image with no FBO bound!\n");
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "FBO: attempted to attach a texture image with no FBO bound!\n");
-#endif // REND2_SP
 		return;
 	}
 
@@ -437,21 +325,13 @@ static void FBO_SetupDrawBuffers()
 {
 	if (!glState.currentFBO)
 	{
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "FBO: attempted to attach a texture image with no FBO bound!\n");
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "FBO: attempted to attach a texture image with no FBO bound!\n");
-#endif // REND2_SP
 		return;
 	}
 
 	FBO_t* currentFBO = glState.currentFBO;
 	int numBuffers = 0;
-#ifdef REND2_SP
-	GLenum bufs[8];
-#else // !REND2_SP
 	GLenum bufs[8]{};
-#endif // REND2_SP
 
 	while (currentFBO->colorBuffers[numBuffers] != 0)
 	{
@@ -514,11 +394,7 @@ void FBO_Init(void)
 	int             i = 0;
 	int             hdrFormat = 0, multisample = 0;
 
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "------- FBO_Init -------\n");
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, "------- FBO_Init -------\n");
-#endif // REND2_SP
 
 	tr.numFBOs = 0;
 
@@ -555,11 +431,7 @@ void FBO_Init(void)
 
 	if (multisample != r_ext_framebuffer_multisample->integer)
 	{
-#ifdef REND2_SP
 		ri.Cvar_SetValue("r_ext_framebuffer_multisample", (float)multisample);
-#else // !REND2_SP
-		ri->Cvar_SetValue("r_ext_framebuffer_multisample", (float)multisample);
-#endif // REND2_SP
 	}
 
 	// only create a render FBO if we need to resolve MSAA or do HDR
@@ -573,6 +445,8 @@ void FBO_Init(void)
 		FBO_Bind(tr.renderFbo);
 		FBO_CreateBuffer(tr.renderFbo, hdrFormat, 0, multisample);
 		FBO_CreateBuffer(tr.renderFbo, hdrFormat, 1, multisample);
+		if (tr.ssrMaskImage)
+			FBO_CreateBuffer(tr.renderFbo, hdrFormat, 2, multisample); // r_ssr material mask (Jace 2026-11-04)
 		FBO_CreateBuffer(tr.renderFbo, GL_DEPTH24_STENCIL8, 0, multisample);
 		FBO_SetupDrawBuffers();
 
@@ -585,6 +459,8 @@ void FBO_Init(void)
 		FBO_Bind(tr.msaaResolveFbo);
 		FBO_AttachTextureImage(tr.renderImage, 0);
 		FBO_AttachTextureImage(tr.glowImage, 1);
+		if (tr.ssrMaskImage)
+			FBO_AttachTextureImage(tr.ssrMaskImage, 2); // r_ssr material mask (Jace 2026-11-04)
 		R_AttachFBOTexturePackedDepthStencil(tr.renderDepthImage->texnum);
 		FBO_SetupDrawBuffers();
 
@@ -599,6 +475,8 @@ void FBO_Init(void)
 		FBO_Bind(tr.renderFbo);
 		FBO_AttachTextureImage(tr.renderImage, 0);
 		FBO_AttachTextureImage(tr.glowImage, 1);
+		if (tr.ssrMaskImage)
+			FBO_AttachTextureImage(tr.ssrMaskImage, 2); // r_ssr material mask (Jace 2026-11-04)
 		R_AttachFBOTexturePackedDepthStencil(tr.renderDepthImage->texnum);
 		FBO_SetupDrawBuffers();
 
@@ -615,15 +493,9 @@ void FBO_Init(void)
 	{
 		for (int i = 0; i < ARRAY_LEN(tr.glowImageScaled); i++)
 		{
-#ifdef REND2_SP
-			tr.glowFboScaled[i] = FBO_Create(
-				va("_glowScaled%d", i), tr.glowImageScaled[i]->width,
-				tr.glowImageScaled[i]->height);
-#else // !REND2_SP
 			tr.glowFboScaled[i] = FBO_Create(
 				va("*glowScaled%d", i), tr.glowImageScaled[i]->width,
 				tr.glowImageScaled[i]->height);
-#endif // REND2_SP
 
 			FBO_Bind(tr.glowFboScaled[i]);
 			FBO_AttachTextureImage(tr.glowImageScaled[i], 0);
@@ -795,7 +667,6 @@ void FBO_Init(void)
 
 			R_CheckFBO(tr.sunShadowFbo[i]);
 		}
-#ifndef REND2_SP
 
 		tr.screenShadowFbo = FBO_Create(
 			"_screenshadow", tr.screenShadowImage->width,
@@ -806,7 +677,6 @@ void FBO_Init(void)
 		FBO_SetupDrawBuffers();
 
 		R_CheckFBO(tr.screenShadowFbo);
-#endif // !REND2_SP
 	}
 
 	for (i = 0; i < 2; i++)
@@ -953,11 +823,7 @@ void FBO_Shutdown(void)
 	int             i = 0, j = 0;
 	FBO_t* fbo = nullptr;
 
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "------- FBO_Shutdown -------\n");
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, "------- FBO_Shutdown -------\n");
-#endif // REND2_SP
 
 	FBO_Bind(NULL);
 
@@ -977,11 +843,9 @@ void FBO_Shutdown(void)
 		if (fbo->stencilBuffer)
 			qglDeleteRenderbuffers(1, &fbo->stencilBuffer);
 
-#ifdef REND2_SP
 		if (fbo->packedDepthStencilBuffer)
 			qglDeleteRenderbuffers(1, &fbo->packedDepthStencilBuffer);
 
-#endif // REND2_SP
 		if (fbo->frameBuffer)
 			qglDeleteFramebuffers(1, &fbo->frameBuffer);
 	}
@@ -992,39 +856,22 @@ void FBO_Shutdown(void)
 R_FBOList_f
 ============
 */
-#ifdef REND2_SP
-void R_FBOList_f(void)
-#else // !REND2_SP
 static void R_FBOList_f(void)
-#endif // REND2_SP
 {
 	int             i = 0;
 	FBO_t* fbo = nullptr;
 
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "             size       name\n");
 	ri.Printf(PRINT_ALL, "----------------------------------------------------------\n");
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, "             size       name\n");
-	ri->Printf(PRINT_ALL, "----------------------------------------------------------\n");
-#endif // REND2_SP
 
 	for (i = 0; i < tr.numFBOs; i++)
 	{
 		fbo = tr.fbos[i];
 
-#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, "  %4i: %4i %4i %s\n", i, fbo->width, fbo->height, fbo->name);
-#else // !REND2_SP
-		ri->Printf(PRINT_ALL, "  %4i: %4i %4i %s\n", i, fbo->width, fbo->height, fbo->name);
-#endif // REND2_SP
 	}
 
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, " %i FBOs\n", tr.numFBOs);
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, " %i FBOs\n", tr.numFBOs);
-#endif // REND2_SP
 }
 
 void FBO_FastBlitFromTexture(struct image_s* src, FBO_t* dst, vec4i_t dstBox, vec4_t inColor, int blend)
@@ -1050,22 +897,12 @@ void FBO_FastBlitFromTexture(struct image_s* src, FBO_t* dst, vec4i_t dstBox, ve
 
 void FBO_BlitFromTexture(struct image_s* src, vec4i_t inSrcBox, vec2_t inSrcTexScale, FBO_t* dst, vec4i_t inDstBox, struct shaderProgram_s* shaderProgram, vec4_t inColor, int blend)
 {
-#ifdef REND2_SP
-	vec4i_t dstBox, srcBox;
-	vec2_t srcTexScale;
-	vec4_t color;
-#else // !REND2_SP
 	vec4i_t dstBox{}, srcBox{};
 	vec2_t srcTexScale{};
 	vec4_t color{};
-#endif // REND2_SP
-	vec4_t quadVerts[4];
-	vec2_t texCoords[4];
-#ifdef REND2_SP
-	vec2_t invTexRes;
-#else // !REND2_SP
+	vec4_t quadVerts[4]; // all set below; no {} (it made /analyze report a NULL dereference, C6011)
+	vec2_t texCoords[4]; // all set below; no {} (it made /analyze report a NULL dereference, C6011)
 	vec2_t invTexRes{};
-#endif // REND2_SP
 	FBO_t* oldFbo = glState.currentFBO;
 	matrix_t projection;
 	int width = 0, height = 0;
@@ -1183,19 +1020,11 @@ void FBO_BlitFromTexture(struct image_s* src, vec4i_t inSrcBox, vec2_t inSrcTexS
 
 void FBO_Blit(FBO_t* src, vec4i_t inSrcBox, vec2_t srcTexScale, FBO_t* dst, vec4i_t dstBox, struct shaderProgram_s* shaderProgram, vec4_t color, int blend)
 {
-#ifdef REND2_SP
-	vec4i_t srcBox;
-#else // !REND2_SP
 	vec4i_t srcBox{};
-#endif // REND2_SP
 
 	if (!src)
 	{
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "Tried to blit from a NULL FBO!\n");
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "Tried to blit from a NULL FBO!\n");
-#endif // REND2_SP
 		return;
 	}
 
@@ -1217,11 +1046,7 @@ void FBO_Blit(FBO_t* src, vec4i_t inSrcBox, vec2_t srcTexScale, FBO_t* dst, vec4
 
 void FBO_FastBlit(FBO_t* src, vec4i_t srcBox, FBO_t* dst, vec4i_t dstBox, int buffers, int filter)
 {
-#ifdef REND2_SP
-	vec4i_t srcBoxFinal, dstBoxFinal;
-#else // !REND2_SP
 	vec4i_t srcBoxFinal{}, dstBoxFinal{};
-#endif // REND2_SP
 	GLuint srcFb = 0, dstFb = 0;
 
 	// get to a neutral state first

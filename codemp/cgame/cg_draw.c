@@ -11636,7 +11636,7 @@ static void CG_DrawSlamTimerBar(void)
 #define OVERHEAD_HEAD_MARGIN	10.0f	// world units from the live head (the head_top bolt) to the anchor
 #define OVERHEAD_BAR_SPACING	1.0f
 #define OVERHEAD_NAME_SPACING	3.0f
-#define OVERHEAD_NAME_SCALE	0.4f
+#define OVERHEAD_NAME_SCALE	0.1f	// albertus_bold is a big font (as MD8 / SP, 2026-11-05)
 
 static int cg_numHealthBarEnts = 0;
 static int cg_healthBarEnts[MAX_HEAD_BAR_ENTS];
@@ -11839,12 +11839,14 @@ static void CG_DrawOverheadName(const centity_t* cent, const char* name, const f
 		return;
 	}
 	const float fontScale = OVERHEAD_NAME_SCALE * scale;
-	const float w = (float)trap->R_Font_StrLenPixels(name, cgDC.Assets.qhMediumFont, fontScale);
-	const float h = (float)trap->R_Font_HeightPixels(cgDC.Assets.qhMediumFont, fontScale);
+	const qhandle_t font = cgs.media.qhFontMenu ? cgs.media.qhFontMenu : cgDC.Assets.qhMediumFont;
+	const float fontScaleUsed = cgs.media.qhFontMenu ? fontScale : fontScale * 4.0f; // ergoec fallback at its old size
+	const float w = (float)trap->R_Font_StrLenPixels(name, font, fontScaleUsed);
+	const float h = (float)trap->R_Font_HeightPixels(font, fontScaleUsed);
 	const vec4_t c = { color[0], color[1], color[2], color[3] * alpha };
 	// the font takes whole virtual units: round, don't truncate
 	trap->R_Font_DrawString((int)floorf(x - w / 2.0f + 0.5f), (int)floorf(y - h - scale + 0.5f), name, c,
-		cgDC.Assets.qhMediumFont, -1, fontScale);
+		font, -1, fontScaleUsed);
 }
 
 static qboolean CG_HeadBarInRange(const int entNum)

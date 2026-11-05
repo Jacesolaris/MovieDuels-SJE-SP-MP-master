@@ -70,11 +70,7 @@ static GLenum GetGLBufferUsage(vboUsage_t usage)
 		return GL_STREAM_COPY;
 
 	default:
-#ifdef REND2_SP
 		ri.Error(ERR_FATAL, "bad vboUsage_t given: %i", usage);
-#else // !REND2_SP
-		ri->Error(ERR_FATAL, "bad vboUsage_t given: %i", usage);
-#endif // REND2_SP
 		return GL_INVALID_OPERATION;
 	}
 }
@@ -88,138 +84,118 @@ VBO_t* R_CreateVBO(byte* vertexes, size_t vertexesSize, vboUsage_t usage, const 
 {
 	VBO_t* vbo = nullptr;
 
-#ifdef REND2_SP
-	if (tr.numVBOs >= MAX_VBOS) {
-		ri.Error(ERR_DROP, "R_CreateVBO: MAX_VBOS hit");
-#else // !REND2_SP
 	// ----------------------------------------------------------------------
 	// Safety: prevent out-of-bounds write to tr.vbos[]
 	// ----------------------------------------------------------------------
 	if (tr.numVBOs >= MAX_VBOS)
 	{
-		ri->Error(ERR_DROP, "R_CreateVBO: MAX_VBOS hit");
-#endif // REND2_SP
-		return nullptr; // not reached: ri.Error never returns (function pointer, so it cannot be noreturn)
+		ri.Error(ERR_DROP, "R_CreateVBO: MAX_VBOS hit");
+		return nullptr;    // REQUIRED to satisfy MSVC and prevent buffer overrun
 	}
 
 	R_IssuePendingRenderCommands();
 
-#ifdef REND2_SP
-	vbo = tr.vbos[tr.numVBOs] = (VBO_t*)Hunk_Alloc(sizeof(*vbo), h_low);
-#else // !REND2_SP
 	// ----------------------------------------------------------------------
 	// Allocate VBO struct
 	// ----------------------------------------------------------------------
 	vbo = static_cast<VBO_t*>(Hunk_Alloc(sizeof(*vbo), h_low));
 	tr.vbos[tr.numVBOs] = vbo;
-#endif // REND2_SP
 
 	memset(vbo, 0, sizeof(*vbo));
 
 	vbo->vertexesSize = vertexesSize;
+
 	qglGenBuffers(1, &vbo->vertexesVBO);
 	tr.numVBOs++;
 
+	// ----------------------------------------------------------------------
+	// Upload vertex data
+	// ----------------------------------------------------------------------
 	qglBindBuffer(GL_ARRAY_BUFFER, vbo->vertexesVBO);
-#ifdef REND2_SP
-	if (glRefConfig.annotateResources) qglObjectLabel(GL_BUFFER, vbo->vertexesVBO, -1, va("%s_VBO", debugName));
-#else // !REND2_SP
 
 	if (glRefConfig.annotateResources)
 	{
 		qglObjectLabel(GL_BUFFER, vbo->vertexesVBO, -1, va("%s_VBO", debugName));
 	}
 
-#endif // REND2_SP
 	if (glRefConfig.immutableBuffers)
 	{
 		GLbitfield creationFlags = 0;
+
 		if (usage == VBO_USAGE_DYNAMIC)
 		{
-			creationFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+			creationFlags = GL_MAP_WRITE_BIT |
+				GL_MAP_PERSISTENT_BIT |
+				GL_MAP_COHERENT_BIT;
 		}
 
 		qglBufferStorage(GL_ARRAY_BUFFER, vertexesSize, vertexes, creationFlags);
 	}
 	else
 	{
-#ifdef REND2_SP
-		int glUsage = GetGLBufferUsage(usage);
-#else // !REND2_SP
 		const int glUsage = GetGLBufferUsage(usage);
-#endif // REND2_SP
 		qglBufferData(GL_ARRAY_BUFFER, vertexesSize, vertexes, glUsage);
 	}
 
 	qglBindBuffer(GL_ARRAY_BUFFER, 0);
 
-#ifdef REND2_SP
-	glState.currentVBO = NULL;
-#else // !REND2_SP
 	glState.currentVBO = nullptr;
-#endif // REND2_SP
 
 	GL_CheckErrors();
 
 	return vbo;
-	}
+}
 
 /*
 ============
 R_CreateIBO
 ============
 */
-IBO_t* R_CreateIBO(byte * indexes, size_t indexesSize, vboUsage_t usage, const char* debugName)
+IBO_t* R_CreateIBO(byte* indexes, size_t indexesSize, vboUsage_t usage, const char* debugName)
 {
 	IBO_t* ibo = nullptr;
 
-#ifdef REND2_SP
-	if (tr.numIBOs >= MAX_IBOS) {
-		ri.Error(ERR_DROP, "R_CreateIBO: MAX_IBOS hit");
-#else // !REND2_SP
 	// ----------------------------------------------------------------------
 	// Safety: prevent out-of-bounds write to tr.ibos[]
 	// ----------------------------------------------------------------------
 	if (tr.numIBOs >= MAX_IBOS)
 	{
-		ri->Error(ERR_DROP, "R_CreateIBO: MAX_IBOS hit");
-#endif // REND2_SP
-		return nullptr; // not reached: ri.Error never returns (function pointer, so it cannot be noreturn)
+		ri.Error(ERR_DROP, "R_CreateIBO: MAX_IBOS hit");
+		return nullptr;    // REQUIRED to satisfy MSVC and prevent buffer overrun
 	}
 
 	R_IssuePendingRenderCommands();
 
-#ifdef REND2_SP
-	ibo = tr.ibos[tr.numIBOs] = (IBO_t*)Hunk_Alloc(sizeof(*ibo), h_low);
-#else // !REND2_SP
 	// ----------------------------------------------------------------------
 	// Allocate IBO struct
 	// ----------------------------------------------------------------------
 	ibo = static_cast<IBO_t*>(Hunk_Alloc(sizeof(*ibo), h_low));
 	tr.ibos[tr.numIBOs] = ibo;
-#endif // REND2_SP
 
 	ibo->indexesSize = indexesSize;
+
 	qglGenBuffers(1, &ibo->indexesVBO);
 	tr.numIBOs++;
 
+	// ----------------------------------------------------------------------
+	// Upload index data
+	// ----------------------------------------------------------------------
 	qglBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo->indexesVBO);
-#ifdef REND2_SP
-	if (glRefConfig.annotateResources) qglObjectLabel(GL_BUFFER, ibo->indexesVBO, -1, va("%s_IBO", debugName));
-#else // !REND2_SP
 
 	if (glRefConfig.annotateResources)
 	{
 		qglObjectLabel(GL_BUFFER, ibo->indexesVBO, -1, va("%s_IBO", debugName));
 	}
 
-#endif // REND2_SP
 	if (glRefConfig.immutableBuffers)
 	{
 		GLbitfield creationFlags = 0;
+
 		if (usage == VBO_USAGE_DYNAMIC)
 		{
-			creationFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+			creationFlags = GL_MAP_WRITE_BIT |
+				GL_MAP_PERSISTENT_BIT |
+				GL_MAP_COHERENT_BIT;
 		}
 
 		qglBufferStorage(GL_ELEMENT_ARRAY_BUFFER, indexesSize, indexes, creationFlags);
@@ -227,42 +203,30 @@ IBO_t* R_CreateIBO(byte * indexes, size_t indexesSize, vboUsage_t usage, const c
 	}
 	else
 	{
-#ifdef REND2_SP
-		int glUsage = GetGLBufferUsage(usage);
-#else // !REND2_SP
 		const int glUsage = GetGLBufferUsage(usage);
-#endif // REND2_SP
 		qglBufferData(GL_ELEMENT_ARRAY_BUFFER, indexesSize, indexes, glUsage);
 	}
 
 	qglBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-#ifdef REND2_SP
-	glState.currentIBO = NULL;
-#else // !REND2_SP
 	glState.currentIBO = nullptr;
-#endif // REND2_SP
 
 	GL_CheckErrors();
 
 	return ibo;
-	}
+}
 
 /*
 ============
 R_BindVBO
 ============
 */
-void R_BindVBO(VBO_t * vbo)
+void R_BindVBO(VBO_t* vbo)
 {
 	if (!vbo)
 	{
 		//R_BindNullVBO();
-#ifdef REND2_SP
 		ri.Error(ERR_DROP, "R_BindVBO: NULL vbo");
-#else // !REND2_SP
-		ri->Error(ERR_DROP, "R_BindVBO: NULL vbo");
-#endif // REND2_SP
 		return;
 	}
 
@@ -310,16 +274,12 @@ void R_BindNullVBO(void)
 R_BindIBO
 ============
 */
-void R_BindIBO(IBO_t * ibo)
+void R_BindIBO(IBO_t* ibo)
 {
 	if (!ibo)
 	{
 		//R_BindNullIBO();
-#ifdef REND2_SP
 		ri.Error(ERR_DROP, "R_BindIBO: NULL ibo");
-#else // !REND2_SP
-		ri->Error(ERR_DROP, "R_BindIBO: NULL ibo");
-#endif // REND2_SP
 		return;
 	}
 
@@ -361,11 +321,7 @@ R_InitGPUBuffers
 */
 void R_InitGPUBuffers(void)
 {
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "------- R_InitGPUBuffers -------\n");
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, "------- R_InitGPUBuffers -------\n");
-#endif // REND2_SP
 
 	// glGenBuffers only allocates the IDs for these buffers. The 'buffer object' is
 	// actually created on first bind.
@@ -402,11 +358,7 @@ R_DestroyGPUBuffers
 */
 void R_DestroyGPUBuffers(void)
 {
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "------- R_DestroyGPUBuffers -------\n");
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, "------- R_DestroyGPUBuffers -------\n");
-#endif // REND2_SP
 
 	R_BindNullVBO();
 	R_BindNullIBO();
@@ -446,89 +398,51 @@ R_VBOList_f
 */
 void R_VBOList_f(void)
 {
-	int    i = 0;
+	int             i = 0;
 	VBO_t* vbo = nullptr;
 	IBO_t* ibo = nullptr;
-	size_t vertexesSize = 0;
-	size_t indexesSize = 0;
+	size_t         vertexesSize = 0;
+	size_t         indexesSize = 0;
 
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, " vertex buffers\n");
 	ri.Printf(PRINT_ALL, "----------------\n\n");
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, " vertex buffers\n");
-	ri->Printf(PRINT_ALL, "----------------\n\n");
-#endif // REND2_SP
 
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, " id   size (MB)\n");
 	ri.Printf(PRINT_ALL, "---------------\n");
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, " id   size (MB)\n");
-	ri->Printf(PRINT_ALL, "---------------\n");
-#endif // REND2_SP
 
 	for (i = 0; i < tr.numVBOs; i++)
 	{
 		vbo = tr.vbos[i];
 
-#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, " %4i %4.2f\n", i, vbo->vertexesSize / (1024.0f * 1024.0f));
-#else // !REND2_SP
-		ri->Printf(PRINT_ALL, " %4i %4.2f\n", i, vbo->vertexesSize / (1024.0f * 1024.0f));
-#endif // REND2_SP
 
 		vertexesSize += vbo->vertexesSize;
 	}
 
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, " %d total buffers\n", tr.numVBOs);
 	ri.Printf(PRINT_ALL, " %.2f MB in total\n\n", vertexesSize / (1024.0f * 1024.0f));
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, " %d total buffers\n", tr.numVBOs);
-	ri->Printf(PRINT_ALL, " %.2f MB in total\n\n", vertexesSize / (1024.0f * 1024.0f));
-#endif // REND2_SP
 
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, " index buffers\n");
 	ri.Printf(PRINT_ALL, "---------------\n\n");
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, " index buffers\n");
-	ri->Printf(PRINT_ALL, "---------------\n\n");
-#endif // REND2_SP
 
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, " id   size (MB)\n");
 	ri.Printf(PRINT_ALL, "---------------\n");
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, " id   size (MB)\n");
-	ri->Printf(PRINT_ALL, "---------------\n");
-#endif // REND2_SP
 
 	for (i = 0; i < tr.numIBOs; i++)
 	{
 		ibo = tr.ibos[i];
 
-#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, " %4i %4.2f\n", i, ibo->indexesSize / (1024.0f * 1024.0f));
-#else // !REND2_SP
-		ri->Printf(PRINT_ALL, " %4i %4.2f\n", i, ibo->indexesSize / (1024.0f * 1024.0f));
-#endif // REND2_SP
 
 		indexesSize += ibo->indexesSize;
 	}
 
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, " %d total buffers\n", tr.numIBOs);
 	ri.Printf(PRINT_ALL, " %.2f MB in total\n\n", indexesSize / (1024.0f * 1024.0f));
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, " %d total buffers\n", tr.numIBOs);
-	ri->Printf(PRINT_ALL, " %.2f MB in total\n\n", indexesSize / (1024.0f * 1024.0f));
-#endif // REND2_SP
 }
 
 static void AddVertexArray(
-	VertexArraysProperties * properties,
+	VertexArraysProperties* properties,
 	int attributeIndex,
 	size_t size,
 	size_t stride,
@@ -549,7 +463,7 @@ static void AddVertexArray(
 	properties->numVertexArrays++;
 }
 
-void CalculateVertexArraysProperties(uint32_t attributes, VertexArraysProperties * properties)
+void CalculateVertexArraysProperties(uint32_t attributes, VertexArraysProperties* properties)
 {
 	properties->vertexDataSize = 0;
 	properties->numVertexArrays = 0;
@@ -686,8 +600,8 @@ void CalculateVertexArraysProperties(uint32_t attributes, VertexArraysProperties
 
 void CalculateVertexArraysFromVBO(
 	uint32_t attributes,
-	const VBO_t * vbo,
-	VertexArraysProperties * properties)
+	const VBO_t* vbo,
+	VertexArraysProperties* properties)
 {
 	properties->vertexDataSize = 0;
 	properties->numVertexArrays = 0;
@@ -759,12 +673,7 @@ void RB_UpdateVBOs(unsigned int attribBits)
 		if ((currentFrame->dynamicVboWriteOffset + totalVertexDataSize) > frameVbo->vertexesSize)
 		{
 			// TODO: Eh...resize?
-#ifdef REND2_SP
-			//assert(!"This shouldn't happen");
-			Com_Printf("^1WARNING: Dynamic VBO overflow — skipping draw this frame\n");
-#else // !REND2_SP
 			assert(!"This shouldn't happen");
-#endif // REND2_SP
 			return;
 		}
 
@@ -815,12 +724,7 @@ void RB_UpdateVBOs(unsigned int attribBits)
 		if ((currentFrame->dynamicIboWriteOffset + totalIndexDataSize) > frameIbo->indexesSize)
 		{
 			// TODO: Resize the buffer?
-#ifdef REND2_SP
-			//assert(!"This shouldn't happen");
-			Com_Printf("^1WARNING: Dynamic VBO overflow — skipping draw this frame\n");
-#else // !REND2_SP
 			assert(!"This shouldn't happen");
-#endif // REND2_SP
 			return;
 		}
 
@@ -847,7 +751,7 @@ void RB_UpdateVBOs(unsigned int attribBits)
 }
 
 #ifdef _G2_GORE
-void RB_UpdateGoreVertexData(gpuFrame_t * currentFrame, srfG2GoreSurface_t * goreSurface, bool updateFirstVertAndIndex)
+void RB_UpdateGoreVertexData(gpuFrame_t* currentFrame, srfG2GoreSurface_t* goreSurface, bool updateFirstVertAndIndex)
 {
 	if (updateFirstVertAndIndex)
 	{
@@ -860,7 +764,7 @@ void RB_UpdateGoreVertexData(gpuFrame_t * currentFrame, srfG2GoreSurface_t * gor
 
 	R_BindVBO(currentFrame->goreVBO);
 
-	if (glRefConfig.immutableBuffers) // rend2 c38bceb0
+	if (glRefConfig.immutableBuffers)
 	{
 		void* writePtr = (byte*)currentFrame->goreVBOMemory + sizeof(g2GoreVert_t) * goreSurface->firstVert;
 		memcpy(writePtr, (byte*)goreSurface->verts, sizeof(g2GoreVert_t) * goreSurface->numVerts);
@@ -885,7 +789,7 @@ void RB_UpdateGoreVertexData(gpuFrame_t * currentFrame, srfG2GoreSurface_t * gor
 
 	R_BindIBO(currentFrame->goreIBO);
 
-	if (glRefConfig.immutableBuffers) // rend2 c38bceb0
+	if (glRefConfig.immutableBuffers)
 	{
 		void* writePtr = (byte*)currentFrame->goreIBOMemory + sizeof(glIndex_t) * goreSurface->firstIndex;
 		memcpy(writePtr, goreSurface->indexes, sizeof(glIndex_t) * goreSurface->numIndexes);
@@ -904,7 +808,7 @@ void RB_UpdateGoreVertexData(gpuFrame_t * currentFrame, srfG2GoreSurface_t * gor
 	{
 		currentFrame->goreIBOCurrentIndex += goreSurface->numIndexes;
 	}
-	// rend2 05e4c5f4: only mark the gore data as cached when it is actually drawn
+
 	if (!updateFirstVertAndIndex)
 		goreSurface->cachedInFrame[backEndData->realFrameNumber % MAX_FRAMES] = true;
 }
@@ -977,7 +881,7 @@ size_t RB_AddShaderInstanceBlock(void* data)
 	return writeOffset;
 }
 
-void RB_BeginConstantsUpdate(gpuFrame_t * frame)
+void RB_BeginConstantsUpdate(gpuFrame_t* frame)
 {
 	const byte currentFrameScene = frame->currentScene;
 	if (glState.currentGlobalUBO != frame->ubo[currentFrameScene])
@@ -1000,7 +904,7 @@ void RB_BeginConstantsUpdate(gpuFrame_t * frame)
 }
 
 size_t RB_AppendConstantsData(
-	gpuFrame_t * frame, const void* data, size_t dataSize)
+	gpuFrame_t* frame, const void* data, size_t dataSize)
 {
 	const byte currentFrameScene = frame->currentScene;
 	const size_t writeOffset = frame->uboWriteOffset[currentFrameScene];
@@ -1016,7 +920,7 @@ size_t RB_AppendConstantsData(
 	return writeOffset;
 }
 
-void RB_EndConstantsUpdate(const gpuFrame_t * frame)
+void RB_EndConstantsUpdate(const gpuFrame_t* frame)
 {
 	const byte currentFrameScene = frame->currentScene;
 	qglFlushMappedBufferRange(

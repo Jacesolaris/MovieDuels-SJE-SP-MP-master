@@ -13,15 +13,15 @@ in vec4 attr_BoneWeights;
 #endif
 
 layout(std140) uniform Scene
- {
- 	vec4 u_PrimaryLightOrigin;
- 	vec3 u_PrimaryLightAmbient;
- 	int  u_globalFogIndex;
- 	vec3 u_PrimaryLightColor;
- 	float u_PrimaryLightRadius;
- 	float u_frameTime;
- 	float u_deltaTime;
- };
+{
+	vec4 u_PrimaryLightOrigin;
+	vec3 u_PrimaryLightAmbient;
+	int  u_globalFogIndex;
+	vec3 u_PrimaryLightColor;
+	float u_PrimaryLightRadius;
+	float u_frameTime;
+	float u_deltaTime;
+};
 
 layout(std140) uniform Camera
 {
@@ -125,11 +125,11 @@ vec3 DeformPosition(const vec3 pos, const vec3 normal, const vec2 st)
 		}
 
 		case DEFORM_BULGE_UNIFORM:
- 		{
- 			float bulgeHeight = u_DeformParams0.y; // amplitude
- 
- 			return pos + normal * bulgeHeight;
- 		}
+		{
+			float bulgeHeight = u_DeformParams0.y; // amplitude
+
+			return pos + normal * bulgeHeight;
+		}
 
 		case DEFORM_WAVE:
 		{
@@ -488,6 +488,7 @@ in vec2 var_TexCoords;
 
 out vec4 out_Color;
 out vec4 out_Glow;
+out vec4 out_SsrMask;	// r_ssr material mask (Jace 2026-11-04) (fog is blended: never written)
 
 #if defined(USE_VOLUMETRIC_FOG)
 vec3 CalcVolumetricFogColor(in vec3 startPosition, in vec3 endPosition, in Fog fog)
@@ -627,4 +628,5 @@ void main()
 	Fog fog = u_Fogs[u_FogIndex];
 	out_Color = CalcFog(u_ViewOrigin, var_WSPosition, fog);
 	out_Glow = vec4(0.0, 0.0, 0.0, out_Color.a);
-}
+	out_SsrMask = vec4(0.0);
+}

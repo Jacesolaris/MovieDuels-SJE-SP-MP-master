@@ -295,7 +295,7 @@ unsigned int JSON_ValueGetString(const char *json, const char *jsonEnd, char *ou
 	return stringEnd - stringStart;
 }
 
-double JSON_ValueGetDouble(const char *json, const char *jsonEnd)
+double JSON_ValueGetDouble(const char* json, const char* jsonEnd)
 {
 	char cValue[256];
 	double dValue = 0.0;
@@ -304,7 +304,7 @@ double JSON_ValueGetDouble(const char *json, const char *jsonEnd)
 	if (np)
 		return (double)(np - 1);
 
-	if (!JSON_ValueGetString(json, jsonEnd, cValue, 256))
+	if (!JSON_ValueGetString(json, jsonEnd, cValue, sizeof(cValue)))
 		return 0.0;
 
 	int unused = sscanf(cValue, "%lf", &dValue);
@@ -313,7 +313,7 @@ double JSON_ValueGetDouble(const char *json, const char *jsonEnd)
 	return dValue;
 }
 
-float JSON_ValueGetFloat(const char *json, const char *jsonEnd)
+float JSON_ValueGetFloat(const char* json, const char* jsonEnd)
 {
 	char cValue[256];
 	float fValue = 0.0f;
@@ -322,7 +322,7 @@ float JSON_ValueGetFloat(const char *json, const char *jsonEnd)
 	if (np)
 		return (float)(np - 1);
 
-	if (!JSON_ValueGetString(json, jsonEnd, cValue, 256))
+	if (!JSON_ValueGetString(json, jsonEnd, cValue, sizeof(cValue)))
 		return 0.0f;
 
 	int unused = sscanf(cValue, "%f", &fValue);
@@ -331,7 +331,7 @@ float JSON_ValueGetFloat(const char *json, const char *jsonEnd)
 	return fValue;
 }
 
-int JSON_ValueGetInt(const char *json, const char *jsonEnd)
+int JSON_ValueGetInt(const char* json, const char* jsonEnd)
 {
 	char cValue[256];
 	int iValue = 0;
@@ -340,7 +340,7 @@ int JSON_ValueGetInt(const char *json, const char *jsonEnd)
 	if (np)
 		return np - 1;
 
-	if (!JSON_ValueGetString(json, jsonEnd, cValue, 256))
+	if (!JSON_ValueGetString(json, jsonEnd, cValue, sizeof(cValue)))
 		return 0;
 
 	int unused = sscanf(cValue, "%d", &iValue);
@@ -348,6 +348,7 @@ int JSON_ValueGetInt(const char *json, const char *jsonEnd)
 
 	return iValue;
 }
+
 
 #undef IS_SEPARATOR
 #undef IS_STRUCT_OPEN

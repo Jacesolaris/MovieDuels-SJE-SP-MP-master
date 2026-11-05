@@ -32,11 +32,7 @@ void QDECL Com_Printf(const char* msg, ...)
 	Q_vsnprintf(text, sizeof(text), msg, argptr);
 	va_end(argptr);
 
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "%s", text);
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, "%s", text);
-#endif // REND2_SP
 }
 
 void QDECL Com_OPrintf(const char* msg, ...)
@@ -47,62 +43,27 @@ void QDECL Com_OPrintf(const char* msg, ...)
 	va_start(argptr, msg);
 	Q_vsnprintf(text, sizeof(text), msg, argptr);
 	va_end(argptr);
-#ifdef REND2_SP
+#ifndef REND2_SP
+	ri.OPrintf("%s", text);
+#else
 	ri.Printf(PRINT_ALL, "%s", text);
-#else // !REND2_SP
-
-	ri->OPrintf("%s", text);
-#endif // REND2_SP
+#endif
 }
 
-#ifdef REND2_SP
-void QDECL Com_Error(int level, const char* error, ...)
-#else // !REND2_SP
 void QDECL Com_Error(const int level, const char* error, ...)
-#endif // REND2_SP
 {
 	va_list         argptr;
 	char            text[1024];
 
 	va_start(argptr, error);
-#ifdef REND2_SP
-	Q_vsnprintf(text, sizeof(text), error, argptr);
-#else // !REND2_SP
 	Q_vsnprintf(text, sizeof text, error, argptr);
-#endif // REND2_SP
 	va_end(argptr);
 
-#ifdef REND2_SP
 	ri.Error(level, "%s", text);
-#else // !REND2_SP
-	ri->Error(level, "%s", text);
-}
-
-// HUNK
-void* Hunk_AllocateTempMemory(const int size)
-{
-	return ri->Hunk_AllocateTempMemory(size);
-}
-
-void Hunk_FreeTempMemory(void* buf)
-{
-	ri->Hunk_FreeTempMemory(buf);
-}
-
-void* Hunk_Alloc(const int size, const ha_pref preference)
-{
-	return ri->Hunk_Alloc(size, preference);
-}
-
-int Hunk_MemoryRemaining(void)
-{
-	return ri->Hunk_MemoryRemaining();
-#endif // REND2_SP
 }
 
 // ZONE
 void* Z_Malloc(const int iSize, const memtag_t eTag, const qboolean bZeroit, const int iUnusedAlign)
-#ifdef REND2_SP
 {
 	return ri.Z_Malloc(iSize, eTag, bZeroit, iUnusedAlign);
 }
@@ -117,7 +78,8 @@ void* R_Malloc(const int iSize, const memtag_t eTag, const qboolean bZeroit)
 	return ri.Z_Malloc(iSize, eTag, bZeroit, 4);
 }
 
-void* R_Malloc(const int iSize, const memtag_t eTag, const qboolean bZeroit, const int iUnusedAlign)
+#ifdef REND2_SP
+static void* R_Malloc(const int iSize, const memtag_t eTag, const qboolean bZeroit, const int iUnusedAlign)
 {
 	return ri.Z_Malloc(iSize, eTag, bZeroit, iUnusedAlign);
 }
@@ -131,43 +93,31 @@ void R_Free(void* pvAddress)
 {
 	ri.Z_Free(pvAddress);
 }
-#else // !REND2_SP
-{
-	return ri->Z_Malloc(iSize, eTag, bZeroit, iUnusedAlign);
-}
-
+#else
 void Z_Free(void* pvAddress)
 {
-	ri->Z_Free(pvAddress);
+	ri.Z_Free(pvAddress);
 }
-#endif // REND2_SP
+#endif
 
 int Z_MemSize(const memtag_t eTag)
 {
-#ifdef REND2_SP
 	return ri.Z_MemSize(eTag);
-#else // !REND2_SP
-	return ri->Z_MemSize(eTag);
-#endif // REND2_SP
 }
 
 void Z_MorphMallocTag(void* pvAddress, const memtag_t eDesiredTag)
 {
-#ifdef REND2_SP
 	ri.Z_MorphMallocTag(pvAddress, eDesiredTag);
-#else // !REND2_SP
-	ri->Z_MorphMallocTag(pvAddress, eDesiredTag);
-#endif // REND2_SP
 }
-#ifdef REND2_SP
 
 // HUNK
+#ifdef REND2_SP
 void* Hunk_Alloc(const int size, const ha_pref preference)
 {
 	return R_Malloc(size, TAG_HUNKALLOC, qtrue);
 }
 
-void* Hunk_AllocateTempMemory(const int size)
+void* Hunk_AllocateTempMemory(int size)
 {
 	// don't bother clearing, because we are going to load a file over it
 	return R_Malloc(size, TAG_TEMP_HUNKALLOC, qfalse);
@@ -177,4 +127,25 @@ void Hunk_FreeTempMemory(void* buf)
 {
 	ri.Z_Free(buf);
 }
-#endif // REND2_SP
+#else
+
+void* Hunk_AllocateTempMemory(int size)
+{
+	return ri.Hunk_AllocateTempMemory(size);
+}
+
+void Hunk_FreeTempMemory(void* buf)
+{
+	ri.Hunk_FreeTempMemory(buf);
+}
+
+void* Hunk_Alloc(const int size, const ha_pref preference)
+{
+	return ri.Hunk_Alloc(size, preference);
+}
+
+int Hunk_MemoryRemaining(void)
+{
+	return ri.Hunk_MemoryRemaining();
+}
+#endif

@@ -37,7 +37,6 @@ static void R_PerformanceCounters(void)
 		Com_Memset(&tr.pc, 0, sizeof(tr.pc));
 		Com_Memset(&backEnd.pc, 0, sizeof(backEnd.pc));
 		currentFrame->numTimedBlocks = 0;
-#ifdef REND2_SP
 		currentFrame->numTimers = 0;
 		return;
 	}
@@ -55,34 +54,10 @@ static void R_PerformanceCounters(void)
 		ri.Printf(PRINT_ALL, "(md3) %i sin %i sclip  %i sout %i bin %i bclip %i bout\n",
 			tr.pc.c_sphere_cull_md3_in, tr.pc.c_sphere_cull_md3_clip, tr.pc.c_sphere_cull_md3_out,
 			tr.pc.c_box_cull_md3_in, tr.pc.c_box_cull_md3_clip, tr.pc.c_box_cull_md3_out);
-#else // !REND2_SP
-		currentFrame->numTimers = 0;
-		return;
-	}
-
-	if (r_speeds->integer == 1) {
-		ri->Printf(PRINT_ALL, "%i/%i/%i shaders/batches/surfs %i leafs %i verts %i/%i tris %.2f mtex %.2f dc\n",
-			backEnd.pc.c_shaders, backEnd.pc.c_surfBatches, backEnd.pc.c_surfaces, tr.pc.c_leafs, backEnd.pc.c_vertexes,
-			backEnd.pc.c_indexes / 3, backEnd.pc.c_totalIndexes / 3,
-			R_SumOfUsedImages() / (1000000.0f), backEnd.pc.c_overDraw / (float)(glConfig.vidWidth * glConfig.vidHeight));
-	}
-	else if (r_speeds->integer == 2) {
-		ri->Printf(PRINT_ALL, "(patch) %i sin %i sclip  %i sout %i bin %i bclip %i bout\n",
-			tr.pc.c_sphere_cull_patch_in, tr.pc.c_sphere_cull_patch_clip, tr.pc.c_sphere_cull_patch_out,
-			tr.pc.c_box_cull_patch_in, tr.pc.c_box_cull_patch_clip, tr.pc.c_box_cull_patch_out);
-		ri->Printf(PRINT_ALL, "(md3) %i sin %i sclip  %i sout %i bin %i bclip %i bout\n",
-			tr.pc.c_sphere_cull_md3_in, tr.pc.c_sphere_cull_md3_clip, tr.pc.c_sphere_cull_md3_out,
-			tr.pc.c_box_cull_md3_in, tr.pc.c_box_cull_md3_clip, tr.pc.c_box_cull_md3_out);
-#endif // REND2_SP
 	}
 	else if (r_speeds->integer == 3) {
-#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, "viewcluster: %i\n", tr.viewCluster);
-#else // !REND2_SP
-		ri->Printf(PRINT_ALL, "viewcluster: %i\n", tr.viewCluster);
-#endif // REND2_SP
 	}
-#ifdef REND2_SP
 	else if (r_speeds->integer == 4) {
 		if (backEnd.pc.c_dlightVertexes) {
 			ri.Printf(PRINT_ALL, "dlight srf:%i  culled:%i  verts:%i  tris:%i\n",
@@ -123,48 +98,6 @@ static void R_PerformanceCounters(void)
 		ri.Printf(PRINT_ALL, "2000-2999: %d 3000+: %d\n",
 			backEnd.pc.c_triangleCountBins[TRI_BIN_2000_2999],
 			backEnd.pc.c_triangleCountBins[TRI_BIN_3000_PLUS]);
-#else // !REND2_SP
-	else if (r_speeds->integer == 4) {
-		if (backEnd.pc.c_dlightVertexes) {
-			ri->Printf(PRINT_ALL, "dlight srf:%i  culled:%i  verts:%i  tris:%i\n",
-				tr.pc.c_dlightSurfaces, tr.pc.c_dlightSurfacesCulled,
-				backEnd.pc.c_dlightVertexes, backEnd.pc.c_dlightIndexes / 3);
-		}
-	}
-	else if (r_speeds->integer == 5)
-	{
-		ri->Printf(PRINT_ALL, "zFar: %.0f\n", tr.viewParms.zFar);
-	}
-	else if (r_speeds->integer == 6)
-	{
-		ri->Printf(PRINT_ALL, "flare adds:%i tests:%i renders:%i\n",
-			backEnd.pc.c_flareAdds, backEnd.pc.c_flareTests, backEnd.pc.c_flareRenders);
-	}
-	else if (r_speeds->integer == 7)
-	{
-		ri->Printf(PRINT_ALL, "VBO draws: static %i dynamic %i (%.2fKB)\nMultidraws: %i merged %i\n",
-			backEnd.pc.c_staticVboDraws, backEnd.pc.c_dynamicVboDraws, backEnd.pc.c_dynamicVboTotalSize / (1024.0f),
-			backEnd.pc.c_multidraws, backEnd.pc.c_multidrawsMerged);
-		ri->Printf(PRINT_ALL, "GLSL binds: %i  draws: gen %i light %i fog %i dlight %i\n",
-			backEnd.pc.c_glslShaderBinds, backEnd.pc.c_genericDraws, backEnd.pc.c_lightallDraws, backEnd.pc.c_fogDraws, backEnd.pc.c_dlightDraws);
-	}
-	else if (r_speeds->integer == 8)
-	{
-		ri->Printf(PRINT_ALL, "0-19: %d 20-49: %d 50-99: %d 100-299: %d\n",
-			backEnd.pc.c_triangleCountBins[TRI_BIN_0_19],
-			backEnd.pc.c_triangleCountBins[TRI_BIN_20_49],
-			backEnd.pc.c_triangleCountBins[TRI_BIN_50_99],
-			backEnd.pc.c_triangleCountBins[TRI_BIN_100_299]);
-
-		ri->Printf(PRINT_ALL, "300-599: %d 600-999: %d 1000-1499: %d 1500-1999: %d\n",
-			backEnd.pc.c_triangleCountBins[TRI_BIN_300_599],
-			backEnd.pc.c_triangleCountBins[TRI_BIN_600_999],
-			backEnd.pc.c_triangleCountBins[TRI_BIN_1000_1499],
-			backEnd.pc.c_triangleCountBins[TRI_BIN_1500_1999]);
-		ri->Printf(PRINT_ALL, "2000-2999: %d 3000+: %d\n",
-			backEnd.pc.c_triangleCountBins[TRI_BIN_2000_2999],
-			backEnd.pc.c_triangleCountBins[TRI_BIN_3000_PLUS]);
-#endif // REND2_SP
 	}
 	else if (r_speeds->integer == 100)
 	{
@@ -186,34 +119,22 @@ static void R_PerformanceCounters(void)
 			diffInNs = endTime - startTime;
 			diffInMs = diffInNs / 1e6f;
 
-#ifdef REND2_SP
 			ri.Printf(PRINT_ALL, "%s: %.3fms ", timedBlock->name, diffInMs);
-#else // !REND2_SP
-			ri->Printf(PRINT_ALL, "%s: %.3fms ", timedBlock->name, diffInMs);
-#endif // REND2_SP
 
 			if ((i % 7) == 6)
 			{
-#ifdef REND2_SP
 				ri.Printf(PRINT_ALL, "\n");
-#else // !REND2_SP
-				ri->Printf(PRINT_ALL, "\n");
-#endif // REND2_SP
 			}
 		}
 
-#ifdef REND2_SP
 		ri.Printf(PRINT_ALL, "\n");
-#else // !REND2_SP
-		ri->Printf(PRINT_ALL, "\n");
-#endif // REND2_SP
 	}
 
 	Com_Memset(&tr.pc, 0, sizeof(tr.pc));
 	Com_Memset(&backEnd.pc, 0, sizeof(backEnd.pc));
 	currentFrame->numTimedBlocks = 0;
 	currentFrame->numTimers = 0;
-	}
+}
 
 /*
 ====================
@@ -272,17 +193,9 @@ static void* R_GetCommandBufferReserved(unsigned int bytes, const int reservedBy
 	bytes = PAD(bytes, sizeof(void*));
 
 	// always leave room for the end of list command
-#ifdef REND2_SP
-	if (cmdList->used + bytes + sizeof(int) + reservedBytes > MAX_RENDER_COMMANDS) {
-#else // !REND2_SP
 	if (cmdList->used + static_cast<unsigned long long>(bytes) + sizeof(int) + reservedBytes > MAX_RENDER_COMMANDS) {
-#endif // REND2_SP
 		if (bytes > MAX_RENDER_COMMANDS - (int)sizeof(int)) {
-#ifdef REND2_SP
 			ri.Error(ERR_FATAL, "R_GetCommandBuffer: bad size %i", bytes);
-#else // !REND2_SP
-			ri->Error(ERR_FATAL, "R_GetCommandBuffer: bad size %i", bytes);
-#endif // REND2_SP
 		}
 		// if we run out of room, just start dropping commands
 		return NULL;
@@ -291,7 +204,7 @@ static void* R_GetCommandBufferReserved(unsigned int bytes, const int reservedBy
 	cmdList->used += bytes;
 
 	return cmdList->cmds + cmdList->used - bytes;
-	}
+}
 
 /*
 ============
@@ -299,8 +212,7 @@ R_GetCommandBuffer
 make sure there is enough command space
 ============
 */
-void* R_GetCommandBuffer(const unsigned int bytes)
-{
+void* R_GetCommandBuffer(const unsigned int bytes) {
 	return R_GetCommandBufferReserved(bytes, PAD(sizeof(swapBuffersCommand_t), sizeof(void*)));
 }
 
@@ -310,7 +222,7 @@ R_AddDrawSurfCmd
 
 =============
 */
-void R_AddDrawSurfCmd(drawSurf_t * drawSurfs, const int numDrawSurfs)
+void R_AddDrawSurfCmd(drawSurf_t* drawSurfs, const int numDrawSurfs)
 {
 	drawSurfsCommand_t* cmd = nullptr;
 
@@ -336,7 +248,8 @@ R_AddConvolveCubemapsCmd
 
 =============
 */
-void R_AddConvolveCubemapCmd(cubemap_t * cubemap, int cubemapId) {
+void R_AddConvolveCubemapCmd(cubemap_t* cubemap, int cubemapId)
+{
 	convolveCubemapCommand_t* cmd = nullptr;
 
 	if (!tr.registered) {
@@ -455,11 +368,11 @@ void	RE_SetColor(const float* rgba) {
 	static cvar_t* r_hudAlpha = nullptr;
 	if (!r_hudAlpha)
 	{
-#ifdef REND2_SP
+#ifndef REND2_SP
+		r_hudAlpha = ri.Cvar_Get("r_hudAlpha", "1", CVAR_TEMP, "");
+#else
 		r_hudAlpha = ri.Cvar_Get("r_hudAlpha", "1", CVAR_TEMP);
-#else // !REND2_SP
-		r_hudAlpha = ri->Cvar_Get("r_hudAlpha", "1", CVAR_TEMP, "");
-#endif // REND2_SP
+#endif
 	}
 	// the fade is applied per shader stage in the backend (RB_HudFadeStage), so shaders that ignore the vertex alpha fade too
 	cmd->hudFade = 0.0f;
@@ -561,7 +474,7 @@ void RE_StretchPic(const float x, const float y, const float w, const float h, c
 #define MODE_GREEN_MAGENTA 4
 #define MODE_MAX	MODE_GREEN_MAGENTA
 
-static void R_SetColorMode(GLboolean * rgba, stereoFrame_t stereoFrame, int colormode)
+static void R_SetColorMode(GLboolean* rgba, stereoFrame_t stereoFrame, int colormode)
 {
 	rgba[0] = rgba[1] = rgba[2] = rgba[3] = GL_TRUE;
 
@@ -609,11 +522,7 @@ void RE_LAGoggles(void)
 RE_Scissor
 =============
 */
-#ifdef REND2_SP
 void RE_Scissor(const float x, const float y, const float w, const float h)
-#else // !REND2_SP
-void RE_Scissor(float x, float y, float w, float h)
-#endif // REND2_SP
 {
 	scissorCommand_t* cmd = nullptr;
 
@@ -657,11 +566,7 @@ void RE_BeginFrame(stereoFrame_t stereoFrame)
 		GLenum result = qglClientWaitSync(sync, 0, 0);
 		if (result != GL_ALREADY_SIGNALED)
 		{
-#ifdef REND2_SP
 			ri.Printf(PRINT_DEVELOPER, "OpenGL: GPU is more than %d frames behind! Waiting for this frame to finish...\n", MAX_FRAMES);
-#else // !REND2_SP
-			ri->Printf(PRINT_DEVELOPER, "OpenGL: GPU is more than %d frames behind! Waiting for this frame to finish...\n", MAX_FRAMES);
-#endif // REND2_SP
 
 			static const GLuint64 HALF_SECOND = 500 * 1000 * 1000;
 			do
@@ -690,11 +595,7 @@ void RE_BeginFrame(stereoFrame_t stereoFrame)
 #endif // _G2_GORE
 					backEndData->perFrameMemory->Reset();
 
-#ifdef REND2_SP
 					ri.Error(ERR_DROP, "OpenGL: Failed to wait for fence. Context lost. (0x%x)\n", qglGetError());
-#else // !REND2_SP
-					ri->Error(ERR_DROP, "OpenGL: Failed to wait for fence. Context lost. (0x%x)\n", qglGetError());
-#endif // REND2_SP
 					return;
 				}
 			} while (result != GL_ALREADY_SIGNALED && result != GL_CONDITION_SATISFIED);
@@ -710,11 +611,7 @@ void RE_BeginFrame(stereoFrame_t stereoFrame)
 		for (byte i = 0; i < MAX_SCENES; i++)
 		{
 			if (backEndData->cachePreviousFrameUbos)
-#ifdef REND2_SP
-				thisFrame->ubo[i] = backEndData->frameUbos[(frameNumber % (MAX_FRAMES + 1)) * MAX_SCENES + i];
-#else // !REND2_SP
-				thisFrame->ubo[i] = backEndData->frameUbos[(frameNumber % (MAX_FRAMES + 1) * (MAX_FRAMES + 1)) + i];
-#endif // REND2_SP
+				thisFrame->ubo[i] = backEndData->frameUbos[(frameNumber % (MAX_FRAMES + 1)) * MAX_SCENES + i]; // SJE/MD9 shared renderer (2026-11-05): one set of MAX_SCENES per frame (the old index overlapped the sets)
 
 			qglBindBuffer(GL_UNIFORM_BUFFER, thisFrame->ubo[i]);
 			glState.currentGlobalUBO = thisFrame->ubo[i];
@@ -752,24 +649,14 @@ void RE_BeginFrame(stereoFrame_t stereoFrame)
 	{
 		if (glConfig.stencilBits < 4)
 		{
-#ifdef REND2_SP
 			ri.Printf(PRINT_ALL, "Warning: not enough stencil bits to measure overdraw: %d\n", glConfig.stencilBits);
 			ri.Cvar_Set("r_measureOverdraw", "0");
-#else // !REND2_SP
-			ri->Printf(PRINT_ALL, "Warning: not enough stencil bits to measure overdraw: %d\n", glConfig.stencilBits);
-			ri->Cvar_Set("r_measureOverdraw", "0");
-#endif // REND2_SP
 			r_measureOverdraw->modified = qfalse;
 		}
 		else if (r_shadows->integer == 2)
 		{
-#ifdef REND2_SP
 			ri.Printf(PRINT_ALL, "Warning: stencil shadows and overdraw measurement are mutually exclusive\n");
 			ri.Cvar_Set("r_measureOverdraw", "0");
-#else // !REND2_SP
-			ri->Printf(PRINT_ALL, "Warning: stencil shadows and overdraw measurement are mutually exclusive\n");
-			ri->Cvar_Set("r_measureOverdraw", "0");
-#endif // REND2_SP
 			r_measureOverdraw->modified = qfalse;
 		}
 		else
@@ -836,11 +723,7 @@ void RE_BeginFrame(stereoFrame_t stereoFrame)
 			cmd->buffer = (int)GL_BACK_RIGHT;
 		}
 		else {
-#ifdef REND2_SP
 			ri.Error(ERR_FATAL, "RE_BeginFrame: Stereo is enabled, but stereoFrame was %i", stereoFrame);
-#else // !REND2_SP
-			ri->Error(ERR_FATAL, "RE_BeginFrame: Stereo is enabled, but stereoFrame was %i", stereoFrame);
-#endif // REND2_SP
 		}
 	}
 	else
@@ -902,11 +785,7 @@ void RE_BeginFrame(stereoFrame_t stereoFrame)
 			}
 			else
 			{
-#ifdef REND2_SP
 				ri.Error(ERR_FATAL, "RE_BeginFrame: Stereo is enabled, but stereoFrame was %i", stereoFrame);
-#else // !REND2_SP
-				ri->Error(ERR_FATAL, "RE_BeginFrame: Stereo is enabled, but stereoFrame was %i", stereoFrame);
-#endif // REND2_SP
 				return; // not reached: ri.Error never returns (function pointer, so it cannot be noreturn)
 			}
 
@@ -916,11 +795,7 @@ void RE_BeginFrame(stereoFrame_t stereoFrame)
 		else
 		{
 			if (stereoFrame != STEREO_CENTER)
-#ifdef REND2_SP
 				ri.Error(ERR_FATAL, "RE_BeginFrame: Stereo is disabled, but stereoFrame was %i", stereoFrame);
-#else // !REND2_SP
-				ri->Error(ERR_FATAL, "RE_BeginFrame: Stereo is disabled, but stereoFrame was %i", stereoFrame);
-#endif // REND2_SP
 
 			if (!(cmd = (drawBufferCommand_t*)R_GetCommandBuffer(sizeof(*cmd))))
 				return;
@@ -1002,7 +877,7 @@ RE_TakeVideoFrame
 =============
 */
 void RE_TakeVideoFrame(int width, int height,
-	byte * captureBuffer, byte * encodeBuffer, qboolean motionJpeg)
+	byte* captureBuffer, byte* encodeBuffer, qboolean motionJpeg)
 {
 	videoFrameCommand_t* cmd = nullptr;
 

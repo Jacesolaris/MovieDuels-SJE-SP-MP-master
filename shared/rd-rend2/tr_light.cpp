@@ -38,16 +38,13 @@ Used by both the front end (for DlightBmodel) and
 the back end (before doing the lighting calculation)
 ===============
 */
-#ifdef REND2_SP
-void R_TransformDlights(const int count, dlight_t* dl, const orientationr_t* ori) {
-#else // !REND2_SP
-void R_TransformDlights(int count, dlight_t * dl, orientationr_t * ori)
+void R_TransformDlights(int count, dlight_t* dl, orientationr_t* ori)
 {
-#endif // REND2_SP
 	int		i = 0;
 	vec3_t	temp;
 
-	for (i = 0; i < count; i++, dl++) {
+	for (i = 0; i < count; i++, dl++)
+	{
 		VectorSubtract(dl->origin, ori->origin, temp);
 		dl->transformed[0] = DotProduct(temp, ori->axis[0]);
 		dl->transformed[1] = DotProduct(temp, ori->axis[1]);
@@ -62,11 +59,7 @@ R_DlightBmodel
 Determine which dynamic lights may effect this bmodel
 =============
 */
-#ifdef REND2_SP
-void R_DlightBmodel(const bmodel_t * bmodel, trRefEntity_t * ent)
-#else // !REND2_SP
-void R_DlightBmodel(bmodel_t * bmodel, trRefEntity_t * ent)
-#endif // REND2_SP
+void R_DlightBmodel(bmodel_t* bmodel, trRefEntity_t* ent)
 {
 	int			i = 0, j = 0;
 	dlight_t* dl = nullptr;
@@ -100,10 +93,8 @@ void R_DlightBmodel(bmodel_t * bmodel, trRefEntity_t * ent)
 	ent->needDlights = (qboolean)(mask != 0);
 
 	world_t* world = R_GetWorld(bmodel->worldIndex);
-
 	// set the dlight bits in all the surfaces
-	for (i = 0; i < bmodel->numSurfaces; i++)
-	{
+	for (i = 0; i < bmodel->numSurfaces; i++) {
 		surf = world->surfaces + bmodel->firstSurface + i;
 
 		switch (*surf->data)
@@ -139,7 +130,7 @@ R_SetupEntityLightingGrid
 
 =================
 */
-static void R_SetupEntityLightingGrid(trRefEntity_t * ent, world_t * world)
+static void R_SetupEntityLightingGrid(trRefEntity_t* ent, world_t* world)
 {
 	vec3_t	lightOrigin;
 	int		pos[3]{};
@@ -149,12 +140,7 @@ static void R_SetupEntityLightingGrid(trRefEntity_t * ent, world_t * world)
 	vec3_t	direction;
 	float	totalFactor = 0.0f;
 	uint32_t startGridPos = 0;
-#ifdef REND2_SP
-
-	if (r_fullbright->integer || r_ambientScale->integer == -1 || tr.refdef.doLAGoggles)
-#else // !REND2_SP
-	if (r_fullbright->integer || tr.refdef.doLAGoggles)
-#endif // REND2_SP
+	if (r_fullbright->integer || r_ambientScale->integer == -1 || tr.refdef.doLAGoggles) // r_ambientScale -1: fullbright (MD9 SP, SJE/MD9 shared renderer (2026-11-05))
 	{
 		ent->ambientLight[0] = ent->ambientLight[1] = ent->ambientLight[2] = 255.0f;
 		ent->directedLight[0] = ent->directedLight[1] = ent->directedLight[2] = 255.0f;
@@ -223,11 +209,7 @@ static void R_SetupEntityLightingGrid(trRefEntity_t * ent, world_t * world)
 			}
 		}
 
-#ifdef REND2_SP
-		if (gridPos >= world->numGridArrayElements)
-#else // !REND2_SP
 		if (gridPos >= (unsigned)world->numGridArrayElements)
-#endif // REND2_SP
 		{//we've gone off the array somehow
 			continue;
 		}
@@ -266,11 +248,7 @@ static void R_SetupEntityLightingGrid(trRefEntity_t * ent, world_t * world)
 		{
 			for (j = 0; j < MAXLIGHTMAPS; j++)
 			{
-#ifdef REND2_SP
-				if (data->styles[j] != LS_LSNONE)
-#else // !REND2_SP
 				if (data->styles[j] != LS_LSNONE && data->styles[j] < MAX_LIGHT_STYLES) // styleColors has MAX_LIGHT_STYLES entries
-#endif // REND2_SP
 				{
 					const byte	style = data->styles[j];
 
@@ -322,12 +300,8 @@ static void R_SetupEntityLightingGrid(trRefEntity_t * ent, world_t * world)
 LogLight
 ===============
 */
-#ifdef REND2_SP
-static void LogLight(const trRefEntity_t * ent) {
-#else // !REND2_SP
-static void LogLight(trRefEntity_t * ent)
+static void LogLight(trRefEntity_t* ent)
 {
-#endif // REND2_SP
 	int	max1 = 0, max2 = 0;
 
 	if (!(ent->e.renderfx & RF_FIRST_PERSON)) {
@@ -350,11 +324,7 @@ static void LogLight(trRefEntity_t * ent)
 		max2 = ent->directedLight[2];
 	}
 
-#ifdef REND2_SP
 	ri.Printf(PRINT_ALL, "amb:%i  dir:%i\n", max1, max2);
-#else // !REND2_SP
-	ri->Printf(PRINT_ALL, "amb:%i  dir:%i\n", max1, max2);
-#endif // REND2_SP
 }
 
 /*
@@ -365,7 +335,8 @@ Calculates all the lighting values that will be used
 by the Calc_* functions
 =================
 */
-void R_SetupEntityLighting(const trRefdef_t * refdef, trRefEntity_t * ent) {
+void R_SetupEntityLighting(const trRefdef_t* refdef, trRefEntity_t* ent)
+{
 	int				i = 0;
 	float			d = 0.0f;
 	vec3_t			lightDir;
@@ -531,7 +502,7 @@ int R_LightForPoint(vec3_t point, vec3_t ambientLight, vec3_t directedLight, vec
 	return qtrue;
 }
 
-int R_LightDirForPoint(vec3_t point, vec3_t lightDir, vec3_t normal, world_t * world)
+int R_LightDirForPoint(vec3_t point, vec3_t lightDir, vec3_t normal, world_t* world)
 {
 	trRefEntity_t ent;
 

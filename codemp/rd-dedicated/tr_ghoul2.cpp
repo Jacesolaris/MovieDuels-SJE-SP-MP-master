@@ -578,7 +578,7 @@ bool G2_WasBoneRendered(const CGhoul2Info& ghoul2, const int boneNum)
 // G2_GetBoneBasepose
 // Retrieves the basepose and inverse basepose matrices for a
 // specific bone. Behaviour preserved, asserts replaced with
-// ri->Printf diagnostics and safety checks added.
+// ri.Printf diagnostics and safety checks added.
 // ------------------------------------------------------------
 void G2_GetBoneBasepose(
 	const CGhoul2Info& ghoul2,
@@ -589,7 +589,7 @@ void G2_GetBoneBasepose(
 	// Validate bone cache
 	if (ghoul2.mBoneCache == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetBoneBasepose: NULL boneCache\n");
+		ri.Printf(PRINT_WARNING, "G2_GetBoneBasepose: NULL boneCache\n");
 		retBasepose = const_cast<mdxaBone_t*>(&identityMatrix);
 		retBaseposeInv = const_cast<mdxaBone_t*>(&identityMatrix);
 		return;
@@ -600,7 +600,7 @@ void G2_GetBoneBasepose(
 	// Validate model + header
 	if (boneCache.mod == NULL || boneCache.header == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetBoneBasepose: Missing model/header\n");
+		ri.Printf(PRINT_WARNING, "G2_GetBoneBasepose: Missing model/header\n");
 		retBasepose = const_cast<mdxaBone_t*>(&identityMatrix);
 		retBaseposeInv = const_cast<mdxaBone_t*>(&identityMatrix);
 		return;
@@ -609,7 +609,7 @@ void G2_GetBoneBasepose(
 	// Validate bone index
 	if (boneNum < 0 || boneNum >= boneCache.header->numBones)
 	{
-		ri->Printf(PRINT_WARNING,
+		ri.Printf(PRINT_WARNING,
 			"G2_GetBoneBasepose: Invalid boneNum %d (max %d)\n",
 			boneNum, boneCache.header->numBones);
 
@@ -645,7 +645,7 @@ char* G2_GetBoneNameFromSkel(const CGhoul2Info& ghoul2, const int boneNum)
 	// Validate bone cache
 	if (ghoul2.mBoneCache == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetBoneNameFromSkel: NULL boneCache\n");
+		ri.Printf(PRINT_WARNING, "G2_GetBoneNameFromSkel: NULL boneCache\n");
 		return nullptr;
 	}
 
@@ -654,14 +654,14 @@ char* G2_GetBoneNameFromSkel(const CGhoul2Info& ghoul2, const int boneNum)
 	// Validate model + header
 	if (boneCache.mod == NULL || boneCache.header == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetBoneNameFromSkel: Missing model/header\n");
+		ri.Printf(PRINT_WARNING, "G2_GetBoneNameFromSkel: Missing model/header\n");
 		return nullptr;
 	}
 
 	// Validate bone index
 	if (boneNum < 0 || boneNum >= boneCache.header->numBones)
 	{
-		ri->Printf(PRINT_WARNING,
+		ri.Printf(PRINT_WARNING,
 			"G2_GetBoneNameFromSkel: Invalid boneNum %d (max %d)\n",
 			boneNum, boneCache.header->numBones);
 		return nullptr;
@@ -714,7 +714,7 @@ void G2_RagGetBoneBasePoseMatrixLow(
 	// Validate bone index
 	if (boneNum < 0 || boneNum >= boneCache.header->numBones)
 	{
-		ri->Printf(
+		ri.Printf(
 			PRINT_DEVELOPER,
 			"G2_RagGetBoneBasePoseMatrixLow: invalid boneNum %d (numBones=%d)\n",
 			boneNum,
@@ -736,7 +736,7 @@ void G2_RagGetBoneBasePoseMatrixLow(
 		ofs < boneCache.header->ofsSkel ||
 		ofs >= boneCache.header->ofsEnd)
 	{
-		ri->Printf(
+		ri.Printf(
 			PRINT_DEVELOPER,
 			"G2_RagGetBoneBasePoseMatrixLow: bad offset for bone %d: %d (ofsSkel=%d ofsEnd=%d)\n",
 			boneNum,
@@ -758,7 +758,7 @@ void G2_RagGetBoneBasePoseMatrixLow(
 		skel->numChildren < 0 ||
 		skel->numChildren > boneCache.header->numBones)
 	{
-		ri->Printf(
+		ri.Printf(
 			PRINT_DEVELOPER,
 			"G2_RagGetBoneBasePoseMatrixLow: malformed skel for bone %d\n",
 			boneNum
@@ -794,7 +794,7 @@ void G2_RagGetBoneBasePoseMatrixLow(
 // G2_GetBoneMatrixLow
 // Safely retrieves a bone matrix from a Ghoul2 model.
 // Behaviour preserved exactly as original, but asserts replaced
-// with ri->Printf and all pointer/index checks hardened.
+// with ri.Printf and all pointer/index checks hardened.
 // ------------------------------------------------------------
 void G2_GetBoneMatrixLow(
 	const CGhoul2Info& ghoul2,
@@ -809,7 +809,7 @@ void G2_GetBoneMatrixLow(
 	// ------------------------------------------------------------
 	if (ghoul2.mBoneCache == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetBoneMatrixLow: NULL boneCache\n");
+		ri.Printf(PRINT_WARNING, "G2_GetBoneMatrixLow: NULL boneCache\n");
 		retMatrix = identityMatrix;
 		retBasepose = const_cast<mdxaBone_t*>(&identityMatrix);
 		retBaseposeInv = const_cast<mdxaBone_t*>(&identityMatrix);
@@ -821,7 +821,7 @@ void G2_GetBoneMatrixLow(
 	// Validate model + header
 	if (boneCache.mod == NULL || boneCache.header == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetBoneMatrixLow: Missing model/header\n");
+		ri.Printf(PRINT_WARNING, "G2_GetBoneMatrixLow: Missing model/header\n");
 		retMatrix = identityMatrix;
 		retBasepose = const_cast<mdxaBone_t*>(&identityMatrix);
 		retBaseposeInv = const_cast<mdxaBone_t*>(&identityMatrix);
@@ -831,7 +831,7 @@ void G2_GetBoneMatrixLow(
 	// Validate bone index
 	if (boneNum < 0 || boneNum >= boneCache.header->numBones)
 	{
-		ri->Printf(PRINT_WARNING,
+		ri.Printf(PRINT_WARNING,
 			"G2_GetBoneMatrixLow: Invalid boneNum %d (max %d)\n",
 			boneNum, boneCache.header->numBones);
 
@@ -898,7 +898,7 @@ void G2_GetBoneMatrixLow(
 		{
 			if (Q_isnan(retMatrix.matrix[i][j]))
 			{
-				ri->Printf(PRINT_WARNING,
+				ri.Printf(PRINT_WARNING,
 					"G2_GetBoneMatrixLow: NaN detected in retMatrix[%d][%d]\n",
 					i, j);
 			}
@@ -924,7 +924,7 @@ int G2_GetParentBoneMatrixLow(
 	// Validate bone cache
 	if (ghoul2.mBoneCache == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetParentBoneMatrixLow: NULL boneCache\n");
+		ri.Printf(PRINT_WARNING, "G2_GetParentBoneMatrixLow: NULL boneCache\n");
 		retMatrix = identityMatrix;
 		retBasepose = const_cast<mdxaBone_t*>(&identityMatrix);
 		retBaseposeInv = const_cast<mdxaBone_t*>(&identityMatrix);
@@ -936,7 +936,7 @@ int G2_GetParentBoneMatrixLow(
 	// Validate model + header
 	if (boneCache.mod == NULL || boneCache.header == NULL)
 	{
-		ri->Printf(PRINT_WARNING, "G2_GetParentBoneMatrixLow: Missing model/header\n");
+		ri.Printf(PRINT_WARNING, "G2_GetParentBoneMatrixLow: Missing model/header\n");
 		retMatrix = identityMatrix;
 		retBasepose = const_cast<mdxaBone_t*>(&identityMatrix);
 		retBaseposeInv = const_cast<mdxaBone_t*>(&identityMatrix);
@@ -946,7 +946,7 @@ int G2_GetParentBoneMatrixLow(
 	// Validate bone index
 	if (boneNum < 0 || boneNum >= boneCache.header->numBones)
 	{
-		ri->Printf(PRINT_WARNING,
+		ri.Printf(PRINT_WARNING,
 			"G2_GetParentBoneMatrixLow: Invalid boneNum %d (max %d)\n",
 			boneNum, boneCache.header->numBones);
 
@@ -962,7 +962,7 @@ int G2_GetParentBoneMatrixLow(
 	// Validate parent index
 	if (parent < 0 || parent >= boneCache.header->numBones)
 	{
-		ri->Printf(PRINT_WARNING,
+		ri.Printf(PRINT_WARNING,
 			"G2_GetParentBoneMatrixLow: Invalid parent %d for bone %d (max %d)\n",
 			parent, boneNum, boneCache.header->numBones);
 
@@ -2366,7 +2366,7 @@ static void G2_TransformGhoulBones(boneInfo_v& rootBoneList, const mdxaBone_t& r
 	ghoul2.mBoneCache->mUnsquash = false;
 
 	// master smoothing control
-	if (HackadelicOnClient && smooth && !ri->Cvar_VariableIntegerValue("dedicated"))
+	if (HackadelicOnClient && smooth && !ri.Cvar_VariableIntegerValue("dedicated"))
 	{
 		ghoul2.mBoneCache->mLastTouch = ghoul2.mBoneCache->mLastLastTouch;
 		/*

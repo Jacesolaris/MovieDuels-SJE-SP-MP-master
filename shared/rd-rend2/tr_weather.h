@@ -1,10 +1,10 @@
 /*
 ===========================================================================
-Copyright (C) 2016, OpenJK contributors
+Copyright (C) 2016, SerenityJediEngine2027 contributors
 
-This file is part of the OpenJK source code.
+This file is part of the SerenityJediEngine2027 source code.
 
-OpenJK is free software; you can redistribute it and/or modify it
+SerenityJediEngine2027 is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License version 2 as
 published by the Free Software Foundation.
 
@@ -131,7 +131,7 @@ float R_GetChanceOfSaberFizz();
 bool R_GetWindVector(vec3_t windVector, vec3_t atPoint); // doesn't work?
 bool R_GetWindGusting(vec3_t atPoint); // doesn't work
 
-void RE_WorldEffectCommand(const char* cmd);
+void RE_WorldEffectCommand(const char* command);
 void R_WorldEffect_f(void);
 void R_WeatherEffect_f(void);
 void R_SetWeatherEffect_f(void);

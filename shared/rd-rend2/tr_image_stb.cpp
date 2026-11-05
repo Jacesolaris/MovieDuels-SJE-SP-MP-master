@@ -4,11 +4,11 @@ Copyright (C) 1999 - 2005, Id Software, Inc.
 Copyright (C) 2000 - 2013, Raven Software, Inc.
 Copyright (C) 2001 - 2013, Activision, Inc.
 Copyright (C) 2005 - 2015, ioquake3 contributors
-Copyright (C) 2013 - 2015, OpenJK contributors
+Copyright (C) 2013 - 2015, SerenityJediEngine2027 contributors
 
-This file is part of the OpenJK source code.
+This file is part of the SerenityJediEngine2027 source code.
 
-OpenJK is free software; you can redistribute it and/or modify it
+SerenityJediEngine2027 is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License version 2 as
 published by the Free Software Foundation.
 
@@ -27,39 +27,23 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 static void* R_LocalMalloc(size_t size)
 {
-#ifdef REND2_SP
 	return Hunk_AllocateTempMemory(size);
-#else // !REND2_SP
-	return ri->Hunk_AllocateTempMemory(size);
-#endif // REND2_SP
 }
 
 static void* R_LocalReallocSized(void* ptr, size_t old_size, size_t new_size)
 {
-#ifdef REND2_SP
 	void* mem = Hunk_AllocateTempMemory(new_size);
-#else // !REND2_SP
-	void* mem = ri->Hunk_AllocateTempMemory(new_size);
-#endif // REND2_SP
 	if (ptr)
 	{
 		memcpy(mem, ptr, old_size);
-#ifdef REND2_SP
 		Hunk_FreeTempMemory(ptr);
-#else // !REND2_SP
-		ri->Hunk_FreeTempMemory(ptr);
-#endif // REND2_SP
 	}
 	return mem;
 }
 static void R_LocalFree(void* ptr)
 {
 	if (ptr)
-#ifdef REND2_SP
 		Hunk_FreeTempMemory(ptr);
-#else // !REND2_SP
-		ri->Hunk_FreeTempMemory(ptr);
-#endif // REND2_SP
 }
 
 #define STBI_MALLOC R_LocalMalloc
@@ -81,11 +65,7 @@ void R_LoadHDRImage(const char* filename, byte** data, int* width, int* height)
 	PROFILE_ZONE("Load: decode HDR");
 	byte* buf = NULL;
 	int x = 0, y = 0, n = 0;
-#ifdef REND2_SP
 	int len = ri.FS_ReadFile(filename, (void**)&buf);
-#else // !REND2_SP
-	int len = ri->FS_ReadFile(filename, (void**)&buf);
-#endif // REND2_SP
 	if (len <= 0 || buf == NULL)
 	{
 		// reset output varialbes
@@ -97,18 +77,10 @@ void R_LoadHDRImage(const char* filename, byte** data, int* width, int* height)
 	stbi_set_flip_vertically_on_load(0);
 	*data = (byte*)stbi_loadf_from_memory(buf, len, &x, &y, &n, 3);
 
-#ifdef REND2_SP
 	ri.FS_FreeFile(buf);
-#else // !REND2_SP
-	ri->FS_FreeFile(buf);
-#endif // REND2_SP
 
 	if (!*data) // was !data (always false, data is dereferenced above)
-#ifdef REND2_SP
 		ri.Printf(PRINT_DEVELOPER, "R_LoadHDRImage(%s) failed: %s\n", filename, stbi_failure_reason());
-#else // !REND2_SP
-		ri->Printf(PRINT_DEVELOPER, "R_LoadHDRImage(%s) failed: %s\n", filename, stbi_failure_reason());
-#endif // REND2_SP
 
 	// (the old "else *width = 0;" / "else *height = 0;" wrote through the NULL pointer)
 	if (width)

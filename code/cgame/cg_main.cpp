@@ -121,6 +121,7 @@ const char* inv_names[] =
 };
 
 int force_icons[NUM_FORCE_POWERS];
+int force_icons_off[NUM_FORCE_POWERS]; // the weapon wheel's dimmed copies (CG_MDWheel_OffIcon)
 static int flame_force_icon = 0; // gfx/hud/i_icon_flame: Force Lightning slot for flamethrower users
 
 void CG_DrawDataPadHUD(const centity_t* cent);
@@ -2350,6 +2351,11 @@ static void CG_RegisterGraphics()
 	//gore decal shaders -rww
 	cgs.media.bdecal_bodyburn1 = cgi_R_RegisterShader("gfx/damage/bodyburnmark1");
 	cgs.media.bdecal_burnmark1 = cgi_R_RegisterShader("gfx/damage/burnmark1");
+	// force lightning burn marks (JKG burn line images, shaders/zz_lightningburn.shader; 2026-11-04)
+	cgs.media.lightningBurnShader = cgi_R_RegisterShader("gfx/burnmarks/lightningburn");
+	cgs.media.lightningBurnAshShader = cgi_R_RegisterShader("gfx/burnmarks/lightningburn_ash");
+	cgs.media.lightningBurnGlowShader = cgi_R_RegisterShader("gfx/burnmarks/lightningburn_glow");
+	cgs.media.lightningBurnBodyShader = cgi_R_RegisterShader("gfx/burnmarks/lightningburn_body");
 	cgs.media.bdecal_saberglowmark = cgi_R_RegisterShader("gfx/damage/saberglowmark");
 	cgs.media.bdecal_saberglow = cgi_R_RegisterShader("gfx/effects/saberDamageGlow");
 	cgs.media.saberSliceCapShader = cgi_R_RegisterShader("gfx/effects/saberslice_cap");
@@ -3374,6 +3380,7 @@ void CG_Init(const int serverCommandSequence)
 
 	cgs.media.qhFontSmall = cgi_R_RegisterFont("ocr_a");
 	cgs.media.qhFontMedium = cgi_R_RegisterFont("ergoec");
+	cgs.media.qhFontMenu = cgi_R_RegisterFont("albertus_bold");
 
 	cgs.media.whiteShader = cgi_R_RegisterShader("white");
 	cgs.media.loadTick = cgi_R_RegisterShaderNoMip("gfx/hud/load_tick");
@@ -3417,6 +3424,9 @@ void CG_Init(const int serverCommandSequence)
 		if (force_icon_files[i])
 		{
 			force_icons[i] = cgi_R_RegisterShaderNoMip(force_icon_files[i]);
+			// the weapon wheel's dimmed copy (0 when shaders/md_wheelicons.shader is not installed)
+			const char* base = strrchr(force_icon_files[i], '/');
+			force_icons_off[i] = cgi_R_RegisterShaderNoMip(va("gfx/menus/weaponwheel/off/%s", base ? base + 1 : force_icon_files[i]));
 		}
 	}
 	flame_force_icon = cgi_R_RegisterShaderNoMip("gfx/hud/i_icon_flame");
@@ -6593,15 +6603,21 @@ static void CG_MDWheel_CenterText(const float y, float scale, const vec4_t color
 	if (text && text[0])
 	{
 		// long names are scaled down to stay inside the inner ring
-		const float maxWidth = 230.0f * ax;
-		float width = static_cast<float>(cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, scale));
+		const float maxWidth = 190.0f * ax;
+		const float originalScale = scale;
+		float width = static_cast<float>(cgi_R_Font_StrLenPixels(text, cgs.media.qhFontMenu, scale));
 		if (width > maxWidth)
 		{
 			scale *= maxWidth / width;
-			width = static_cast<float>(cgi_R_Font_StrLenPixels(text, cgs.media.qhFontSmall, scale));
+			width = static_cast<float>(cgi_R_Font_StrLenPixels(text, cgs.media.qhFontMenu, scale));
 		}
-		cgi_R_Font_DrawString(static_cast<int>(320.0f - width * 0.5f), static_cast<int>(y), text, color,
-			cgs.media.qhFontSmall, -1, scale);
+
+		// Move scaled-down text slightly lower to maintain visual centring.
+		const float scaleDifference = originalScale - scale;
+		const float adjustedY = y + (scaleDifference * 70.0f);
+
+		cgi_R_Font_DrawString(static_cast<int>(320.0f - width * 0.5f), static_cast<int>(adjustedY), text, color,
+			cgs.media.qhFontMenu, -1, scale);
 	}
 }
 
@@ -6814,6 +6830,16 @@ static void CG_MDWheel_DarkDisc(const float x, const float y, const float r, con
 	}
 }
 
+// a force power not known is drawn with its dimmed copy (gfx/menus/weaponwheel/off/<icon>, shaders/md_wheelicons.shader
+// in the Claude pk3: the same picture, but it takes the draw colour). Only when that shader is missing does the dark disc
+// below go over it: the disc is round and the icons' corners stuck out of it (white dots, Jace 2026-11-05)
+static bool CG_MDWheel_OffIcon(const int n)
+{
+	const int power = mdWheel.ring == 1 && n >= 0 && n < mdWheel.numItems ? showPowers[mdWheel.items[n]] : -1;
+	return power >= 0 && power < NUM_FORCE_POWERS && force_icons_off[power]
+		&& CG_ForcePowerIcon(power) == force_icons[power];
+}
+
 // the force powers not known, greyed out as the weapons not carried: their icons' shaders ignore the draw colour (they
 // stayed bright), so a dark disc goes over each, drawn after the icons (Jace 2026-10-29)
 static void CG_MDWheel_GreyUnknownForce(const float iconSize)
@@ -6826,7 +6852,7 @@ static void CG_MDWheel_GreyUnknownForce(const float iconSize)
 	cgi_R_ClearScene();
 	for (int n = 0; n < mdWheel.numItems; n++)
 	{
-		if (mdWheel.avail[n])
+		if (mdWheel.avail[n] || CG_MDWheel_OffIcon(n))
 		{
 			continue;
 		}
@@ -6916,10 +6942,19 @@ void CG_DrawMDWheel()
 			icon = CG_ForcePowerIcon(showPowers[item]);
 			if (!mdWheel.avail[n])
 			{
-				// not known: faded as a weapon not carried. The colour is dimmed too, so an icon whose shader ignores
-				// the alpha (an additive glow) fades as well
-				color[0] = color[1] = color[2] = 0.45f;
-				color[3] = 0.4f;
+				// not known: faded as a weapon not carried, with the icon's dimmed copy (it takes the colour; the
+				// normal icon's shader ignores it)
+				if (CG_MDWheel_OffIcon(n))
+				{
+					icon = force_icons_off[showPowers[item]];
+					color[0] = color[1] = color[2] = 0.6f;
+					color[3] = 0.45f;
+				}
+				else
+				{
+					color[0] = color[1] = color[2] = 0.45f;
+					color[3] = 0.4f;
+				}
 			}
 		}
 
@@ -6933,10 +6968,10 @@ void CG_DrawMDWheel()
 	CG_MDWheel_GreyUnknownForce(iconSize);
 
 	// the centre: ring name, the pointed item, its ammo / On Person (or why it can't be picked), the controls
-	CG_MDWheel_CenterText(my - 86.0f, 0.6f, gold, mdWheel.ring == 0 ? "WEAPONS" : "FORCE POWERS", ax);
+	CG_MDWheel_CenterText(my - 86.0f, 0.15f, gold, mdWheel.ring == 0 ? "WEAPONS" : "FORCE POWERS", ax);
 	if (mdWheel.numItems == 0)
 	{
-		CG_MDWheel_CenterText(my - 20.0f, 0.7f, grey, mdWheel.ring == 0 ? "No weapons" : "No force powers", ax);
+		CG_MDWheel_CenterText(my - 26.0f, 0.15f, grey, mdWheel.ring == 0 ? "No Weapons" : "No Force Powers", ax);
 	}
 	else if (mdWheel.hover >= 0)
 	{
@@ -6944,22 +6979,22 @@ void CG_DrawMDWheel()
 		const bool avail = mdWheel.avail[mdWheel.hover];
 		if (mdWheel.ring == 0 && item > WP_NONE && item < WP_NUM_WEAPONS)
 		{
-			CG_MDWheel_CenterText(my - 38.0f, 0.75f, avail ? white : greyed, CG_MDWheel_WeaponName(item), ax);
+			CG_MDWheel_CenterText(my - 26.0f, 0.15f, avail ? white : greyed, CG_MDWheel_WeaponName(item), ax);
 			if (!avail)
 			{
-				CG_MDWheel_CenterText(my - 12.0f, 0.6f, greyed, "Not carried", ax);
+				CG_MDWheel_CenterText(my - 2.0f, 0.13f, greyed, "Not Carried", ax);
 			}
 			else
 			{
 				if (weaponData[item].ammoIndex != AMMO_NONE)
 				{
-					CG_MDWheel_CenterText(my - 12.0f, 0.6f, grey,
+					CG_MDWheel_CenterText(my - 2.0f, 0.13f, grey,
 						va("Ammo: %d", cg.snap->ps.ammo[weaponData[item].ammoIndex]), ax);
 				}
 				if (item != WP_THERMAL && item != WP_TRIP_MINE && item != WP_DET_PACK && item < 64)
 				{
-					CG_MDWheel_CenterText(my + 10.0f, 0.6f, hidden & 1ull << item ? red : grey,
-						hidden & 1ull << item ? "Not on person" : "On person", ax);
+					CG_MDWheel_CenterText(my + 20.0f, 0.13f, hidden & 1ull << item ? red : grey,
+						hidden & 1ull << item ? "Holster: Disabled" : "Holster: Enabled", ax);
 				}
 			}
 		}
@@ -6970,18 +7005,20 @@ void CG_DrawMDWheel()
 			{
 				Q_strncpyz(text, CG_ForcePowerName(item), sizeof text);
 			}
-			CG_MDWheel_CenterText(my - 26.0f, 0.75f, avail ? white : greyed, text, ax);
+			CG_MDWheel_CenterText(my - 26.0f, 0.15f, avail ? white : greyed, text, ax);
 			if (!avail)
 			{
-				CG_MDWheel_CenterText(my - 2.0f, 0.6f, greyed, "Not known", ax);
+				CG_MDWheel_CenterText(my - 2.0f, 0.13f, greyed, "Not Known", ax);
+			}
+			else {
+				CG_MDWheel_CenterText(my - 2.0f, 0.13f, grey, va("Level: %d", player->client->ps.forcePowerLevel[showPowers[item]]), ax);
 			}
 		}
 	}
-	CG_MDWheel_CenterText(my + 44.0f, 0.45f, grey,
-		mdWheel.ring == 0 ? "Mouse wheel: force powers" : "Mouse wheel: weapons", ax);
+	CG_MDWheel_CenterText(my + 56.0f, 0.11f, grey, mdWheel.ring == 0 ? "Mouse Wheel: Force Powers" : "Mouse Wheel: Weapons", ax);
 	if (mdWheel.ring == 0)
 	{
-		CG_MDWheel_CenterText(my + 58.0f, 0.45f, grey, "Alt attack: on person", ax);
+		CG_MDWheel_CenterText(my + 70.0f, 0.11f, grey, "Alt Attack: Holster", ax);
 	}
 
 	// the pointer

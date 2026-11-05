@@ -29,12 +29,11 @@ void main()
 	float depthSample = texture(u_ShadowMap, depthPosition.xy).r;
 
 	var_Culled = int(depthPosition.z > depthSample);
-
 	if (var_Culled == 0)
- 	{
- 		depthPosition = u_ShadowMvp * (gl_Position + velocitiyOffset -(vec4(0.0, 0.0, u_ViewInfo.y, 0.0)));
- 		var_Culled -= int((depthPosition.z / depthPosition.w * 0.5 + 0.5) > depthSample);
- 	}
+	{
+		depthPosition = u_ShadowMvp * (gl_Position + velocitiyOffset -(vec4(0.0, 0.0, u_ViewInfo.y, 0.0)));
+		var_Culled -= int((depthPosition.z / depthPosition.w * 0.5 + 0.5) > depthSample);
+	}
 }
 
 /*[Geometry]*/
@@ -90,7 +89,7 @@ void main()
 			float distance = distance(u_ViewOrigin, worldPos.xyz);
 			float alpha = (u_ViewInfo.w - distance) / u_ViewInfo.w;
 			if (var_Culled[0] < 0 && offsets[i].y < 0.0)
- 				alpha = 0.0;
+				alpha = 0.0;
 
 			var_TexCoordAlpha = vec3(texcoords[i], clamp(alpha, 0.0, 1.0));
 			EmitVertex();
@@ -106,6 +105,7 @@ uniform sampler2D u_DiffuseMap;
 in vec3 var_TexCoordAlpha;
 out vec4 out_Color;
 out vec4 out_Glow;
+out vec4 out_SsrMask;	// r_ssr material mask (Jace 2026-11-04)
 
 void main()
 {
@@ -114,4 +114,5 @@ void main()
 
 	out_Glow.rgb = vec3(0.0);
 	out_Glow.a = out_Color.a;
+	out_SsrMask = vec4(0.0);
 }

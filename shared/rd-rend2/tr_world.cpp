@@ -158,7 +158,8 @@ that is touched by one or more dlights, so try to throw out
 more dlights if possible.
 ====================
 */
-static int R_DlightSurface(msurface_t* surf, int dlightBits) {
+static int R_DlightSurface(msurface_t* surf, int dlightBits)
+{
 	float       d = 0.0f;
 	int         i = 0;
 	dlight_t* dl = nullptr;
@@ -325,12 +326,7 @@ static int R_PshadowSurface(msurface_t* surf, int pshadowBits) {
 R_AddWorldSurface
 ======================
 */
-static void R_AddWorldSurface(
-	msurface_t* surf,
-	const trRefEntity_t* entity,
-	int entityNum,
-	int dlightBits,
-	int pshadowBits)
+static void R_AddWorldSurface(msurface_t* surf, const trRefEntity_t* entity, int entityNum, int dlightBits, int pshadowBits)
 {
 	// FIXME: bmodel fog?
 
@@ -385,7 +381,8 @@ static void R_AddWorldSurface(
 R_AddBrushModelSurfaces
 =================
 */
-void R_AddBrushModelSurfaces(trRefEntity_t* ent, int entityNum) {
+void R_AddBrushModelSurfaces(trRefEntity_t* ent, int entityNum)
+{
 	model_t* pModel = R_GetModelByHandle(ent->e.hModel);
 	bmodel_t* bmodel = pModel->data.bmodel;
 	int clip = R_CullLocalBox(bmodel->bounds);
@@ -400,15 +397,11 @@ void R_AddBrushModelSurfaces(trRefEntity_t* ent, int entityNum) {
 	for (int i = 0; i < bmodel->numSurfaces; i++) {
 		int surf = bmodel->firstSurface + i;
 
-#ifndef REND2_SP
 		if (world->surfacesViewCount[surf] != tr.viewCount)
 		{
 			world->surfacesViewCount[surf] = tr.viewCount;
-#endif // !REND2_SP
 			R_AddWorldSurface(world->surfaces + surf, ent, entityNum, ent->needDlights, 0);
-#ifndef REND2_SP
 		}
-#endif // !REND2_SP
 	}
 }
 
@@ -433,11 +426,7 @@ static float GetQuadArea(vec3_t v1, vec3_t v2, vec3_t v3, vec3_t v4)
 		dis2[0] * dis2[0] + dis2[1] * dis2[1] + dis2[2] * dis2[2]);
 }
 
-#ifdef REND2_SP
-void RE_GetBModelVerts(int bmodelIndex, vec3_t* verts, vec3_t normal)
-#else // !REND2_SP
 void RE_GetBModelVerts(const int bmodelIndex, vec3_t* verts, vec3_t normal)
-#endif // REND2_SP
 {
 	int					surf = 0;
 	srfBspSurface_t* face = nullptr;
@@ -720,52 +709,55 @@ void R_RecursiveWorldNode(mnode_t* node, int planeBits, int dlightBits, int psha
 R_PointInLeaf
 ===============
 */
-static mnode_t* R_PointInLeaf(const vec3_t p) {
+static mnode_t* R_PointInLeaf(const vec3_t p)
+{
 	mnode_t* node = nullptr;
-	float		d = 0.0f;
+	float d = 0.0f;
 	cplane_t* plane = nullptr;
 
-	if (!tr.world) {
-#ifdef REND2_SP
+	// ----------------------------------------------------------------------
+	// Safety: validate world pointer
+	// ----------------------------------------------------------------------
+	if (tr.world == nullptr)
+	{
 		ri.Error(ERR_DROP, "R_PointInLeaf: bad model");
-#else // !REND2_SP
-		ri->Error(ERR_DROP, "R_PointInLeaf: bad model");
-#endif // REND2_SP
-		return nullptr; // not reached: ri.Error never returns (function pointer, so it cannot be noreturn)
+		return nullptr;   // REQUIRED to satisfy MSVC and prevent NULL deref
 	}
 
 	node = tr.world->nodes;
-	while (1) {
-		if (node->contents != -1) {
-			break;
-		}
-		plane = node->plane;
-		d = DotProduct(p, plane->normal) - plane->dist;
-#ifdef REND2_SP
-		if (d >= 0) {
-#else // !REND2_SP
-		if (d > 0) {
-#endif // REND2_SP
-			node = node->children[0];
-		}
-		else {
-			node = node->children[1];
-		}
+
+	// ----------------------------------------------------------------------
+	// Walk BSP tree until reaching a leaf
+	// ----------------------------------------------------------------------
+	while (qtrue)
+	{
+		if (node->contents != -1)
+		{
+			break;  // leaf reached
 		}
 
-	return node;
+		plane = node->plane;
+		d = DotProduct(p, plane->normal) - plane->dist;
+
+		if (d > 0.0f)
+		{
+			node = node->children[0];
+		}
+		else
+		{
+			node = node->children[1];
+		}
 	}
+
+	return node;
+}
 
 /*
 ==============
 R_ClusterPVS
 ==============
 */
-#ifdef REND2_SP
-static const byte* R_ClusterPVS(int cluster) {
-#else // !REND2_SP
 static const byte* R_ClusterPVS(const int cluster) {
-#endif // REND2_SP
 	if (!tr.world->vis || cluster < 0 || cluster >= tr.world->numClusters) {
 		return tr.world->novis;
 	}
@@ -778,31 +770,17 @@ static const byte* R_ClusterPVS(const int cluster) {
 R_inPVS
 =================
 */
-#ifdef REND2_SP
-qboolean R_inPVS(const vec3_t p1, const vec3_t p2, byte * mask) {
-	mnode_t* leaf = R_PointInLeaf(p1);
-#else // !REND2_SP
-qboolean R_inPVS(const vec3_t p1, const vec3_t p2, byte * mask)
+qboolean R_inPVS(const vec3_t p1, const vec3_t p2, byte* mask)
 {
-	int leafnum = ri->CM_PointLeafnum(p1);
-	int cluster = ri->CM_LeafCluster(leafnum);
-#endif // REND2_SP
+	mnode_t* leaf = R_PointInLeaf(p1);
+	if (!leaf)
+		return qtrue;	// no world loaded
 
 	//agh, the damn snapshot mask doesn't work for this
-#ifdef REND2_SP
 	mask = (byte*)ri.CM_ClusterPVS(leaf->cluster);
-#else // !REND2_SP
-	mask = ri->CM_ClusterPVS(cluster);
-#endif // REND2_SP
 
-#ifdef REND2_SP
 	leaf = R_PointInLeaf(p2);
-	if (!(mask[leaf->cluster >> 3] & (1 << (leaf->cluster & 7))))
-#else // !REND2_SP
-	leafnum = ri->CM_PointLeafnum(p2);
-	cluster = ri->CM_LeafCluster(leafnum);
-	if (mask && !(mask[cluster >> 3] & 1 << (cluster & 7)))
-#endif // REND2_SP
+	if (mask && leaf && !(mask[leaf->cluster >> 3] & (1 << (leaf->cluster & 7))))
 		return qfalse;
 
 	return qtrue;
@@ -842,21 +820,15 @@ void R_MarkLeaves(void)
 		else if (tr.visClusters[i] == cluster)
 		{
 			if (tr.visClusters[i] != tr.visClusters[tr.visIndex] && r_showcluster->integer)
-#ifdef REND2_SP
 			{
 				ri.Printf(PRINT_ALL, "found cluster:%i  area:%i  index:%i\n",
 					cluster, leaf->area, i);
-#else // !REND2_SP
-				{
-					ri->Printf(PRINT_ALL, "found cluster:%i  area:%i  index:%i\n",
-						cluster, leaf->area, i);
-#endif // REND2_SP
-				}
+			}
 
 			tr.visIndex = i;
 			return;
-			}
 		}
+	}
 
 	tr.visIndex = (tr.visIndex + 1) % MAX_VISCOUNTS;
 	tr.visCounts[tr.visIndex]++;
@@ -865,17 +837,14 @@ void R_MarkLeaves(void)
 	if (r_showcluster->modified || r_showcluster->integer) {
 		r_showcluster->modified = qfalse;
 		if (r_showcluster->integer) {
-#ifdef REND2_SP
 			ri.Printf(PRINT_ALL, "cluster:%i  area:%i\n", cluster, leaf->area);
-#else // !REND2_SP
-			ri->Printf(PRINT_ALL, "cluster:%i  area:%i\n", cluster, leaf->area);
-#endif // REND2_SP
 		}
 	}
 
 	const byte* vis = R_ClusterPVS(tr.visClusters[tr.visIndex]);
 
 	int i = 0;
+
 	for (i = 0, leaf = tr.world->nodes; i < tr.world->numnodes; i++, leaf++)
 	{
 		cluster = leaf->cluster;
@@ -906,14 +875,14 @@ void R_MarkLeaves(void)
 			parent = parent->parent;
 		} while (parent);
 	}
-	}
+}
 
 /*
 =============
 R_AddWorldSurfaces
 =============
 */
-void R_AddWorldSurfaces(viewParms_t * viewParms, trRefdef_t * refdef) {
+void R_AddWorldSurfaces(viewParms_t* viewParms, trRefdef_t* refdef) {
 	int planeBits = 0, dlightBits = 0, pshadowBits = 0;
 
 	if (!r_drawworld->integer) {

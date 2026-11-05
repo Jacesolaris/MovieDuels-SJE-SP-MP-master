@@ -192,7 +192,7 @@ vec3 DeformNormal( const in vec3 position, const in vec3 normal )
 
 	vec3 outNormal = normal;
 	const float scale = 0.98;
-	
+
 	outNormal.x += amplitude * GetNoiseValue(
 		position.x * scale,
 		position.y * scale,
@@ -245,7 +245,7 @@ vec2 GenTexCoords(int TCGen, vec3 position, vec3 normal, vec3 TCGenVector0, vec3
 	{
 		tex = vec2(dot(position, TCGenVector0), dot(position, TCGenVector1));
 	}
-	
+
 	return tex;
 }
 #endif
@@ -260,10 +260,10 @@ vec2 ModTexCoords(vec2 st, vec3 position, vec4 texMatrix, vec4 offTurb)
 	st2.y = st.x * texMatrix.y + (st.y * texMatrix.w + offTurb.y);
 
 	vec2 offsetPos = vec2(position.x + position.z, position.y);
-	
+
 	vec2 texOffset = sin(offsetPos * (2.0 * M_PI / 1024.0) + vec2(phase));
-	
-	return st2 + texOffset * amplitude;	
+
+	return st2 + texOffset * amplitude;
 }
 #endif
 
@@ -271,7 +271,7 @@ vec2 ModTexCoords(vec2 st, vec3 position, vec4 texMatrix, vec4 offTurb)
 vec4 CalcColor(vec3 position, vec3 normal)
 {
 	vec4 color = u_VertColor * attr_Color + u_BaseColor;
-	
+
 	if (u_ColorGen == CGEN_LIGHTING_DIFFUSE)
 	{
 		float incoming = clamp(dot(normal, u_ModelLightDir), 0.0, 1.0);
@@ -302,7 +302,7 @@ vec4 CalcColor(vec3 position, vec3 normal)
 	{
 		color.a = clamp(length(viewer) / u_PortalRange, 0.0, 1.0);
 	}
-	
+
 	return color;
 }
 #endif
@@ -462,6 +462,7 @@ in vec4 var_RefractPosG;
 in vec4 var_RefractPosB;
 
 out vec4 out_Color;
+out vec4 out_SsrMask;	// r_ssr material mask (Jace 2026-11-04): refracting surfaces (water, glass) may reflect
 
 vec3 LinearTosRGB( in vec3 color )
 {
@@ -478,11 +479,11 @@ vec3 FilmicTonemap(vec3 x)
 	const float TS  = 0.20; // Toe Strength
 	const float TAN = 0.01; // Toe Angle Numerator
 	const float TAD = 0.30; // Toe Angle Denominator
-	
+
 	vec3 SSxx = SS * x * x;
 	vec3 LSx = LS * x;
 	vec3 LALSx = LSx * LA;
-	
+
 	return ((SSxx + LALSx + TS * TAN) / (SSxx + LSx + TS * TAD)) - TAN / TAD;
 }
 
@@ -499,7 +500,7 @@ void main()
 	color.a = var_Color.a;
 	color.rgb *= var_Color.rgb;
 	color.rgb *= u_Color.rgb;
-	
+
 #if defined(USE_ALPHA_TEST)
 	if (u_AlphaTestType == ALPHA_TEST_GT0)
 	{
@@ -522,17 +523,17 @@ void main()
 			discard;
 	}
 	else if (u_AlphaTestType == ALPHA_TEST_E255)
- 	{
- 		if (color.a < 1.00)
- 			discard;
- 	}
+	{
+		if (color.a < 1.00)
+			discard;
+	}
 #endif
 
 #if defined(USE_TONEMAPPING)
 	vec3 minAvgMax = texture(u_LevelsMap, texG).rgb;
 	vec3 logMinAvgMaxLum = clamp(minAvgMax * 20.0 - 10.0, -u_AutoExposureMinMax.y, -u_AutoExposureMinMax.x);
 	float avgLum = exp2(logMinAvgMaxLum.y);
-	
+
 	color.rgb *= u_ToneMinAvgMaxLinear.y / avgLum;
 	color.rgb = max(vec3(0.0), color.rgb - vec3(u_ToneMinAvgMaxLinear.x));
 
@@ -545,4 +546,5 @@ void main()
 #endif
 
 	out_Color = clamp(color, 0.0, 1.0);
+	out_SsrMask = vec4(0.0);
 }

@@ -25,11 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define	WAVEVALUE( table, base, amplitude, phase, freq )  ((base) + table[ Q_ftol( ( ( (phase) + tess.shaderTime * (freq) ) * FUNCTABLE_SIZE ) ) & FUNCTABLE_MASK ] * (amplitude))
 
-#ifdef REND2_SP
-static float* TableForFunc(genFunc_t func)
-#else // !REND2_SP
 static float* TableForFunc(const genFunc_t func)
-#endif // REND2_SP
 {
 	switch (func)
 	{
@@ -48,11 +44,7 @@ static float* TableForFunc(const genFunc_t func)
 		break;
 	}
 
-#ifdef REND2_SP
 	ri.Error(ERR_DROP, "TableForFunc called with invalid function '%d' in shader '%s'", func, tess.shader->name);
-#else // !REND2_SP
-	ri->Error(ERR_DROP, "TableForFunc called with invalid function '%d' in shader '%s'", func, tess.shader->name);
-#endif // REND2_SP
 	return NULL;
 }
 
@@ -126,91 +118,45 @@ RB_CalcDeformVertexes
 
 ========================
 */
-#ifdef REND2_SP
-void RB_CalcDeformVertexes(deformStage_t* ds)
-#else // !REND2_SP
 static void RB_CalcDeformVertexes(const deformStage_t* ds)
-#endif // REND2_SP
 {
 	int i = 0;
 	vec3_t	offset;
 	float	scale = 0.0f;
-#ifdef REND2_SP
-	float* xyz = (float*)tess.xyz;
-	uint32_t* normal = (uint32_t*)tess.normal;
-	float* table = nullptr;
-#else // !REND2_SP
 	auto* xyz = reinterpret_cast<float*>(tess.xyz);
 	auto* normal = reinterpret_cast<float*>(tess.normal);
-#endif // REND2_SP
 
 	if (ds->deformationWave.frequency == 0)
 	{
 		scale = EvalWaveForm(&ds->deformationWave);
 
-#ifdef REND2_SP
-		for (i = 0; i < tess.numVertexes; i++, xyz += 4, normal++)
-#else // !REND2_SP
 		for (i = 0; i < tess.numVertexes; i++, xyz += 4, normal += 4)
-#endif // REND2_SP
 		{
-#ifdef REND2_SP
-			R_VboUnpackNormal(offset, *normal);
-#else // !REND2_SP
 			VectorScale(normal, scale, offset);
-#endif // REND2_SP
 
-#ifdef REND2_SP
-			xyz[0] += offset[0] * scale;
-			xyz[1] += offset[1] * scale;
-			xyz[2] += offset[2] * scale;
-#else // !REND2_SP
 			xyz[0] += offset[0];
 			xyz[1] += offset[1];
 			xyz[2] += offset[2];
-#endif // REND2_SP
 		}
 	}
 	else
 	{
-#ifdef REND2_SP
-		table = TableForFunc(ds->deformationWave.func);
-#else // !REND2_SP
 		const float* table = TableForFunc(ds->deformationWave.func);
-#endif // REND2_SP
 
-#ifdef REND2_SP
-		for (i = 0; i < tess.numVertexes; i++, xyz += 4, normal++)
-#else // !REND2_SP
 		for (i = 0; i < tess.numVertexes; i++, xyz += 4, normal += 4)
-#endif // REND2_SP
 		{
-#ifdef REND2_SP
-			float off = (xyz[0] + xyz[1] + xyz[2]) * ds->deformationSpread;
-#else // !REND2_SP
 			const float off = (xyz[0] + xyz[1] + xyz[2]) * ds->deformationSpread;
-#endif // REND2_SP
 
 			scale = WAVEVALUE(table, ds->deformationWave.base,
 				ds->deformationWave.amplitude,
 				ds->deformationWave.phase + off,
 				ds->deformationWave.frequency);
 
-#ifdef REND2_SP
-			R_VboUnpackNormal(offset, *normal);
-#else // !REND2_SP
 			VectorScale(normal, scale, offset);
-#endif // REND2_SP
 
-#ifdef REND2_SP
-			xyz[0] += offset[0] * scale;
-			xyz[1] += offset[1] * scale;
-			xyz[2] += offset[2] * scale;
-#else // !REND2_SP
 			xyz[0] += offset[0];
 			xyz[1] += offset[1];
 			xyz[2] += offset[2];
-#endif // REND2_SP
 		}
 	}
 }
@@ -222,12 +168,8 @@ RB_CalcDeformNormals
 Wiggle the normals for wavy environment mapping
 =========================
 */
-#ifdef REND2_SP
-void RB_CalcDeformNormals(deformStage_t* ds) {
-#else // !REND2_SP
-static void RB_CalcDeformNormals(const deformStage_t * ds)
+static void RB_CalcDeformNormals(const deformStage_t* ds)
 {
-#endif // REND2_SP
 	int i = 0;
 	float	scale = 0.0f;
 	float* xyz = (float*)tess.xyz;
@@ -265,12 +207,8 @@ RB_CalcBulgeVertexes
 
 ========================
 */
-#ifdef REND2_SP
-void RB_CalcBulgeVertexes(deformStage_t * ds) {
-#else // !REND2_SP
-static void RB_CalcBulgeVertexes(const deformStage_t * ds)
+static void RB_CalcBulgeVertexes(const deformStage_t* ds)
 {
-#endif // REND2_SP
 	int i = 0;
 	const float* st = (const float*)tess.texCoords[0];
 	float* xyz = (float*)tess.xyz;
@@ -303,22 +241,7 @@ RB_CalcMoveVertexes
 A deformation that can move an entire surface along a wave path
 ======================
 */
-#ifdef REND2_SP
-void RB_CalcMoveVertexes(deformStage_t * ds) {
-	int			i = 0;
-	float* xyz = nullptr;
-	float* table = nullptr;
-	float		scale = 0.0f;
-	vec3_t		offset;
-
-	table = TableForFunc(ds->deformationWave.func);
-
-	scale = WAVEVALUE(table, ds->deformationWave.base,
-		ds->deformationWave.amplitude,
-		ds->deformationWave.phase,
-		ds->deformationWave.frequency);
-#else // !REND2_SP
-static void RB_CalcMoveVertexes(const deformStage_t * ds)
+static void RB_CalcMoveVertexes(const deformStage_t* ds)
 {
 	vec3_t		offset;
 
@@ -328,20 +251,14 @@ static void RB_CalcMoveVertexes(const deformStage_t * ds)
 		ds->deformationWave.amplitude,
 		ds->deformationWave.phase,
 		ds->deformationWave.frequency);
-#endif // REND2_SP
 
 	VectorScale(ds->moveVector, scale, offset);
 
-#ifdef REND2_SP
-	xyz = (float*)tess.xyz;
-	for (i = 0; i < tess.numVertexes; i++, xyz += 4) {
-#else // !REND2_SP
 	auto* xyz = reinterpret_cast<float*>(tess.xyz);
 	for (int i = 0; i < tess.numVertexes; i++, xyz += 4) {
-#endif // REND2_SP
 		VectorAdd(xyz, offset, xyz);
 	}
-	}
+}
 
 /*
 =============
@@ -350,25 +267,13 @@ DeformText
 Change a polygon into a bunch of text polygons
 =============
 */
-#ifdef REND2_SP
-void DeformText(const char* text) {
-#else // !REND2_SP
 static void DeformText(const char* text)
 {
-#endif // REND2_SP
 	int		i = 0;
-#ifdef REND2_SP
-	vec3_t	origin, width, height;
-#else // !REND2_SP
 	vec3_t	origin, width, height{};
-#endif // REND2_SP
 	int		len = 0;
 	int		ch = 0;
-#ifdef REND2_SP
-	float	color[4];
-#else // !REND2_SP
 	float	color[4]{};
-#endif // REND2_SP
 	float	bottom = 0.0f, top = 0.0f;
 	vec3_t	mid;
 	vec3_t fNormal;
@@ -382,13 +287,8 @@ static void DeformText(const char* text)
 
 	// find the midpoint of the box
 	VectorClear(mid);
-#ifdef REND2_SP
-	bottom = 999999;
-	top = -999999;
-#else // !REND2_SP
 	bottom = WORLD_SIZE;
 	top = -WORLD_SIZE;
-#endif // REND2_SP
 	for (i = 0; i < 4; i++) {
 		VectorAdd(tess.xyz[i], mid, mid);
 		if (tess.xyz[i][2] < bottom) {
@@ -459,32 +359,21 @@ Assuming all the triangles for this shader are independant
 quads, rebuild them as forward facing sprites
 =====================
 */
-static void AutospriteDeform(void) {
+static void AutospriteDeform(void)
+{
 	int		i = 0;
 	int		oldVerts = 0;
 	float* xyz = nullptr;
-#ifdef REND2_SP
-	vec3_t	mid, delta;
-#else // !REND2_SP
 	vec3_t	mid{}, delta;
-#endif // REND2_SP
 	float	radius = 0.0f;
 	vec3_t	left, up;
 	vec3_t	leftDir, upDir;
 
 	if (tess.numVertexes & 3) {
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "Autosprite shader %s had odd vertex count\n", tess.shader->name);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "Autosprite shader %s had odd vertex count\n", tess.shader->name);
-#endif // REND2_SP
 	}
 	if (tess.numIndexes != (tess.numVertexes >> 2) * 6) {
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "Autosprite shader %s had odd index count\n", tess.shader->name);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "Autosprite shader %s had odd index count\n", tess.shader->name);
-#endif // REND2_SP
 	}
 
 	oldVerts = tess.numVertexes;
@@ -547,25 +436,18 @@ int edgeVerts[6][2] = {
 	{ 2, 3 }
 };
 
-static void Autosprite2Deform(void) {
+static void Autosprite2Deform(void)
+{
 	int		i = 0, j = 0, k = 0;
 	int		indexes = 0;
 	float* xyz = nullptr;
 	vec3_t	forward;
 
 	if (tess.numVertexes & 3) {
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "Autosprite2 shader %s had odd vertex count\n", tess.shader->name);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "Autosprite2 shader %s had odd vertex count\n", tess.shader->name);
-#endif // REND2_SP
 	}
 	if (tess.numIndexes != (tess.numVertexes >> 2) * 6) {
-#ifdef REND2_SP
 		ri.Printf(PRINT_WARNING, "Autosprite2 shader %s had odd index count\n", tess.shader->name);
-#else // !REND2_SP
-		ri->Printf(PRINT_WARNING, "Autosprite2 shader %s had odd index count\n", tess.shader->name);
-#endif // REND2_SP
 	}
 
 	VectorCopy(backEnd.viewParms.ori.axis[0], forward);
@@ -574,15 +456,9 @@ static void Autosprite2Deform(void) {
 	// we could precalculate a lot of it is an issue, but it would mess up
 	// the shader abstraction
 	for (i = 0, indexes = 0; i < tess.numVertexes; i += 4, indexes += 6) {
-#ifdef REND2_SP
-		float	lengths[2];
-		int		nums[2];
-		vec3_t	mid[2];
-#else // !REND2_SP
 		float	lengths[2]{};
 		int		nums[2]{};
 		vec3_t	mid[2]{};
-#endif // REND2_SP
 		vec3_t	major, minor;
 		float* v1 = nullptr, * v2 = nullptr;
 
@@ -667,7 +543,8 @@ RB_DeformTessGeometry
 
 =====================
 */
-void RB_DeformTessGeometry(void) {
+void RB_DeformTessGeometry(void)
+{
 	int		i = 0;
 	deformStage_t* ds = nullptr;
 
@@ -677,7 +554,8 @@ void RB_DeformTessGeometry(void) {
 		return;
 	}
 
-	for (i = 0; i < tess.shader->numDeforms; i++) {
+	for (i = 0; i < tess.shader->numDeforms; i++)
+	{
 		ds = &tess.shader->deforms[i];
 
 		switch (ds->deformation) {
@@ -729,7 +607,7 @@ COLORS
 /*
 ** RB_CalcWaveColorSingle
 */
-float RB_CalcWaveColorSingle(const waveForm_t * wf)
+float RB_CalcWaveColorSingle(const waveForm_t* wf)
 {
 	float glow = 0.0f;
 
@@ -753,7 +631,7 @@ float RB_CalcWaveColorSingle(const waveForm_t * wf)
 /*
 ** RB_CalcWaveAlphaSingle
 */
-float RB_CalcWaveAlphaSingle(const waveForm_t * wf)
+float RB_CalcWaveAlphaSingle(const waveForm_t* wf)
 {
 	return EvalWaveFormClamped(wf);
 }
@@ -761,40 +639,23 @@ float RB_CalcWaveAlphaSingle(const waveForm_t * wf)
 /*
 ** RB_CalcModulateColorsByFog
 */
-#ifdef REND2_SP
-void RB_CalcModulateColorsByFog(unsigned char* colors)
-#else // !REND2_SP
 void RB_CalcModulateColorsByFog(unsigned char* dst_colors)
-#endif // REND2_SP
 {
-#ifdef REND2_SP
-	int		i = 0;
-	static float	texCoords[SHADER_MAX_VERTEXES][2];
-#else // !REND2_SP
 	static float	texCoords[SHADER_MAX_VERTEXES][2]{};
-#endif // REND2_SP
 
 	// calculate texcoords so we can derive density
 	// this is not wasted, because it would only have
 	// been previously called if the surface was opaque
 	RB_CalcFogTexCoords(texCoords[0]);
 
-#ifdef REND2_SP
-	for (i = 0; i < tess.numVertexes; i++, colors += 4) {
-		float f = 1.0 - R_FogFactor(texCoords[i][0], texCoords[i][1]);
-		colors[0] *= f;
-		colors[1] *= f;
-		colors[2] *= f;
-#else // !REND2_SP
 	for (int i = 0; i < tess.numVertexes; i++, dst_colors += 4)
 	{
 		const float f = 1.0 - R_FogFactor(texCoords[i][0], texCoords[i][1]);
 		dst_colors[0] *= f;
 		dst_colors[1] *= f;
 		dst_colors[2] *= f;
-#endif // REND2_SP
 	}
-	}
+}
 
 /*
 ====================================================================
@@ -821,11 +682,7 @@ void RB_CalcFogTexCoords(float* st) {
 	qboolean	eyeOutside;
 	fog_t* fog = nullptr;
 	vec3_t		local;
-#ifdef REND2_SP
-	vec4_t		fogDistanceVector, fogDepthVector = { 0, 0, 0, 0 };
-#else // !REND2_SP
 	vec4_t		fogDistanceVector{}, fogDepthVector = { 0, 0, 0, 0 };
-#endif // REND2_SP
 
 	fog = tr.world->fogs + tess.fogNum;
 
@@ -903,7 +760,7 @@ void RB_CalcFogTexCoords(float* st) {
 /*
 ** RB_CalcTurbulentFactors
 */
-void RB_CalcTurbulentFactors(const waveForm_t * wf, float* amplitude, float* now)
+void RB_CalcTurbulentFactors(const waveForm_t* wf, float* amplitude, float* now)
 {
 	*now = wf->phase + tess.shaderTime * wf->frequency;
 	*amplitude = wf->amplitude;
@@ -941,7 +798,7 @@ void RB_CalcScrollTexMatrix(const float scrollSpeed[2], float* matrix)
 /*
 ** RB_CalcTransformTexMatrix
 */
-void RB_CalcTransformTexMatrix(const texModInfo_t * tmi, float* matrix)
+void RB_CalcTransformTexMatrix(const texModInfo_t* tmi, float* matrix)
 {
 	matrix[0] = tmi->matrix[0][0]; matrix[2] = tmi->matrix[1][0]; matrix[4] = tmi->translate[0];
 	matrix[1] = tmi->matrix[0][1]; matrix[3] = tmi->matrix[1][1]; matrix[5] = tmi->translate[1];

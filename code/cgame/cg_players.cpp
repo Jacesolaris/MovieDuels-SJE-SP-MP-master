@@ -5279,6 +5279,9 @@ extern markPoly_t* CG_AllocMark();
 // Lightning wall mark (DH 2026-11-02): like a saber burn, a scorch mark plus a glow pass that starts bright orange and
 // darkens over ~1.5 s (its start time is moved back 8.5 s into the 10 s mark life, as the saber does), then the scorch
 // fades out after 10 s.
+// (Jace 2026-11-04) the marks use JKG's burn line images: a scorched streak (gfx/burnmarks/lightningburn, 1 in 3
+// the ash version lightningburn_ash) with its ember glow (lightningburn_glow) cooling over ~1.5 s; on bodies JKG's
+// flickering burn line (lightningburn_body). shaders/zz_lightningburn.shader; falls back to the old marks.
 static void CG_LightningWallMark(const vec3_t origin, const vec3_t dir, const float radius)
 {
 	enum { LM_MAX_FRAGMENTS = 32, LM_MAX_POINTS = 128 };
@@ -5320,9 +5323,12 @@ static void CG_LightningWallMark(const vec3_t origin, const vec3_t dir, const fl
 	}
 
 	// the saber's glow colour, one colour for the whole mark
-	glow[0] = static_cast<byte>(215 + Q_flrand(0.0f, 1.0f) * 40.0f);
-	glow[1] = static_cast<byte>(96 + Q_flrand(0.0f, 1.0f) * 32.0f);
-	glow[2] = glow[3] = static_cast<byte>(Q_flrand(0.0f, 1.0f) * 15.0f);
+	// the ember glow (burnline_glow is orange already): a warm white, so the embers keep their own colour
+	glow[0] = 255;
+	glow[1] = static_cast<byte>(215 + Q_flrand(0.0f, 1.0f) * 40.0f);
+	glow[2] = glow[3] = static_cast<byte>(170 + Q_flrand(0.0f, 1.0f) * 50.0f);
+	// the scorched streak (JKG burnline) or, now and then, its ash version (burnline_overlay)
+	const qhandle_t scorch_shader = Q_irand(0, 2) ? cgs.media.lightningBurnShader : cgs.media.lightningBurnAshShader;
 
 	for (i = 0; i < num_frags; i++)
 	{
@@ -5353,7 +5359,7 @@ static void CG_LightningWallMark(const vec3_t origin, const vec3_t dir, const fl
 		mark = CG_AllocMark();
 		mark->time = cg.time;
 		mark->alphaFade = qtrue;
-		mark->markShader = cgs.media.rivetMarkShader;
+		mark->markShader = scorch_shader ? scorch_shader : cgs.media.rivetMarkShader;
 		mark->poly.numVerts = mf->numPoints;
 		mark->color[0] = mark->color[1] = mark->color[2] = mark->color[3] = 255;
 		memcpy(mark->verts, verts, mf->numPoints * sizeof verts[0]);
@@ -5362,7 +5368,7 @@ static void CG_LightningWallMark(const vec3_t origin, const vec3_t dir, const fl
 		mark = CG_AllocMark();
 		mark->time = cg.time - 8500;
 		mark->alphaFade = qfalse;
-		mark->markShader = cgs.media.bdecal_saberglow;
+		mark->markShader = cgs.media.lightningBurnGlowShader ? cgs.media.lightningBurnGlowShader : cgs.media.bdecal_saberglow;
 		mark->poly.numVerts = mf->numPoints;
 		mark->color[0] = glow[0];
 		mark->color[1] = glow[1];
@@ -5424,23 +5430,24 @@ static void CG_LightningScorch(const centity_t* cent, const int force_level, con
 			|| cg_entities[tr.entityNum].currentState.eType == ET_TERRAIN))
 	{
 		// architecture only, like the saber's wall marks
-		CG_LightningWallMark(tr.endpos, tr.plane.normal, Q_flrand(2.5f, 4.5f));
+		CG_LightningWallMark(tr.endpos, tr.plane.normal, Q_flrand(4.0f, 7.0f)); // the streak needs a little more room than the old scorch
 	}
 	else if (tr.entityNum < ENTITYNUM_WORLD)
 	{
 		gentity_t* hit = cg_entities[tr.entityNum].gent;
 		if (hit && hit->client && hit->ghoul2.size() && cgs.media.bdecal_burnmark1)
 		{
+			const qhandle_t body_mark = cgs.media.lightningBurnBodyShader ? cgs.media.lightningBurnBodyShader : cgs.media.bdecal_burnmark1;
 			const float size = Q_flrand(2.5f, 4.0f);
 			const int life = Q_irand(6000, 10000);
 			if (cg_com_rend2.integer == 0)
 			{
-				CG_AddGhoul2Mark(cgs.media.bdecal_burnmark1, size, tr.endpos, fwd, tr.entityNum, hit->client->ps.origin,
+				CG_AddGhoul2Mark(body_mark, size, tr.endpos, fwd, tr.entityNum, hit->client->ps.origin,
 					hit->client->renderInfo.legsYaw, hit->ghoul2, hit->s.modelScale, life, 0, nullptr);
 			}
 			else
 			{
-				CG_AddGhoul2Mark_rend2(cgs.media.bdecal_burnmark1, size, tr.endpos, fwd, tr.entityNum, hit->client->ps.origin,
+				CG_AddGhoul2Mark_rend2(body_mark, size, tr.endpos, fwd, tr.entityNum, hit->client->ps.origin,
 					hit->client->renderInfo.legsYaw, hit->ghoul2, hit->s.modelScale, life, 0, nullptr);
 			}
 		}

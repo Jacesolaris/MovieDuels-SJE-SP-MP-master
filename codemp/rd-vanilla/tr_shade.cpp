@@ -236,8 +236,8 @@ void R_BindAnimatedImage(const textureBundle_t* bundle)
 			}
 			return;
 		}
-		ri->CIN_RunCinematic(bundle->videoMapHandle);
-		ri->CIN_UploadCinematic(bundle->videoMapHandle);
+		ri.CIN_RunCinematic(bundle->videoMapHandle);
+		ri.CIN_UploadCinematic(bundle->videoMapHandle);
 		return;
 	}
 

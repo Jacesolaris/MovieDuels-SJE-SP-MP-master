@@ -16696,6 +16696,9 @@ extern markPoly_t* CG_AllocMark(void);
 // Lightning wall mark (DH 2026-11-02): like a saber burn, a scorch mark plus a glow pass that starts bright orange and
 // darkens over ~1.5 s (its start time is moved back 8.5 s into the 10 s mark life, as the saber does), then the scorch
 // fades out after 10 s.
+// (Jace 2026-11-04) the marks use JKG's burn line images: a scorched streak (gfx/burnmarks/lightningburn, 1 in 3
+// the ash version lightningburn_ash) with its ember glow (lightningburn_glow) cooling over ~1.5 s; on bodies JKG's
+// flickering burn line (lightningburn_body). shaders/zz_lightningburn.shader; falls back to the old marks.
 static void CG_LightningWallMark(const vec3_t origin, const vec3_t dir, const float radius)
 {
 	enum { LM_MAX_FRAGMENTS = 32, LM_MAX_POINTS = 128 };
@@ -16707,6 +16710,7 @@ static void CG_LightningWallMark(const vec3_t origin, const vec3_t dir, const fl
 	int num_frags, i, j, k;
 	const float tex_scale = 0.5f / radius;
 	byte glow[4];
+	qhandle_t scorch_shader;
 
 	if (!cg_marks.integer || radius <= 0.0f)
 	{
@@ -16737,9 +16741,12 @@ static void CG_LightningWallMark(const vec3_t origin, const vec3_t dir, const fl
 	}
 
 	// the saber's glow colour, one colour for the whole mark
-	glow[0] = (byte)(215 + Q_flrand(0.0f, 1.0f) * 40.0f);
-	glow[1] = (byte)(96 + Q_flrand(0.0f, 1.0f) * 32.0f);
-	glow[2] = glow[3] = (byte)(Q_flrand(0.0f, 1.0f) * 15.0f);
+	// the ember glow (burnline_glow is orange already): a warm white, so the embers keep their own colour
+	glow[0] = 255;
+	glow[1] = (byte)(215 + Q_flrand(0.0f, 1.0f) * 40.0f);
+	glow[2] = glow[3] = (byte)(170 + Q_flrand(0.0f, 1.0f) * 50.0f);
+	// the scorched streak (JKG burnline) or, now and then, its ash version (burnline_overlay)
+	scorch_shader = Q_irand(0, 2) ? cgs.media.lightningBurnShader : cgs.media.lightningBurnAshShader;
 
 	for (i = 0; i < num_frags; i++)
 	{
@@ -16770,7 +16777,7 @@ static void CG_LightningWallMark(const vec3_t origin, const vec3_t dir, const fl
 		mark = CG_AllocMark();
 		mark->time = cg.time;
 		mark->alphaFade = qtrue;
-		mark->markShader = cgs.media.rivetMarkShader;
+		mark->markShader = scorch_shader ? scorch_shader : cgs.media.rivetMarkShader;
 		mark->poly.numVerts = mf->numPoints;
 		mark->color[0] = mark->color[1] = mark->color[2] = mark->color[3] = 255;
 		memcpy(mark->verts, verts, mf->numPoints * sizeof verts[0]);
@@ -16779,7 +16786,7 @@ static void CG_LightningWallMark(const vec3_t origin, const vec3_t dir, const fl
 		mark = CG_AllocMark();
 		mark->time = cg.time - 8500;
 		mark->alphaFade = qfalse;
-		mark->markShader = cgs.media.mSaberDamageGlow;
+		mark->markShader = cgs.media.lightningBurnGlowShader ? cgs.media.lightningBurnGlowShader : cgs.media.mSaberDamageGlow;
 		mark->poly.numVerts = mf->numPoints;
 		mark->color[0] = glow[0];
 		mark->color[1] = glow[1];
@@ -16840,7 +16847,7 @@ static void CG_LightningScorch(const centity_t* cent, const vec3_t hand, const i
 	}
 	if (tr.entityNum == ENTITYNUM_WORLD)
 	{
-		CG_LightningWallMark(tr.endpos, tr.plane.normal, flrand(2.5f, 4.5f));
+		CG_LightningWallMark(tr.endpos, tr.plane.normal, flrand(4.0f, 7.0f)); // the streak needs a little more room than the old scorch
 	}
 	else if (tr.entityNum < ENTITYNUM_WORLD)
 	{
@@ -16852,7 +16859,7 @@ static void CG_LightningScorch(const centity_t* cent, const vec3_t hand, const i
 		{
 			vec3_t past;
 			VectorMA(tr.endpos, 4.0f, fwd, past);
-			CG_AddGhoul2Mark(cgs.media.bdecal_burn1, flrand(2.5f, 4.0f), tr.endpos, past, tr.entityNum,
+			CG_AddGhoul2Mark(cgs.media.lightningBurnBodyShader ? cgs.media.lightningBurnBodyShader : cgs.media.bdecal_burn1, flrand(2.5f, 4.0f), tr.endpos, past, tr.entityNum,
 				hit->lerpOrigin, hit->lerpAngles[YAW], hit->ghoul2, hit->modelScale, Q_irand(6000, 10000));
 		}
 	}

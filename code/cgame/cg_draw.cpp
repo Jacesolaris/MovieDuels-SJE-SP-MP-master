@@ -9360,7 +9360,7 @@ static void CG_UseIcon()
 		float distSq = VectorLengthSquared(diff);
 
 		// Only show hint if within 256 units
-		if (distSq < (256.0f * 256.0f))
+		if (cg_usingInFrontOf || distSq < (256.0f * 256.0f))
 		{
 			if (cg_SerenityJediEngineHudMode.integer == 4)
 			{

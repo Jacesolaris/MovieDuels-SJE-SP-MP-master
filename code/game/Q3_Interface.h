@@ -445,6 +445,8 @@ using setType_t = enum //# setType_e
 	//## %t="BOOL_TYPES" # NPC will not be dismemberable if you set this to false (default is true)
 	SET_NO_ACROBATICS,
 	//## %t="BOOL_TYPES" # Jedi won't jump, roll or cartwheel
+	SET_AUTOBLOCKING_OFF,
+	//## %t="BOOL_TYPES" # true: NPC doesn't autoblock, parry or dodge (for cinematics); false: normal blocking again
 	SET_USE_SUBTITLES,
 	//## %t="BOOL_TYPES" # When true NPC will always display subtitle regardless of subtitle setting
 	SET_CLEAN_DAMAGING_ENTS,
@@ -658,6 +660,11 @@ using setType_t = enum //# setType_e
 	SET_MORELIGHT_PLAYER,
 
 	SET_CONSOLE_COMMAND,
+
+	SET_PLAYER_CLEAR_ALL,
+	SET_PLAYER_CLEAR_INVENTORY,
+	SET_PLAYER_CLEAR_WEAPONS,
+	SET_PLAYER_CLEAR_FORCE,
 
 	SET_UNDYINGPLAYERVICTORYSCRIPT,
 	//## %s="NULL" !!"W:\game\base\scripts\!!#*.txt" # Script to run when killed someone

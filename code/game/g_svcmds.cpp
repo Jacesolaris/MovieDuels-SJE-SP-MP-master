@@ -682,6 +682,18 @@ static void Svcmd_SaberAttackCycle_f()
 		}
 	}
 
+	// a known style his saber forbids (e.g. Desann with kyleplayermfs after setforceall) stopped the cycle, and
+	// WP_UseFirstValidSaberStyle then sent him back to Fast, so the styles after it (Tavion, Blaster) were never
+	// reached: the cycle skips styles the saber can't use
+	for (int styleNum = SS_NONE + 1; styleNum < SS_NUM_SABER_STYLES; styleNum++)
+	{
+		if (allowedStyles & 1 << styleNum
+			&& !WP_SaberStyleValidForSaber(self, styleNum))
+		{
+			allowedStyles &= ~(1 << styleNum);
+		}
+	}
+
 	if (!allowedStyles)
 	{
 		return;

@@ -1,6 +1,6 @@
 #include "resource.h"
 
-// the SP icon in Mace Windu purple, so the launcher stands out (the team's launcher uses the same one)
+// the team's launcher icon (MovieDuels-SJE-Launcher-master Assets/MovieDuels-Launcher.ico, 2026-11-07: 16-256 px)
 IDI_LAUNCHER                ICON    "art/MovieDuels-Launcher.ico"
 
 // the team's launcher art (MovieDuels-SJE-Launcher-master/MovieDuels-Launcher/Assets), renamed without spaces
@@ -10,9 +10,9 @@ IDR_IMG_SINGLEPLAYER_GLOW   RCDATA  "art/singleplayer_glow.png"
 IDR_IMG_MULTIPLAYER_GLOW    RCDATA  "art/multiplayer_glow.png"
 IDR_IMG_PLAY_PANEL          RCDATA  "art/play_panel.png"
 IDR_IMG_LOGO_GLOW           RCDATA  "art/logo_glow.png"
-IDR_IMG_INFO_PANEL          RCDATA  "art/info_panel.png"
+IDR_IMG_DOWNLOAD            RCDATA  "art/download_button.png"
+IDR_IMG_DOWNLOAD_READY      RCDATA  "art/download_ready_button.png"
 
-IDR_ICON_SETTINGS           RCDATA  "art/icon_settings.png"
 IDR_ICON_MODDB              RCDATA  "art/icon_moddb.png"
 IDR_ICON_DISCORD            RCDATA  "art/icon_discord.png"
 IDR_ICON_YOUTUBE            RCDATA  "art/icon_youtube.png"
@@ -23,3 +23,10 @@ IDR_SND_CLICK               RCDATA  "sound/button1.wav"
 IDR_SND_HOVER               RCDATA  "sound/menuroam.wav"
 IDR_SND_BACK                RCDATA  "sound/esc.wav"
 IDR_MUSIC                   RCDATA  "sound/Music.mp3"
+
+IDR_FONT_LABEL              RCDATA  "fonts/albertus-bold.ttf"
+
+IDR_TEXT_ABOUT              RCDATA  "texts/About.txt"
+IDR_TEXT_FAQ                RCDATA  "texts/FAQ.txt"
+IDR_TEXT_TEAM               RCDATA  "texts/Team.txt"
+IDR_TEXT_GAMEFILES          RCDATA  "texts/GameFiles.txt"

@@ -632,6 +632,7 @@ stringID_table_t setTable[] =
 	ENUM2STRING(SET_NO_FALLTODEATH),
 	ENUM2STRING(SET_DISMEMBERABLE),
 	ENUM2STRING(SET_NO_ACROBATICS),
+	ENUM2STRING(SET_AUTOBLOCKING_OFF),
 	ENUM2STRING(SET_MUSIC_STATE),
 	ENUM2STRING(SET_USE_SUBTITLES),
 	ENUM2STRING(SET_CLEAN_DAMAGING_ENTS),
@@ -698,6 +699,11 @@ stringID_table_t setTable[] =
 	ENUM2STRING(SET_MORELIGHT_PLAYER),
 
 	ENUM2STRING(SET_CONSOLE_COMMAND),
+
+	ENUM2STRING(SET_PLAYER_CLEAR_ALL),
+	ENUM2STRING(SET_PLAYER_CLEAR_INVENTORY),
+	ENUM2STRING(SET_PLAYER_CLEAR_WEAPONS),
+	ENUM2STRING(SET_PLAYER_CLEAR_FORCE),
 
 	ENUM2STRING(SET_UNDYINGPLAYERVICTORYSCRIPT),
 
@@ -5650,6 +5656,34 @@ static void Q3_SetNoAcrobatics(const int entID, const qboolean add)
 
 /*
 ============
+Q3_SetAutoBlockingOff
+
+true: the NPC doesn't autoblock, parry or dodge (for cinematics, see G_NPCCinematicNoBlock); false: normal again
+============
+*/
+static void Q3_SetAutoBlockingOff(const int entID, const qboolean add)
+{
+	const gentity_t* ent = &g_entities[entID];
+
+	if (!ent->NPC)
+	{
+		Quake3Game()->DebugPrint(IGameInterface::WL_ERROR, "Q3_SetAutoBlockingOff: '%s' is not an NPC!\n",
+			ent->targetname);
+		return;
+	}
+
+	if (add)
+	{
+		ent->NPC->aiFlags |= NPCAI_NO_AUTOBLOCK;
+	}
+	else
+	{
+		ent->NPC->aiFlags &= ~NPCAI_NO_AUTOBLOCK;
+	}
+}
+
+/*
+============
 Q3_SetUseSubtitles
 
 ?
@@ -7399,6 +7433,46 @@ static void Q3_setVaderBreathdamaged(const int entID, const qboolean usable)
 	else
 	{
 		gi.cvar_set("cg_setVaderBreathdamaged", "0");
+	}
+}
+
+static void Q3_ClearInventory()
+{
+	gentity_t* ent = &g_entities[0];
+
+	if (ent && ent->client)
+	{
+		for (int& i : ent->client->ps.inventory)
+		{
+			i = 0;
+		}
+	}
+}
+
+static void Q3_ClearWeapons()
+{
+	gentity_t* ent = &g_entities[0];
+
+	if (ent && ent->client)
+	{
+		for (char& weapon : ent->client->ps.weapons)
+		{
+			weapon = 0;
+		}
+
+		ent->client->ps.weapon = WP_NONE;
+	}
+}
+
+static void Q3_ClearForce()
+{
+	gentity_t* ent = &g_entities[0];
+
+	if (ent && ent->client)
+	{
+		memset(ent->client->ps.forcePowerLevel, 0, sizeof(ent->client->ps.forcePowerLevel));
+		ent->client->ps.forcePowersKnown = 0;
+		ent->client->ps.saberStylesKnown = 0;
 	}
 }
 
@@ -9441,6 +9515,13 @@ void CQuake3GameInterface::Set(int taskID, int entID, const char* type_name, con
 			Q3_SetNoAcrobatics(entID, qfalse);
 		break;
 
+	case SET_AUTOBLOCKING_OFF:
+		if (!Q_stricmp("true", data))
+			Q3_SetAutoBlockingOff(entID, qtrue);
+		else
+			Q3_SetAutoBlockingOff(entID, qfalse);
+		break;
+
 	case SET_USE_SUBTITLES:
 		if (!Q_stricmp("true", data))
 			Q3_SetUseSubtitles(entID, qtrue);
@@ -10472,6 +10553,24 @@ void CQuake3GameInterface::Set(int taskID, int entID, const char* type_name, con
 
 	case SET_CONSOLE_COMMAND:
 		gi.SendConsoleCommand(va("cl_noprint 1; helpusobi 1; %s ; cl_noprint 0\n", const_cast<char*>(data)));
+		break;
+
+	case SET_PLAYER_CLEAR_ALL:
+		Q3_ClearInventory();
+		Q3_ClearWeapons();
+		Q3_ClearForce();
+		break;
+
+	case SET_PLAYER_CLEAR_INVENTORY:
+		Q3_ClearInventory();
+		break;
+
+	case SET_PLAYER_CLEAR_WEAPONS:
+		Q3_ClearWeapons();
+		break;
+
+	case SET_PLAYER_CLEAR_FORCE:
+		Q3_ClearForce();
 		break;
 
 	case SET_FFAMODE:

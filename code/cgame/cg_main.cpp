@@ -874,6 +874,10 @@ void CG_UpdateCvars()
 			}
 		}
 	}
+	// cutscenes run with g_SerenityJediEngineMode 0 (the game side: g_active.cpp G_SetSJEModeScope); the string keeps
+	// the player's own setting, so it is back when the camera ends
+	cg_SerenityJediEngineMode.integer = in_camera ? 0 : atoi(cg_SerenityJediEngineMode.string);
+	cg_SerenityJediEngineMode.value = static_cast<float>(cg_SerenityJediEngineMode.integer);
 }
 
 int CG_CrosshairPlayer()
@@ -6516,7 +6520,8 @@ qboolean CG_MDWheel_BlocksButtons()
 static void CG_MDWheel_ToggleOnPerson(const int weapon)
 {
 	// grenades / mines / det packs are never drawn on the body (as the old wheel)
-	if (weapon <= WP_NONE || weapon >= 64 || weapon == WP_THERMAL || weapon == WP_TRIP_MINE || weapon == WP_DET_PACK)
+	if (weapon <= WP_NONE || weapon == WP_MELEE || weapon == WP_SABER || weapon >= 64 ||
+		weapon == WP_THERMAL || weapon == WP_TRIP_MINE || weapon == WP_DET_PACK)
 	{
 		return;
 	}
@@ -6883,7 +6888,6 @@ void CG_DrawMDWheel()
 	static constexpr vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
 	static constexpr vec4_t grey = { 0.7f, 0.7f, 0.7f, 0.9f };
 	static constexpr vec4_t greyed = { 0.5f, 0.5f, 0.5f, 0.85f };
-	static constexpr vec4_t red = { 1.0f, 0.4f, 0.4f, 1.0f };
 
 	if (!mdWheel.open || !cg.snap)
 	{
@@ -6932,10 +6936,7 @@ void CG_DrawMDWheel()
 			{
 				color[3] = 0.5f;
 			}
-			if (item < 64 && hidden & 1ull << item)
-			{
-				color[1] = color[2] = 0.4f;
-			}
+			// MD 2026-11-06: no red tint on a weapon whose holster is off (the Holster text says it)
 		}
 		else
 		{
@@ -6991,9 +6992,9 @@ void CG_DrawMDWheel()
 					CG_MDWheel_CenterText(my - 2.0f, 0.13f, grey,
 						va("Ammo: %d", cg.snap->ps.ammo[weaponData[item].ammoIndex]), ax);
 				}
-				if (item != WP_THERMAL && item != WP_TRIP_MINE && item != WP_DET_PACK && item < 64)
+				if (item != WP_MELEE && item != WP_SABER && item != WP_THERMAL && item != WP_TRIP_MINE && item != WP_DET_PACK && item < 64)
 				{
-					CG_MDWheel_CenterText(my + 20.0f, 0.13f, hidden & 1ull << item ? red : grey,
+					CG_MDWheel_CenterText(my + 20.0f, 0.13f, grey,
 						hidden & 1ull << item ? "Holster: Disabled" : "Holster: Enabled", ax);
 				}
 			}

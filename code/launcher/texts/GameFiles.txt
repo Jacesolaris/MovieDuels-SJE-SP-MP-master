@@ -1,0 +1,33 @@
+# The pk3 files every Movie Duels install has in its MD folder (SETTINGS > Check installation, and the warning on PLAY).
+# One per line, ".pk3" may be left out. Update the list for each release.
+
+MD_Assets.pk3
+MD_Assets2.pk3
+MD_Assets3.pk3
+MD_Hilts.pk3
+MD_Maps_Canonical.pk3
+MD_Maps_Ep1.pk3
+MD_Maps_Ep2.pk3
+MD_Maps_Ep3.pk3
+MD_Maps_Ep4.pk3
+MD_Maps_Ep5.pk3
+MD_Maps_Ep6.pk3
+MD_Maps_KOTOR.pk3
+MD_Maps_Legends.pk3
+MD_Maps_ST.pk3
+MD_Missions_Ep1.pk3
+MD_Missions_Ep2.pk3
+MD_Missions_Ep3.pk3
+MD_Missions_Ep4.pk3
+MD_Missions_Ep5.pk3
+MD_Missions_Ep6.pk3
+MD_Missions_Ep7.pk3
+MD_Missions_Ep8.pk3
+MD_Missions_Rebels.pk3
+MD_Missions_ROTE_Extras.pk3
+MD_Missions_TCW.pk3
+MD_Models_KOTOR.pk3
+MD_Models_Legends.pk3
+MD_Models_OT-ST.pk3
+MD_Models_PT.pk3
+MD_Weapons.pk3

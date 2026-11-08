@@ -1,0 +1,76 @@
+# The launcher's FAQ (About > FAQ). "## " starts a group, "Q: " a question, "A: " its answer.
+# More lines belong to the answer; a line starting with "- " is shown in a list. Lines starting with "# " are notes.
+
+## Movie Duels
+
+Q: Is “STAR WARS: Jedi Knight: Jedi Academy” required to play this mod?
+A: Yes, it’s essential. This is a modification for Jedi Knight: Jedi Academy and not a separate game. In order to play this mod, you need to install the game and upgrade the game version to the latest version (v1.1), via the game’s official patch. We also suggest checking the ReadMe, for the full installation instructions.
+
+Q: When will the mod reach its 100% conclusion?
+A: At this point, all we can say is... Only when it's done. Whilst our team is very skilled, we’re only a relatively small group of people, with personal lives and a limited amount of time. However, we are working effortlessly to bring you the best mod, possible.
+
+Q: When will the next version of the mod be released?
+A: Join our Discord to get the latest news and previews of new content.
+
+Q: Is this mod playable on Steam Deck, Mobile or Mac?
+A: Unfortunately, no. This mod is currently ONLY supporting Windows PCs currently. Mobile support is extremely unlikely as OpenJK does not have a mobile version, and we don't have anyone that can compile for Mac systems.
+
+Q: Why are all recent updates released in two parts?
+A: Since Update 4, the Mod has gotten rather large for a JKA mod, and due to download speeds being inconsistent (sometimes fast, other times slow), it's split into two parts so that people don't have to worry about a download error possibly happening mid-download and having to restart the process.
+
+Q: How do I skip cutscenes?
+A: You need to press your USE key binding, which by default is set to the R key.
+
+Q: Parts of my screen are cut off when I change the resolution of the game.
+A: Locate MovieDuels.x86 in your GameData folder, right click > Properties > Compatibility > Change High DPI setting > Check "Over-ride High DPI Scaling Behaviour" box > click "OK" and launch the mod again.
+
+Q: My screen is black, but I can hear the game running.
+A: From the Windows Start Icon, search "Graphics Settings" and click the results from System Settings.
+Click "Add Desktop App" and search for "MovieDuels-SP.x86_64" in the Jedi Academy GameData folder.
+Set the Movie Duels application to your preferred GPU.
+If that doesn't work, try deleting the "MovieDuels" folder in "/Documents/my games". This will reset all your settings to default.
+
+Q: How do I perform all of the "fancy" moves, I've seen in YouTube videos?
+A: It’s suggested that you play Jedi Academy and its campaign, before playing this mod. The base game will help you get to grips with all the necessary basics of combat and other controls.
+You can also enter the Datapad by pressing the “TAB” key. From there, you can view a list of all the available moves that can be performed in the mod.
+
+Q: How do I select a different character during the Mission/EXTRAS area?
+A: To do this, press ESC - Click on the “Character” field and you’ll enter the character selection screen menu. From there, you have a wide variety of characters and their alternative skins to choose from.
+
+Q: Why is the Petranaki Arena mission extremely laggy?
+A: To put it shortly, Jedi Academy's game engine was not built for large clusters of NPC fighting. We recommened disabling "Dynamic Glow" and avoiding the central area of the map to reduce lag. 
+
+Q: I can't play the game. It shows me the error message “Couldn't load default.cfg.”
+A: You’ve probably extracted/installed the files, into your “base” folder. This is the incorrect directory. The file has to be extracted into the “Gamedata” folder (or a GameData folder, if you have more than one). Also check the file path is correct and you don't have two GameData folders.
+
+Q: I'm getting an error message, stating "UI_ParseAnimFileSet: 4 == MAX_ANIM_FILES == 4".
+A: It's likely that you've ran Jedi Academy, through Steam. The mod has to be to run, via the "MovieDuels.x86.exe" file. When you run Jedi Academy through the Steam application, it only loads the "normal" Jedi Academy engine that has the base/vanilla game's code. So, each character model will only have a max. of 4 animations (humanoids). If you want to run your copy of the STAR WARS: Movie Duels mod through Steam, you need to go to "ADD A GAME" > "Add a Non-Steam Game..." in the Steam program window, locate the \Steam\steamapps\common\Jedi Academy\GameData folder and add the "MovieDuels.x86". Once added, you can rename the shortcut in your Steam library, if you wish.
+
+Q: How do I win saber locks?
+A: You need to spam the attack button and hold a direction key (WASD) to the winning side. Saber locks are affected by the game's difficulty, and powerful characters such as Luke and Vader are harder to beat.
+
+Q: What is Rend2?
+A: Rend2 is a new rendering engine developed by SomaZ that increases the utilisation of your graphics card for increased FPS.
+More importantly, it makes use of a variety of newer rendering techniques such as real-time dynamic shadows and lighting, normal mapping and specular mapping. Another big feature is physically based rendering: a relatively new feature in games that allows artists to create more realistic materials.
+Note:
+- Rend2 is still in development and may cause graphical issues on some maps and models.
+- Rend2 increases loading times.
+- Rend2 can be enabled in the settings menu.
+
+## The launcher
+
+Q: How do I get updates?
+A: The launcher tells you when a new version is out when the emblem glows red. Click it to see what's new, then get the update from ModDB or Nexus Mods.
+
+Q: Why does the launcher open when I start the game's exe?
+A: The game starts through the launcher, so your settings are always passed to it and it can check for updates.
+
+Q: Why is Multiplayer not available?
+A: Multiplayer is in development. We'll let you know when it's ready.
+
+Q: What does the glowing emblem mean?
+A: Red: a new version is out. Click it to see what's new and where to get it.
+Teal: the new version is installed and its files are checked.
+
+Q: Something looks broken. What can I do?
+A: Open Settings and choose Check installation. It compares your files with the current version and tells you which ones are damaged, missing or out of date. Ask in our Discord if you need help with anything else.

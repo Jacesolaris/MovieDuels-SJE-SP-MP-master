@@ -1,0 +1,14 @@
+# ABOUT > About. A paragraph per line, "- " lines are a list. The last paragraph is the small print at the bottom.
+
+Movie Duels is a remastered edition of Wector’s original 2009 mod, Movie Duels 2, for Star Wars Jedi Knight: Jedi Academy. Relive iconic moments from across the Star Wars saga in this full single-player total conversion, featuring new gameplay mechanics and a wide variety of characters and maps.
+
+- Play missions to recreate famous duels across the Star Wars universe.
+- New lightsaber combat with manual block, sprint, dash and much more.
+- Challenge yourself in the Arena and Challenge modes.
+- Huge collection of high-quality characters and maps.
+- Modern menus with customizable options such as camera, music and commands.
+- Custom animations for characters and cutscenes.
+- Expanded force powers and weapons, including repulse, stasis, dual pistols and more.
+- Jedi Academy and Jedi Outcast campaign support.
+
+THIS MODIFICATION IS NOT MADE, DISTRIBUTED, OR SUPPORTED BY ACTIVISION, RAVEN, OR LUCASARTS ENTERTAINMENT COMPANY LLC. ELEMENTS TM & © LUCASARTS ENTERTAINMENT COMPANY LLC AND/OR ITS LICENSORS.

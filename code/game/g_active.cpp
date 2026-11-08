@@ -125,6 +125,7 @@ extern qboolean PM_InOnGroundAnim(playerState_t* ps);
 extern qboolean PM_LockedAnim(int anim);
 extern qboolean WP_SabersCheckLock2(gentity_t* attacker, gentity_t* defender, sabersLockMode_t lock_mode);
 extern qboolean G_JediInNormalAI(const gentity_t* ent);
+qboolean G_NPCCinematicNoBlock(const gentity_t* ent);
 extern void WP_ForcePowerDrain(const gentity_t* self, forcePowers_t force_power, int override_amt);
 extern qboolean manual_saberblocking(const gentity_t* defender);
 extern qboolean manual_running_and_saberblocking(const gentity_t* defender);
@@ -10576,8 +10577,11 @@ static void ClientThink_real(gentity_t* ent, usercmd_t* ucmd)
 			return;
 		}
 
+		// cutscene / BS_CINEMATIC: no block stance and no NPC blocking (g_cinematicblocking), back when it ends
+		const qboolean cinematic_no_block = G_NPCCinematicNoBlock(ent);
+
 		// Unified block stance logic
-		if (NPC_Should_Block(ent) == qtrue)
+		if (!cinematic_no_block && NPC_Should_Block(ent) == qtrue)
 		{
 			// Activate stance flag if not already active
 			if ((client->ps.ManualBlockingFlags & (1 << MBF_NPCBLOCKSTANCE)) == 0)
@@ -10597,7 +10601,7 @@ static void ClientThink_real(gentity_t* ent, usercmd_t* ucmd)
 		}
 
 		// Saber blocking flag (unchanged logic, cleaned)
-		if (Manual_NPCSaberblocking(ent) == qtrue)
+		if (!cinematic_no_block && Manual_NPCSaberblocking(ent) == qtrue)
 		{
 			if ((client->ps.ManualBlockingFlags & (1 << MBF_NPCBLOCKING)) == 0)
 			{
@@ -11047,8 +11051,9 @@ static void ClientThink_real(gentity_t* ent, usercmd_t* ucmd)
 	}
 
 	//if we have the saber in hand, check for starting a block to reflect shots
-	if (ent->s.number < MAX_CLIENTS //player
+	if ((ent->s.number < MAX_CLIENTS //player
 		|| ent->NPC && G_JediInNormalAI(ent)) //NPC jedi not in a special AI mode
+		&& !G_NPCCinematicNoBlock(ent)) //no autoblock in a cutscene / BS_CINEMATIC (g_cinematicblocking)
 	{
 		if (g_SerenityJediEngineMode->integer && (ent->s.number < MAX_CLIENTS || G_ControlledByPlayer(ent)))
 		{
@@ -11594,6 +11599,111 @@ extern qboolean PM_GentCantJump(const gentity_t* gent);
 
 extern qboolean CG_MDWheel_BlocksButtons();
 
+// ----------------------------------------------------------------------------------------------------------------
+// Cutscenes and scripted events always run with g_SerenityJediEngineMode 0, whatever the player set (DH 2026-11-08).
+// The code reads the mode through the g_SerenityJediEngineMode pointer: while a camera cutscene runs, or while the
+// entity being run is in a scripted event, it points at a fixed "0" cvar; otherwise at the real cvar. The player's
+// own setting is never changed, so it is back as soon as the event ends.
+// Scripted event: an NPC in BS_CINEMATIC, a character with a script task running (navgoal, held anim, facing), or the
+// player locked by a script.
+// ----------------------------------------------------------------------------------------------------------------
+extern cvar_t* g_SerenityJediEngineMode;
+extern bool in_camera;
+extern qboolean player_locked;
+extern qboolean Q3_TaskIDPending(const gentity_t* ent, taskID_t taskType);
+
+static cvar_t* s_sjeModeReal = nullptr;
+static cvar_t s_sjeModeOff;
+
+void G_InitSJEModeScope()
+{
+	if (g_SerenityJediEngineMode != &s_sjeModeOff)
+	{
+		s_sjeModeReal = g_SerenityJediEngineMode;
+	}
+	if (s_sjeModeReal)
+	{
+		s_sjeModeOff = *s_sjeModeReal;
+		s_sjeModeOff.string = const_cast<char*>("0");
+		s_sjeModeOff.value = 0.0f;
+		s_sjeModeOff.integer = 0;
+	}
+}
+
+qboolean G_InScriptedEvent(const gentity_t* ent)
+{
+	if (!ent || !ent->client)
+	{
+		return qfalse;
+	}
+	if (ent->s.number == 0 && player_locked)
+	{
+		return qtrue;
+	}
+	if (ent->NPC && ent->NPC->behaviorState == BS_CINEMATIC)
+	{
+		return qtrue;
+	}
+	if (Q3_TaskIDPending(ent, TID_MOVE_NAV) || Q3_TaskIDPending(ent, TID_ANIM_BOTH)
+		|| Q3_TaskIDPending(ent, TID_ANIM_UPPER) || Q3_TaskIDPending(ent, TID_ANIM_LOWER)
+		|| Q3_TaskIDPending(ent, TID_ANGLE_FACE))
+	{
+		return qtrue;
+	}
+	return qfalse;
+}
+
+// ----------------------------------------------------------------------------------------------------------------
+// NPCs in a cinematic don't autoblock (MD team request, DH 2026-11-08), cvar g_cinematicblocking (1 = on, default).
+// While a camera cutscene runs, or while an NPC is in BS_CINEMATIC, the NPC doesn't take a block stance, doesn't
+// raise its saber at incoming attacks or missiles, doesn't parry and doesn't dodge, so its scripted anims play out.
+// Nothing is stored or changed: normal blocking is back on the first frame after the cinematic.
+// The player and NPCs the player controls are never affected.
+// Script command set SET_AUTOBLOCKING_OFF true/false (NPCAI_NO_AUTOBLOCK) does the same for one NPC at any time,
+// whatever g_cinematicblocking is, until the script sets it false again.
+// ----------------------------------------------------------------------------------------------------------------
+extern cvar_t* g_cinematicblocking;
+
+qboolean G_NPCCinematicNoBlock(const gentity_t* ent)
+{
+	if (!ent || !ent->client || !ent->NPC || ent->s.number < MAX_CLIENTS || G_ControlledByPlayer(ent))
+	{
+		return qfalse;
+	}
+	if (ent->NPC->aiFlags & NPCAI_NO_AUTOBLOCK)
+	{
+		//script: set SET_AUTOBLOCKING_OFF true
+		return qtrue;
+	}
+	if (!g_cinematicblocking || !g_cinematicblocking->integer)
+	{
+		return qfalse;
+	}
+	return in_camera || ent->NPC->behaviorState == BS_CINEMATIC ? qtrue : qfalse;
+}
+
+// ent: the entity being run now (nullptr between entities: only the camera counts)
+void G_SetSJEModeScope(const gentity_t* ent)
+{
+	if (!s_sjeModeReal)
+	{
+		return;
+	}
+	g_SerenityJediEngineMode = in_camera || G_InScriptedEvent(ent) ? &s_sjeModeOff : s_sjeModeReal;
+}
+
+namespace
+{
+	struct SJEModeScope
+	{
+		explicit SJEModeScope(const gentity_t* ent) : saved(g_SerenityJediEngineMode) { G_SetSJEModeScope(ent); }
+		~SJEModeScope() { g_SerenityJediEngineMode = saved; } // an NPC's ClientThink runs inside its G_RunFrame think
+		cvar_t* saved;
+		SJEModeScope(const SJEModeScope&) = delete;
+		SJEModeScope& operator=(const SJEModeScope&) = delete;
+	};
+}
+
 void ClientThink(const int clientNum, usercmd_t* ucmd)
 {
 	gentity_t* ent = g_entities + clientNum;
@@ -11601,6 +11711,7 @@ void ClientThink(const int clientNum, usercmd_t* ucmd)
 	{
 		return;
 	}
+	const SJEModeScope sje_mode_scope(ent); // cutscene / scripted event: g_SerenityJediEngineMode 0
 
 	// the radial weapon wheel (cgame, cg_main.cpp) has the player's attack buttons while it is open (they pick / toggle
 	// On Person there), and the press that closed it doesn't fire

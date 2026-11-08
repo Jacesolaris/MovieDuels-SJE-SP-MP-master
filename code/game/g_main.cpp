@@ -192,6 +192,7 @@ cvar_t* g_numEntities;
 //cvar_t	*g_iscensored;
 
 cvar_t* g_saberAutoBlocking;
+cvar_t* g_cinematicblocking;
 cvar_t* g_saberBreaking; // breakable saber staffs: 0 off, 1 NPCs only, 2 everyone
 cvar_t* g_saberRealisticCombat;
 cvar_t* debug_subdivision;
@@ -284,6 +285,9 @@ cvar_t* g_update9firststartup;
 cvar_t* g_totgfirststartup;
 
 cvar_t* g_allowgunnerbash;
+cvar_t* g_squadTactics;
+cvar_t* g_squadAdvancers;
+cvar_t* g_squadDebug;
 cvar_t* g_aiReload; // AI clips and reloads (2026-11-02, from SJE): gunner NPCs stop to reload when their clip is empty
 cvar_t* g_aiClipScale; // x every AI clip size
 
@@ -803,6 +807,7 @@ static void G_InitCvars()
 	com_buildScript = gi.cvar("com_buildscript", "0", 0);
 
 	g_saberAutoBlocking = gi.cvar("g_saberAutoBlocking", "1", CVAR_ARCHIVE);
+	g_cinematicblocking = gi.cvar("g_cinematicblocking", "1", CVAR_ARCHIVE); // 1: NPCs in a cutscene / BS_CINEMATIC don't autoblock
 	g_saberBreaking = gi.cvar("g_saberBreaking", "2", CVAR_ARCHIVE);
 	//must press +block button to do any blocking
 	g_saberRealisticCombat = gi.cvar("g_saberMoreRealistic", "1", CVAR_ARCHIVE);
@@ -898,7 +903,9 @@ static void G_InitCvars()
 
 	g_noIgniteTwirl = gi.cvar("g_noIgniteTwirl", "1", CVAR_ARCHIVE); //if 1, don't do ignite twirl
 
-	g_SerenityJediEngineMode = gi.cvar("g_SerenityJediEngineMode", "2", CVAR_ARCHIVE); //Alternate saber combat system
+	g_SerenityJediEngineMode = gi.cvar("g_SerenityJediEngineMode", "0", CVAR_ARCHIVE); //Alternate saber combat system (default 0 as cgame / ui / MD 8; was "2")
+	extern void G_InitSJEModeScope();
+	G_InitSJEModeScope(); // cutscenes and scripted events run with mode 0 (g_active.cpp)
 
 	g_SaberPerfectBlockingTimerMissile = gi.cvar("g_SaberPerfectBlockingTimerMissile", "750", CVAR_ARCHIVE);
 	//Alternate saber combat system 3 sec
@@ -923,6 +930,10 @@ static void G_InitCvars()
 	g_totgfirststartup = gi.cvar("g_totgfirststartup", "1", 0);
 
 	g_allowgunnerbash = gi.cvar("g_allowgunnerbash", "1", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
+	// Squad tactics: only g_squadAdvancers gunners per target push in, the others hold position (AI_Stormtrooper.cpp)
+	g_squadTactics = gi.cvar("g_squadTactics", "1", CVAR_ARCHIVE);
+	g_squadAdvancers = gi.cvar("g_squadAdvancers", "2", CVAR_ARCHIVE);
+	g_squadDebug = gi.cvar("g_squadDebug", "0", 0); // 1: print each squad's roles once a second
 	// gunner NPCs count their shots and stop to reload when the clip is empty: reload anim + sound, duck or run to
 	// cover, a callout (DH 2026-11-02, the SJE AI port). 0 = the old endless fire
 	g_aiReload = gi.cvar("g_aiReload", "1", CVAR_ARCHIVE | CVAR_NORESTART);
@@ -2723,6 +2734,8 @@ static void G_CorpseTouchPush(gentity_t* corpse)
 	}
 }
 
+extern void G_SetSJEModeScope(const gentity_t* ent);
+
 void G_RunFrame(const int level_time)
 {
 	PROFILE_ZONE("G_RunFrame");
@@ -2776,6 +2789,7 @@ void G_RunFrame(const int level_time)
 			continue;
 		ents_inuse++;
 		ent = &g_entities[i];
+		G_SetSJEModeScope(ent); // cutscene / scripted event: g_SerenityJediEngineMode 0 while this entity runs
 
 		// clear events that are too old
 		if (level.time - ent->eventTime > EVENT_VALID_MSEC)
@@ -3062,6 +3076,7 @@ void G_RunFrame(const int level_time)
 		ClearNPCGlobals(); //	but these 2 funcs are ok
 		//UpdateTeamCounters( ent );	//	   to call anyway on a freed ent.
 	}
+	G_SetSJEModeScope(nullptr); // between entities only the cutscene camera counts
 
 	// holstered sabers make room for the holstered guns on the hips (wp_saber.cpp)
 	for (int i = 0; i < globals.num_entities; i++)

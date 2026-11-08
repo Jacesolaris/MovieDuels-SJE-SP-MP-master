@@ -4512,7 +4512,8 @@ void CG_MDWheel_Cancel(void)
 static void CG_MDWheel_ToggleOnPerson(const int weapon)
 {
 	// grenades / mines / det packs are never drawn on the body (as the old wheel)
-	if (weapon <= WP_NONE || weapon >= 32 || weapon == WP_THERMAL || weapon == WP_TRIP_MINE || weapon == WP_DET_PACK)
+	if (weapon <= WP_NONE || weapon == WP_MELEE || weapon == WP_SABER || weapon >= 32 ||
+		weapon == WP_THERMAL || weapon == WP_TRIP_MINE || weapon == WP_DET_PACK)
 	{
 		return;
 	}
@@ -4880,16 +4881,6 @@ static void CG_MDWheel_DarkDisc(const float x, const float y, const float r, con
 	}
 }
 
-// a force power not known is drawn with its dimmed copy (gfx/menus/weaponwheel/off/<icon>, shaders/md_wheelicons.shader
-// in the Claude pk3: the same picture, but it takes the draw colour). Only when that shader is missing does the dark disc
-// below go over it: the disc is round and the icons' corners stuck out of it (white dots, Jace 2026-11-05)
-extern qhandle_t cg_forceIconsOff[NUM_FORCE_POWERS];
-static qboolean CG_MDWheel_OffIcon(const int n)
-{
-	const int power = mdWheel.ring == 1 && n >= 0 && n < mdWheel.numItems ? mdWheel.items[n] : -1;
-	return power >= 0 && power < NUM_FORCE_POWERS && cg_forceIconsOff[power] ? qtrue : qfalse;
-}
-
 // the force powers not known, greyed out as the weapons not carried: their icons' shaders ignore the draw colour (they
 // stayed bright), so a dark disc goes over each, drawn after the icons (Jace 2026-10-29)
 static void CG_MDWheel_GreyUnknownForce(const float iconSize)
@@ -4902,7 +4893,7 @@ static void CG_MDWheel_GreyUnknownForce(const float iconSize)
 	trap->R_ClearScene();
 	for (int n = 0; n < mdWheel.numItems; n++)
 	{
-		if (mdWheel.avail[n] || CG_MDWheel_OffIcon(n))
+		if (mdWheel.avail[n])
 		{
 			continue;
 		}
@@ -4934,7 +4925,6 @@ void CG_DrawMDWheel(void)
 	static vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
 	static vec4_t grey = { 0.7f, 0.7f, 0.7f, 0.9f };
 	static vec4_t greyed = { 0.5f, 0.5f, 0.5f, 0.85f };
-	static vec4_t red = { 1.0f, 0.4f, 0.4f, 1.0f };
 
 	if (!mdWheel.open)
 	{
@@ -4988,29 +4978,17 @@ void CG_DrawMDWheel(void)
 			{
 				color[3] = 0.5f;
 			}
-			if (hidden & 1u << item)
-			{
-				color[1] = color[2] = 0.4f;
-			}
+			// MD 2026-11-06: no red tint on a weapon whose holster is off (the Holster text says it)
 		}
 		else
 		{
 			icon = cgs.media.forcePowerIcons[item];
 			if (!mdWheel.avail[n])
 			{
-				// not known: faded as a weapon not carried, with the icon's dimmed copy (it takes the colour; the
-				// normal icon's shader ignores it)
-				if (CG_MDWheel_OffIcon(n))
-				{
-					icon = cg_forceIconsOff[item];
-					color[0] = color[1] = color[2] = 0.6f;
-					color[3] = 0.45f;
-				}
-				else
-				{
-					color[0] = color[1] = color[2] = 0.45f;
-					color[3] = 0.4f;
-				}
+				// not known: faded as a weapon not carried. The colour is dimmed too, so an icon whose shader ignores
+				// the alpha (an additive glow) fades as well
+				color[0] = color[1] = color[2] = 0.45f;
+				color[3] = 0.4f;
 			}
 		}
 
@@ -5047,9 +5025,9 @@ void CG_DrawMDWheel(void)
 					CG_MDWheel_CenterText(my + 6.0f, 0.13f, grey,
 						va("Ammo: %d", cg.predictedPlayerState.ammo[weaponData[item].ammoIndex]), ax);
 				}
-				if (item != WP_THERMAL && item != WP_TRIP_MINE && item != WP_DET_PACK)
+				if (item != WP_MELEE && item != WP_SABER && item != WP_THERMAL && item != WP_TRIP_MINE && item != WP_DET_PACK)
 				{
-					CG_MDWheel_CenterText(my + 28.0f, 0.13f, hidden & 1u << item ? red : grey,
+					CG_MDWheel_CenterText(my + 28.0f, 0.13f, grey,
 						hidden & 1u << item ? "Holster: Disabled" : "Holster: Enabled", ax);
 				}
 			}

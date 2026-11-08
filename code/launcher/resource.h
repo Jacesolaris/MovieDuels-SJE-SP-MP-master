@@ -10,10 +10,10 @@
 #define IDR_IMG_MULTIPLAYER_GLOW    204
 #define IDR_IMG_PLAY_PANEL          205
 #define IDR_IMG_LOGO_GLOW           206
-#define IDR_IMG_INFO_PANEL          207
+#define IDR_IMG_DOWNLOAD            208 // the emblem when a new update is out (red, Download Button.png)
+#define IDR_IMG_DOWNLOAD_READY      209 // the emblem while / after the new files are checked (teal)
 
-// the icons on the top bars (Assets/Icons)
-#define IDR_ICON_SETTINGS           211
+// the icons top left and on ABOUT (Assets/Icons)
 #define IDR_ICON_MODDB              212
 #define IDR_ICON_DISCORD            213
 #define IDR_ICON_YOUTUBE            214
@@ -25,3 +25,14 @@
 #define IDR_SND_HOVER               302
 #define IDR_SND_BACK                303
 #define IDR_MUSIC                   304
+
+// the design's label font (Assets/Fonts/albertus-bold.ttf)
+#define IDR_FONT_LABEL              401
+
+// the texts of ABOUT (Assets/Text)
+#define IDR_TEXT_ABOUT              501
+#define IDR_TEXT_FAQ                502
+#define IDR_TEXT_TEAM               503
+
+// the pk3 files every install has in MD (Assets/Text/GameFiles.txt): SETTINGS > Check installation, the warning on PLAY
+#define IDR_TEXT_GAMEFILES          504

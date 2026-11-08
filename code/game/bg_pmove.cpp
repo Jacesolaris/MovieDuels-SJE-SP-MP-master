@@ -14038,6 +14038,39 @@ static int PM_BobCycleStep(const float bobmove)
 	return whole;
 }
 
+// A walk or run cycle (BOTH_MENUIDLE1 is in PM_WalkingAnim but is a stand pose).
+static qboolean PM_StandFallbackMoveCycle(const int anim)
+{
+	return anim != BOTH_MENUIDLE1 && (PM_WalkingAnim(anim) || PM_RunningAnim(anim)) ? qtrue : qfalse;
+}
+
+// Standing still, but the stand anim picked for this model doesn't exist in it (MD's C-3PO, md_c3po_char,
+// has WP_MELEE, whose stand BOTH_MD_CIN_1 / BOTH_STAND6 the protocol model lacks). PM_SetAnimFinal skips
+// anims a model doesn't have, so the walk cycle went on forever after the droid stopped. Use BOTH_STAND1.
+static void PM_StandAnimFallback(const int set_anim_part)
+{
+	if (!pm->gent || !pm->gent->client
+		|| pm->cmd.forwardmove || pm->cmd.rightmove
+		|| pm->ps->groundEntityNum == ENTITYNUM_NONE
+		|| !PM_HasAnimation(pm->gent, BOTH_STAND1))
+	{
+		return;
+	}
+	if (set_anim_part == SETANIM_LEGS)
+	{
+		if (pm->ps->legsAnimTimer == 0 && PM_StandFallbackMoveCycle(pm->ps->legsAnim))
+		{
+			PM_SetAnim(pm, SETANIM_LEGS, BOTH_STAND1, SETANIM_FLAG_NORMAL);
+		}
+	}
+	else if (pm->ps->torsoAnimTimer == 0
+		&& PM_StandFallbackMoveCycle(pm->ps->torsoAnim)
+		&& !PM_StandFallbackMoveCycle(pm->ps->legsAnim))
+	{
+		PM_SetAnim(pm, SETANIM_TORSO, BOTH_STAND1, SETANIM_FLAG_NORMAL);
+	}
+}
+
 static void PM_Footsteps()
 {
 	float bobmove = 0.0f;
@@ -14733,6 +14766,7 @@ static void PM_Footsteps()
 				}
 			}
 		}
+		PM_StandAnimFallback(SETANIM_LEGS);
 		return;
 	}
 
@@ -31739,6 +31773,17 @@ static void PM_Weapon()
 		return;
 	}
 
+	// A kick with a gun (or any non-saber weapon) sets saberMove to LS_KICK_*, but only PM_WeaponLightsaber ever
+	// moves a saberMove on, so it stayed a kick after the anim ended and blocked the dash/roll (IsPressingDashButton,
+	// ForceSpeedDash), further kicks and the air dash until a weapon change. Clear it once the kick anim is over.
+	if (pm->ps->weapon != WP_SABER
+		&& PM_KickMove(pm->ps->saberMove)
+		&& !PM_KickingAnim(pm->ps->legsAnim)
+		&& !PM_KickingAnim(pm->ps->torsoAnim))
+	{
+		pm->ps->saberMove = LS_NONE;
+	}
+
 	if (PM_InKnockDown(pm->ps) || PM_InRoll(pm->ps))
 	{
 		//in knockdown
@@ -34745,10 +34790,12 @@ static void Pmove_Internal(pmove_t* pmove)
 		else if (pm->ps->stasisTime < level.time)
 		{
 			PM_TorsoAnimation();
+			PM_StandAnimFallback(SETANIM_TORSO);
 		}
 		else if (pm->ps->stasisJediTime < level.time)
 		{
 			PM_TorsoAnimation();
+			PM_StandAnimFallback(SETANIM_TORSO);
 		}
 	}
 

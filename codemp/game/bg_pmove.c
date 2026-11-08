@@ -670,8 +670,36 @@ static QINLINE qboolean PM_IsRocketTrooper(void)
 	return qfalse;
 }
 
+// a battle droid (player / bot class or NPC) with a blaster rifle: as in SP (PM_TorsoAnimation / PM_Weapon, alt_fire ||
+// CLASS_BATTLEDROID) it fires and aims from the hip, the rifle's alt-fire poses, never from the shoulder (DH 2026-11-08)
+static qboolean PM_BattleDroidHipGun(const int weapon)
+{
+	switch (weapon)
+	{
+	case WP_BLASTER:
+	case WP_THEFIRSTORDER:
+	case WP_BOBA:
+	case WP_REBELRIFLE:
+	case WP_CLONECARBINE:
+	case WP_BATTLEDROID:
+	case WP_CLONECOMMANDO:
+		break;
+	default:
+		return qfalse;
+	}
+	if (pm->ps->clientNum < MAX_CLIENTS)
+	{
+		return pm->ps->botclass == BCLASS_BATTLEDROID ? qtrue : qfalse;
+	}
+	return pm_entSelf && pm_entSelf->s.NPC_class == CLASS_BATTLEDROID ? qtrue : qfalse;
+}
+
 static animNumber_t QINLINE PM_GetWeaponAimAnim(void)
 {
+	if (PM_BattleDroidHipGun(pm->ps->weapon))
+	{
+		return WeaponAltAimAnim[pm->ps->weapon];
+	}
 	if (pm->cmd.buttons & BUTTON_ALT_ATTACK)
 	{// Alternate weapon firing
 		if (pm->ps->eFlags & EF3_DUAL_WEAPONS &&
@@ -17182,7 +17210,7 @@ static void PM_SPGunTorsoPoses(const int weapon, int* aim, int* rest)
 	case WP_CLONECOMMANDO:
 	case WP_REBELRIFLE:
 	case WP_BOBA:
-		*aim = BOTH_ATTACK4;
+		*aim = PM_BattleDroidHipGun(weapon) ? BOTH_ATTACK3 : BOTH_ATTACK4; // SP: battle droids from the hip
 		*rest = TORSO_WEAPONREST3;
 		return;
 	case WP_DISRUPTOR:
@@ -18933,7 +18961,8 @@ static void PM_Weapon(void)
 				{// SP PM_Weapon: a player's thermal throw plays on the legs too while standing (parity batch 9)
 					PM_SetAnim(SETANIM_LEGS, BOTH_THERMAL_THROW, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
 				}
-				PM_StartTorsoAnim(WeaponAttackAnim[pm->ps->weapon]);
+				PM_StartTorsoAnim(PM_BattleDroidHipGun(pm->ps->weapon) ? WeaponAltAttackAnim[pm->ps->weapon]
+					: WeaponAttackAnim[pm->ps->weapon]); // SP: battle droids fire from the hip
 			}
 		}
 	}
@@ -22066,14 +22095,12 @@ static QINLINE void PM_CmdForSaberMoves(usercmd_t* ucmd)
 						pm->ps->velocity[2] = 250; //400;
 						pm->ps->fd.forceJumpZStart = pm->ps->origin[2];
 						//so we don't take damage if we land at same height
-						//pm->ps->pm_flags |= PMF_JUMPING;
-						//FIXME: NPCs yell?
 						PM_AddEvent(EV_JUMP);
 					}
 				}
 				else
 				{
-					//FIXME: if this is the second jump, maybe we should just stop the anim?
+					//
 				}
 			}
 		}
@@ -22141,7 +22168,7 @@ static QINLINE void PM_CmdForSaberMoves(usercmd_t* ucmd)
 				}
 				else
 				{
-					//FIXME: if this is the second jump, maybe we should just stop the anim?
+					//
 				}
 			}
 		}
@@ -22816,9 +22843,12 @@ static void PM_MoveForKata(usercmd_t* ucmd)
 	{
 		//medium kata
 		const animFlags_t flags = PM_Animationstyletable();
+		const saberInfo_t* saber1 = BG_MySaber(pm->ps->clientNum, 0);
+
 		pm->cmd.rightmove = 0;
 		pm->cmd.upmove = 0;
-		if (flags.isAnakin)
+
+		if (flags.isAnakin || saber1 && saber1->type == SABER_SINGLE_ANAKIN)
 		{
 			pm->cmd.forwardmove = 0;
 		}

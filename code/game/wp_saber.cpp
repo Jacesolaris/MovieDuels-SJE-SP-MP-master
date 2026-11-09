@@ -46284,6 +46284,23 @@ void WP_ForcePowerStop(gentity_t* self, const forcePowers_t force_power)
 		self->client->Isprojecting = qfalse;
 		self->client->projectToggleTime = level.time + Q_irand(5000, 10000);
 
+		// the copy goes with the power, however it ended (time up, turned off, another power stopped it; DH
+		// 2026-11-09): disintegrated as at the end of its life (MOD_PROJECTION_END)
+		if (self->s.number == 0)
+		{
+			for (int i = MAX_CLIENTS; i < globals.num_entities; i++)
+			{
+				gentity_t* copy = &g_entities[i];
+
+				if (copy->inuse && copy->client && copy->NPC && copy->health > 0
+					&& copy->client->NPC_class == CLASS_PROJECTION)
+				{
+					G_Damage(copy, nullptr, nullptr, nullptr, copy->currentOrigin, 100000, DAMAGE_NO_PROTECTION,
+						MOD_PROJECTION_END);
+				}
+			}
+		}
+
 		break;
 	default:
 		break;
@@ -47995,6 +48012,20 @@ static void wp_force_power_run(gentity_t* self, forcePowers_t force_power, userc
 		if (self->client->ps.forcePowersActive & 1 << FP_PROJECTION || cmd->buttons & BUTTON_PROJECTION)
 		{
 			self->s.loopSound = G_SoundIndex("sound/weapons/force/protectloop.wav");
+		}
+		if (self->client->ps.forcePowersActive & 1 << FP_PROJECTION)
+		{
+			// the caster can't be seen while it lasts (DH 2026-11-09): FL_NOTARGET stops new enemies picking him,
+			// this drops him from the ones already after him (scripts and alerts can set an enemy directly too)
+			for (int i = 1; i < globals.num_entities; i++)
+			{
+				gentity_t* npc = &g_entities[i];
+
+				if (npc->inuse && npc->NPC && npc->client && npc->enemy == self)
+				{
+					G_ClearEnemy(npc);
+				}
+			}
 		}
 		break;
 	default:

@@ -288,6 +288,8 @@ cvar_t* g_allowgunnerbash;
 cvar_t* g_squadTactics;
 cvar_t* g_squadAdvancers;
 cvar_t* g_squadDebug;
+cvar_t* g_squadCommandCooldown;
+cvar_t* g_squadWoundedHealth;
 cvar_t* g_aiReload; // AI clips and reloads (2026-11-02, from SJE): gunner NPCs stop to reload when their clip is empty
 cvar_t* g_aiClipScale; // x every AI clip size
 
@@ -934,6 +936,8 @@ static void G_InitCvars()
 	g_squadTactics = gi.cvar("g_squadTactics", "1", CVAR_ARCHIVE);
 	g_squadAdvancers = gi.cvar("g_squadAdvancers", "2", CVAR_ARCHIVE);
 	g_squadDebug = gi.cvar("g_squadDebug", "0", 0); // 1: print each squad's roles once a second
+	g_squadCommandCooldown = gi.cvar("g_squadCommandCooldown", "60", CVAR_ARCHIVE); // seconds between two orders on the same target
+	g_squadWoundedHealth = gi.cvar("g_squadWoundedHealth", "20", CVAR_ARCHIVE); // percent health at which an enemy keeps a safe distance (0 = off)
 	// gunner NPCs count their shots and stop to reload when the clip is empty: reload anim + sound, duck or run to
 	// cover, a callout (DH 2026-11-02, the SJE AI port). 0 = the old endless fire
 	g_aiReload = gi.cvar("g_aiReload", "1", CVAR_ARCHIVE | CVAR_NORESTART);

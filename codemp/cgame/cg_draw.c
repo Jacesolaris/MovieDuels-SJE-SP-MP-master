@@ -528,6 +528,7 @@ char* showPowersName[] =
 	"INSANITY2", //FP_INSANITY
 	"BLINDING2", //FP_BLINDING
 	"DARKSTASIS_NAME", //FP_DARK_STASIS (its own strings/English/darkstasis.str: CG_GetStringEdString)
+	"PROJECTION2", //FP_PROJECTION (MD's SP_INGAME_PROJECTION2)
 	NULL
 };
 
@@ -7603,6 +7604,27 @@ static void CG_DrawHUD(const centity_t* cent)
 #define VALID_FORCE_INDEX(i) ((i) >= 0 && (i) < MAX_SHOWPOWERS)
 #define VALID_ITEM_INDEX(i)  ((i) >= 0 && (i) < HI_NUM_HOLDABLE)
 
+// a force power's name: MD_MP_GAME_, then SP_INGAME_ (Projection: SP_INGAME_PROJECTION2), then the reference as it is
+// (DARKSTASIS_NAME). The select bar and the holocron pickup line use it (the "??" under Projection, DH 2026-11-09).
+const char* CG_ForcePowerDisplayName(const int fp)
+{
+	static char text[2][256];
+	static int index = 0;
+
+	if (fp < 0 || fp >= NUM_FORCE_POWERS || !showPowersName[fp])
+	{
+		return "";
+	}
+	index ^= 1;
+	if (trap->SE_GetStringTextString(va("MD_MP_GAME_%s", showPowersName[fp]), text[index], sizeof text[0])
+		|| trap->SE_GetStringTextString(va("SP_INGAME_%s", showPowersName[fp]), text[index], sizeof text[0])
+		|| trap->SE_GetStringTextString(showPowersName[fp], text[index], sizeof text[0]))
+	{
+		return text[index];
+	}
+	return showPowersName[fp];
+}
+
 static qboolean ForcePower_Valid(const int i)
 {
 	if (i == FP_LEVITATION ||
@@ -7809,7 +7831,7 @@ CG_DrawForceSelect
 	{
 		CG_DrawProportionalString(
 			320, y + 30 + y_offset,
-			CG_GetStringEdString("MD_MP_GAME", showPowersName[cg.forceSelect]),
+			CG_ForcePowerDisplayName(cg.forceSelect),
 			UI_CENTER | UI_SMALLFONT,
 			colorTable[CT_ICON_BLUE]);
 	}
@@ -12937,7 +12959,8 @@ static qboolean CG_IsDurationPower(const int power)
 		power == FP_PROTECT ||
 		power == FP_ABSORB ||
 		power == FP_SEE ||
-		power == FP_DARK_STASIS)
+		power == FP_DARK_STASIS ||
+		power == FP_PROJECTION)
 	{
 		return qtrue;
 	}
@@ -15538,6 +15561,21 @@ static void CG_Draw2DScreenTints(void)
 			{
 				cgRageRecTime = 0;
 			}
+		}
+
+		if (cg.snap->ps.fd.forcePowersActive & 1 << FP_PROJECTION)
+		{
+			// Force Projection: the caster looks through his copy's "remote" view while he can't be hurt (as MD 9 SP)
+			static qhandle_t projectionShader = 0;
+			const float pulse = 0.5f + 0.5f * sin(cg.time * 0.004f);
+			const vec4_t projectionTint = { 0.35f, 0.6f, 1.0f, 0.12f + 0.06f * pulse };
+
+			if (!projectionShader)
+			{
+				projectionShader = trap->R_RegisterShaderNoMip("gfx/2d/droid_view");
+			}
+			CG_FillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, projectionTint);
+			CG_DrawPic(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, projectionShader);
 		}
 
 		if (cg.snap->ps.fd.forcePowersActive & 1 << FP_DARK_STASIS)

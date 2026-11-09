@@ -5410,6 +5410,9 @@ static const char* g_bindCommands[] =
 {
 	"pazaak",
 	"shop", // the shop menu (2026-11-01, g_pazaak.cpp)
+	"ally_follow", // ally orders (2026-11-09, g_cmds.cpp Cmd_AllyOrder_f)
+	"ally_hold",
+	"ally_attack",
 	"+altattack",
 	"+attack",
 	"+back",

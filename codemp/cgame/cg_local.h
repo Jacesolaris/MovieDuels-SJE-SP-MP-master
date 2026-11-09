@@ -2507,6 +2507,7 @@ int			BG_ProperForceIndex(int power);
 void		bg_cycle_force(playerState_t* ps, int direction);
 
 const char* CG_GetStringEdString(char* refSection, char* refName);
+const char* CG_ForcePowerDisplayName(int fp); // cg_draw.c
 
 void FX_TurretProjectileThink(centity_t* cent, const struct weaponInfo_s* weapon);
 void FX_TurretHitWall(vec3_t origin, vec3_t normal);

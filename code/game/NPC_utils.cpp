@@ -954,6 +954,15 @@ qboolean G_ValidEnemy(const gentity_t* self, const gentity_t* enemy)
 		return qfalse;
 	}
 
+	// a Force Projection copy (CLASS_PROJECTION, put on the player's team in g_active.cpp) fights everyone who is not
+	// on the player's team, whatever side he plays (DH 2026-11-09): enemies, other teams, rampaging creatures; not the
+	// neutrals (civilians, droids), not the player, not another copy
+	if (self->client && self->client->NPC_class == CLASS_PROJECTION && g_entities[0].client)
+	{
+		return enemy->s.number != 0 && enemy->client->playerTeam != g_entities[0].client->playerTeam
+			&& enemy->client->playerTeam != TEAM_NEUTRAL && enemy->client->NPC_class != CLASS_PROJECTION ? qtrue : qfalse;
+	}
+
 	if (enemy->client->playerTeam == TEAM_FREE && enemy->s.number < MAX_CLIENTS)
 	{
 		//An evil player, everyone attacks him

@@ -71,7 +71,8 @@ const char* HolocronIcons[NUM_FORCE_POWERS] = {
 	"gfx/mp/f_icon_lt_blast", //FP_BLAST
 	"gfx/mp/f_icon_dk_insanity", //FP_INSANITY
 	"gfx/mp/f_icon_lt_blinding", //FP_BLINDING
-	"gfx/mp/new_f_icon_dk_stasis" //FP_DARK_STASIS (own icon now that Stasis uses f_icon_dk_stasis)
+	"gfx/mp/new_f_icon_dk_stasis", //FP_DARK_STASIS (own icon now that Stasis uses f_icon_dk_stasis)
+	"gfx/mp/f_icon_lt_projection" //FP_PROJECTION
 };
 
 #define SCROLL_TIME_START					500
@@ -3228,6 +3229,7 @@ static qboolean Item_OwnerDraw_HandleKey(itemDef_t* item, const int key)
 			case UI_FORCE_RANK_INSANITY:
 			case UI_FORCE_RANK_BLINDING:
 			case UI_FORCE_RANK_DARK_STASIS:
+			case UI_FORCE_RANK_PROJECTION:
 				if (!Rect_ContainsPoint(&item->window.rect, DC->cursorx, DC->cursory))
 				{
 					return qfalse;
@@ -5452,6 +5454,7 @@ static const char* g_bindCommands[] = {
 	"flourish",
 	"force_absorb",
 	"force_darkstasis",
+	"force_projection",
 	"force_distract",
 	"force_forcepowerother",
 	"force_heal",

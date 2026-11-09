@@ -3594,24 +3594,42 @@ qboolean G_DoDismembermentcin(gentity_t* self, vec3_t point, const int mod, cons
 // a pistol hit (G_IsPistolWeapon): G_DoGunDismemberment takes an arm or a hand, nothing else (DH 2026-10-31)
 static qboolean s_gun_arms_only = qfalse;
 
+// The gun MODs that also cut a body that is already dead (player_die). The clone rifle, repeater alt, disruptor (not
+// the charged sniper shot, that one disintegrates) and concussion were missing (2026-11-09).
+static qboolean G_IsCorpseGunMOD(const int mod)
+{
+	switch (mod)
+	{
+	case MOD_BLASTER:
+	case MOD_BLASTER_ALT:
+	case MOD_REBELBLASTER:
+	case MOD_REBELBLASTER_ALT:
+	case MOD_CLONERIFLE:
+	case MOD_CLONERIFLE_ALT:
+	case MOD_CLONECOMMANDO:
+	case MOD_CLONECOMMANDO_ALT:
+	case MOD_REBELRIFLE:
+	case MOD_REBELRIFLE_ALT:
+	case MOD_BOBA:
+	case MOD_BOBA_ALT:
+	case MOD_BOWCASTER:
+	case MOD_BOWCASTER_ALT:
+	case MOD_REPEATER:
+	case MOD_REPEATER_ALT:
+	case MOD_DISRUPTOR:
+	case MOD_CONC:
+	case MOD_CONC_ALT:
+	case MOD_FLECHETTE:
+	case MOD_EMPLACED:
+		return qtrue;
+	default:
+		return qfalse;
+	}
+}
+
 static qboolean G_DoGunDismemberment(gentity_t* self, vec3_t point, const int mod, const int hit_loc, const qboolean gun_shot)
 {
-	if (gun_shot
-		|| mod == MOD_BLASTER
-		|| mod == MOD_BLASTER_ALT
-		|| mod == MOD_REBELBLASTER
-		|| mod == MOD_REBELBLASTER_ALT
-		|| mod == MOD_CLONECOMMANDO
-		|| mod == MOD_CLONECOMMANDO_ALT
-		|| mod == MOD_REBELRIFLE
-		|| mod == MOD_REBELRIFLE_ALT
-		|| mod == MOD_BOBA
-		|| mod == MOD_BOBA_ALT
-		|| mod == MOD_BOWCASTER
-		|| mod == MOD_BOWCASTER_ALT
-		|| mod == MOD_REPEATER
-		|| mod == MOD_FLECHETTE
-		|| mod == MOD_EMPLACED)
+	if (gun_shot || G_IsCorpseGunMOD(mod))
 	{
 		if (g_gundismemberment->integer > 0)
 		{
@@ -4995,6 +5013,10 @@ static qboolean G_IsGunMOD(const int mod)
 	case MOD_BOWCASTER:
 	case MOD_BOWCASTER_ALT:
 	case MOD_REPEATER:
+	case MOD_REPEATER_ALT:
+	case MOD_DISRUPTOR:
+	case MOD_CONC:
+	case MOD_CONC_ALT:
 	case MOD_FLECHETTE:
 	case MOD_FLECHETTE_ALT:
 	case MOD_EMPLACED:
@@ -5003,6 +5025,39 @@ static qboolean G_IsGunMOD(const int mod)
 	case MOD_BRYAR_ALT:
 	case MOD_CLONEPISTOL:
 	case MOD_CLONEPISTOL_ALT:
+		return qtrue;
+	default:
+		return qfalse;
+	}
+}
+
+// The weapons (the inflictor's s.weapon) whose killing shot takes a head or a limb. The repeater was missing (its MOD
+// was listed, the weapon not), and the disruptor and concussion are added as in SJE (2026-11-09).
+static qboolean G_IsGunShotWeapon(const int weapon)
+{
+	switch (weapon)
+	{
+	case WP_BLASTER:
+	case WP_BOWCASTER:
+	case WP_REPEATER:
+	case WP_DISRUPTOR:
+	case WP_CONCUSSION:
+	case WP_FLECHETTE:
+	case WP_TUSKEN_RIFLE:
+	case WP_TURRET:
+	case WP_EMPLACED_GUN:
+	case WP_BATTLEDROID:
+	case WP_THEFIRSTORDER:
+	case WP_REBELBLASTER:
+	case WP_CLONECARBINE:
+	case WP_CLONECOMMANDO:
+	case WP_CLONERIFLE:
+	case WP_REBELRIFLE:
+	case WP_BOBA:
+	case WP_WRIST_BLASTER:
+	case WP_DROIDEKA:
+	case WP_JAWA:
+	case WP_Z6_ROTARY_CANNON:
 		return qtrue;
 	default:
 		return qfalse;
@@ -5195,21 +5250,7 @@ void player_die(gentity_t* self, gentity_t* inflictor, gentity_t* attacker,
 				G_DoDismemberment(self, self->pos1, means_of_death, hit_loc);
 			}
 			else if (g_gundismemberment->integer > 0
-				&& (means_of_death == MOD_BLASTER
-					|| means_of_death == MOD_BLASTER_ALT
-					|| means_of_death == MOD_REBELBLASTER
-					|| means_of_death == MOD_REBELBLASTER_ALT
-					|| means_of_death == MOD_CLONECOMMANDO
-					|| means_of_death == MOD_CLONECOMMANDO_ALT
-					|| means_of_death == MOD_REBELRIFLE
-					|| means_of_death == MOD_REBELRIFLE_ALT
-					|| means_of_death == MOD_BOBA
-					|| means_of_death == MOD_BOBA_ALT
-					|| means_of_death == MOD_BOWCASTER
-					|| means_of_death == MOD_BOWCASTER_ALT
-					|| means_of_death == MOD_REPEATER
-					|| means_of_death == MOD_FLECHETTE
-					|| means_of_death == MOD_EMPLACED)
+				&& G_IsCorpseGunMOD(means_of_death)
 				&& (!inflictor || !G_IsPistolWeapon(inflictor->s.weapon)) // pistols never cut a body that is already dead
 				&& !NPC_IsNotDismemberable(self))
 			{
@@ -9892,26 +9933,7 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, const 
 	{
 		// do head shots; a pistol takes an arm or a hand at the most
 		const qboolean pistol_shot = G_IsPistolWeapon(inflictor->s.weapon);
-		if (pistol_shot
-			|| inflictor->s.weapon == WP_BLASTER
-			|| inflictor->s.weapon == WP_TUSKEN_RIFLE
-			|| inflictor->s.weapon == WP_FLECHETTE
-			|| inflictor->s.weapon == WP_TURRET
-			|| inflictor->s.weapon == WP_EMPLACED_GUN
-			|| inflictor->s.weapon == WP_TUSKEN_RIFLE
-			|| inflictor->s.weapon == WP_BATTLEDROID
-			|| inflictor->s.weapon == WP_THEFIRSTORDER
-			|| inflictor->s.weapon == WP_REBELBLASTER
-			|| inflictor->s.weapon == WP_CLONECARBINE
-			|| inflictor->s.weapon == WP_CLONECOMMANDO
-			|| inflictor->s.weapon == WP_WRIST_BLASTER
-			|| inflictor->s.weapon == WP_BOWCASTER
-			|| inflictor->s.weapon == WP_BOBA
-			|| inflictor->s.weapon == WP_DROIDEKA
-			|| inflictor->s.weapon == WP_JAWA
-			|| inflictor->s.weapon == WP_CLONERIFLE
-			|| inflictor->s.weapon == WP_Z6_ROTARY_CANNON
-			|| inflictor->s.weapon == WP_REBELRIFLE)
+		if (pistol_shot || G_IsGunShotWeapon(inflictor->s.weapon))
 		{
 			float targ_maxs2 = 0.0f;
 			int height = 0;
@@ -9933,32 +9955,19 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, const 
 			z_rel = point[2] - targ->currentOrigin[2] + fabs(targ->mins[2]);
 			z_ratio = z_rel / height;
 
-			// -----------------------------------------
-			// HEALTH RESTRICTION FOR DISMEMBERMENT
-			// -----------------------------------------
-			const int maxHP = targ->client->ps.stats[STAT_MAX_HEALTH];
-			const int hp = targ->health;
-
-			if (hp > (maxHP * 0.25f))
+			// gun_shot is only used by player_die, so it only cuts when this shot kills. The old "only below 25% health
+			// before the shot" rule stopped every one-shot kill from cutting (2026-11-09).
+			if (pistol_shot)
 			{
-				// Too healthy → no head/body dismemberment
-				targ->client->lasthurt_location = LOCATION_NONE;
+				gun_shot = GUN_SHOT_ARMS;
+			}
+			else if (z_ratio > 0.90f)
+			{
+				gun_shot = GUN_SHOT_HEAD;
 			}
 			else
 			{
-				// Existing logic
-				if (pistol_shot)
-				{
-					gun_shot = GUN_SHOT_ARMS;
-				}
-				else if (z_ratio > 0.90f)
-				{
-					gun_shot = GUN_SHOT_HEAD;
-				}
-				else
-				{
-					gun_shot = GUN_SHOT_BODY;
-				}
+				gun_shot = GUN_SHOT_BODY;
 			}
 		}
 	}

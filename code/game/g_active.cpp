@@ -8070,11 +8070,16 @@ static void CommandNPCtoAttack(gentity_t* caller, gentity_t* ourFriend)
 	}
 	else
 	{// if the enemy is close, use a short range callout
-		vec3_t dir;
-		VectorSubtract(ourFriend->currentOrigin, tracedEnemy->currentOrigin, dir);
-		const vec_t angle = DotProduct(ourFriend->currentAngles, dir);
-
-		if (angle >= 0.2 && angle <= 1.0)
+		// ally -> enemy direction against the ally's facing (was a dot product with the view angles,
+		// so front/behind was close to random)
+		vec3_t dir, friend_fwd;
+		VectorSubtract(tracedEnemy->currentOrigin, ourFriend->currentOrigin, dir);
+		dir[2] = 0.0f;
+		VectorNormalize(dir);
+		const vec3_t friend_yaw = { 0.0f, ourFriend->currentAngles[YAW], 0.0f };
+		AngleVectors(friend_yaw, friend_fwd, nullptr, nullptr);
+		const vec_t angle = DotProduct(friend_fwd, dir); // 1 = straight ahead, -1 = behind
+		if (angle >= 0.2f)
 		{// enemy is in front of us, use a front callout
 			G_AddEvent(caller, Q_irand(EV_ANGER1, EV_ANGER3), 0);
 			if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
@@ -11356,6 +11361,18 @@ static void ClientThink_real(gentity_t* ent, usercmd_t* ucmd)
 
 	if (ent->s.clientNum >= MAX_CLIENTS && !G_ControlledByPlayer(ent) && npc_is_projected(ent))
 	{
+		// on the player's side (DH 2026-11-09): his allies leave it alone, his enemies fight it; NPC_utils.cpp
+		// G_ValidEnemy makes it fight everyone not on his team
+		if (g_entities[0].client)
+		{
+			client->playerTeam = g_entities[0].client->playerTeam;
+			client->enemyTeam = g_entities[0].client->enemyTeam;
+			if (ent->enemy && (ent->enemy->s.number == 0 || ent->enemy->client
+				&& ent->enemy->client->playerTeam == client->playerTeam))
+			{
+				G_ClearEnemy(ent); // never after the player or his allies (a stray hit)
+			}
+		}
 		//decrement it
 		ClientTimerProjectionLifeDrain(ent, msec);
 	}

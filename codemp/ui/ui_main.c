@@ -776,7 +776,8 @@ const char* forcepowerDesc[NUM_FORCE_POWERS] =
 	"@SP_INGAME_FORCE_BLAST_DESC",
 	"@SP_INGAME_FORCE_INSANITY_DESC",
 	"@SP_INGAME_FORCE_BLINDING_DESC",
-	"@DARKSTASIS_DESC"
+	"@DARKSTASIS_DESC",
+	"@SP_INGAME_FORCE_PROJECTION_DESC"
 };
 
 // Movedata Sounds
@@ -2368,8 +2369,8 @@ void UI_LoadMenus(const char* menuFile, const qboolean reset)
 	Com_Printf("----------------------- MovieDuels-SJE-MP -----------------------\n");
 	Com_Printf("-----------------------------------------------------------------\n");
 	Com_Printf("-------------------------- Update 9.0 ---------------------------\n");
-	Com_Printf("--------------------- Build Date 08/11/2026 ---------------------\n");// build date
-	Com_Printf("--------------------------- Build 06 ----------------------------\n");
+	Com_Printf("--------------------- Build Date 09/11/2026 ---------------------\n");// build date
+	Com_Printf("--------------------------- Build 07 ----------------------------\n");
 	Com_Printf("-----------------------------------------------------------------\n");
 	Com_Printf("-------------------------- Lightsaber ---------------------------\n");
 	Com_Printf("---------- An elegant weapon for a more civilized age -----------\n");
@@ -3748,6 +3749,7 @@ static int UI_OwnerDrawWidth(int ownerDraw, float scale)
 	case UI_FORCE_RANK_INSANITY:
 	case UI_FORCE_RANK_BLINDING:
 	case UI_FORCE_RANK_DARK_STASIS:
+	case UI_FORCE_RANK_PROJECTION:
 		findex = UI_FORCE_RANK_INDEX(ownerDraw);
 		//this will give us the index as long as UI_FORCE_RANK is always one below the first force rank index
 		i = uiForcePowersRank[findex];
@@ -4216,6 +4218,7 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
 	case UI_FORCE_RANK_INSANITY:
 	case UI_FORCE_RANK_BLINDING:
 	case UI_FORCE_RANK_DARK_STASIS:
+	case UI_FORCE_RANK_PROJECTION:
 		findex = UI_FORCE_RANK_INDEX(ownerDraw);
 		//this will give us the index as long as UI_FORCE_RANK is always one below the first force rank index
 		if (uiForcePowerDarkLight[findex] && uiForceSide != uiForcePowerDarkLight[findex])
@@ -5515,6 +5518,7 @@ static qboolean UI_OwnerDrawHandleKey(int ownerDraw, int flags, float* special, 
 	case UI_FORCE_RANK_INSANITY:
 	case UI_FORCE_RANK_BLINDING:
 	case UI_FORCE_RANK_DARK_STASIS:
+	case UI_FORCE_RANK_PROJECTION:
 		findex = UI_FORCE_RANK_INDEX(ownerDraw);
 		//this will give us the index as long as UI_FORCE_RANK is always one below the first force rank index
 		return UI_ForcePowerRank_HandleKey(flags, special, key, uiForcePowersRank[findex], 0,

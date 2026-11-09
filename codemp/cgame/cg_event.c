@@ -2961,7 +2961,7 @@ void CG_EntityEvent(centity_t* cent, vec3_t position)
 					const char* str_text = CG_GetStringEdString("MD_MP_INGAME", "PICKUPLINE");
 
 					//Com_Printf("%s %s\n", strText, showPowersName[index]);
-					CG_CenterPrint(va("%s %s\n", str_text, CG_GetStringEdString("MD_MP_GAME", showPowersName[index])),
+					CG_CenterPrint(va("%s %s\n", str_text, CG_ForcePowerDisplayName(index)),
 						SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH);
 				}
 

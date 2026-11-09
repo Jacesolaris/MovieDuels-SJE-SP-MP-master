@@ -73,6 +73,18 @@ static char pzkEndScript[MAX_QPATH];
 
 static cvar_t* g_pazaakAllowed;     // SET_PAZAAK_ALLOWED: 0 = the Play Pazaak key does nothing (saved with the game)
 
+// Not in the movie missions (2026-11-09, DH): the Play Pazaak key, the Shop Menu key and the talk question (the NPC use
+// icon) work everywhere except MovieDuels' own movie missions, which are all md_* maps (the JKA / JKO campaign maps, the
+// duel_* maps and the rest keep them). Scripted matches (SET_PAZAAK_PLAY) and the bar challenges are left alone: a map's
+// own script asked for them.
+static qboolean pzkCampaignMap = qfalse; // level.mapname is not an md_* map (set in G_Pazaak_Init)
+static const char pzkNotCampaign[] = "Only available in campaign mode.";
+
+static qboolean Pzk_IsCampaignMap(const char* map)
+{
+	return Q_stricmpn(map, "md_", 3) ? qtrue : qfalse;
+}
+
 // Challenges before a map's own scripts (see the top of the file)
 #define PZK_CHALLENGE_FILE	"ext_data/MD_pazaak_challenges.dat"
 #define PZK_MAX_CHALLENGES	16
@@ -130,6 +142,7 @@ void G_Pazaak_Init()
 	pzkSignalAfterMatch = qfalse;
 	g_pazaakAllowed = gi.cvar("g_pazaakAllowed", "1", CVAR_ROM | CVAR_SAVEGAME);
 	g_pazaakScriptLog = gi.cvar("g_pazaakScriptLog", "0", 0);
+	pzkCampaignMap = Pzk_IsCampaignMap(level.mapname);
 	G_Shop_Init();
 }
 
@@ -930,6 +943,11 @@ qboolean G_Pazaak_ClientCommand(gentity_t* ent, const char* cmd)
 	}
 	if (!Q_stricmp(cmd, "pazaak"))
 	{
+		if (!pzkCampaignMap)
+		{
+			gi.SendServerCommand(ent->s.number, va("pzkcp \"Pazaak is unavailable.\n%s\"", pzkNotCampaign));
+			return qtrue;
+		}
 		if (!Pzk_CanPlay(ent))
 		{
 			Pzk_Unavailable(ent, "");
@@ -1780,7 +1798,7 @@ static qboolean Shop_SilentClass(const int c)
 // challenge rules: Pzk_NPCBusy) and the player's pazaak rules (no fight, no enemy close, solid ground...: Shop_BusyReason)
 qboolean G_Shop_CanTalk(const gentity_t* player, const gentity_t* npc)
 {
-	if (!g_npcTalk || !g_npcTalk->integer || !player || player->s.number != 0 || !player->client || !npc || !npc->NPC
+	if (!pzkCampaignMap || !g_npcTalk || !g_npcTalk->integer || !player || player->s.number != 0 || !player->client || !npc || !npc->NPC
 		|| !npc->client || npc->health <= 0 || npc->client->ps.pm_type >= PM_DEAD || Pzk_InCutscene()
 		|| level.time < shopTalkFrom)
 	{
@@ -1929,6 +1947,11 @@ static qboolean Shop_ClientCommand(gentity_t* ent, const char* cmd)
 	}
 	if (!Q_stricmp(cmd, "shop"))
 	{
+		if (!pzkCampaignMap)
+		{
+			gi.SendServerCommand(ent->s.number, va("pzkcp \"The shop is unavailable.\n%s\"", pzkNotCampaign));
+			return qtrue;
+		}
 		Shop_Open(ent, "");
 		return qtrue;
 	}

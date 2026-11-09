@@ -789,10 +789,46 @@ static qboolean G_IsGunMOD(const int mod)
 	case MOD_BOWCASTER:
 	case MOD_FLECHETTE:
 	case MOD_FLECHETTE_ALT_SPLASH:
+	case MOD_REPEATER:
+	case MOD_REPEATER_ALT:
+	case MOD_DISRUPTOR:
+	case MOD_CONC:
+	case MOD_CONC_ALT:
 	case MOD_TURBLAST:
 	case MOD_TARGET_LASER:
 	case MOD_VEHICLE:
 	case MOD_SENTRY:
+		return qtrue;
+	default:
+		return qfalse;
+	}
+}
+
+// The weapons (the inflictor's s.weapon) whose killing shot takes a head or a limb. The repeater, disruptor and
+// concussion are added as in SJE (2026-11-09).
+static qboolean G_IsGunShotWeapon(const int weapon)
+{
+	switch (weapon)
+	{
+	case WP_BLASTER:
+	case WP_BOWCASTER:
+	case WP_REPEATER:
+	case WP_DISRUPTOR:
+	case WP_CONCUSSION:
+	case WP_FLECHETTE:
+	case WP_TUSKEN_RIFLE:
+	case WP_TURRET:
+	case WP_EMPLACED_GUN:
+	case WP_BATTLEDROID:
+	case WP_THEFIRSTORDER:
+	case WP_REBELBLASTER:
+	case WP_CLONECARBINE:
+	case WP_CLONECOMMANDO:
+	case WP_CLONERIFLE:
+	case WP_REBELRIFLE:
+	case WP_BOBA:
+	case WP_DROIDEKA:
+	case WP_Z6_ROTARY_CANNON:
 		return qtrue;
 	default:
 		return qfalse;
@@ -6407,7 +6443,7 @@ void G_CheckForDismemberment(gentity_t* ent, const gentity_t* enemy, vec3_t poin
 		return;
 	}
 
-	if (gGAvoidDismember != 2)
+	if (gGAvoidDismember != 2 && !s_gun_dismember) // a gun kill always cuts, as in SP; g_dismember 0 still turns it off (2026-11-09)
 	{
 		//this means do the dismemberment regardless of randomness and damage
 		if (Q_irand(0, 100) > dismember)
@@ -6723,9 +6759,9 @@ void G_Knockdown(gentity_t* self, gentity_t* attacker, const vec3_t push_dir, fl
 		return;
 	}
 
-	if (self->client->repulseChargeStart || self->client->ps.fd.forcePowersActive & 1 << FP_DARK_STASIS)
+	if (self->client->repulseChargeStart || self->client->ps.fd.forcePowersActive & (1 << FP_DARK_STASIS | 1 << FP_PROJECTION))
 	{
-		return; // charging Force Repulse or Dark Stasis active: can't be knocked down
+		return; // charging Force Repulse, Dark Stasis or Force Projection active: can't be knocked down
 	}
 
 	if (self->client->NPC_class == CLASS_ROCKETTROOPER)
@@ -7427,7 +7463,7 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
 	if (!targ)
 		return;
 
-	if (targ->client && (targ->client->repulseChargeStart || targ->client->ps.fd.forcePowersActive & 1 << FP_DARK_STASIS) && mod != MOD_TRIGGER_HURT && mod != MOD_SUICIDE
+	if (targ->client && (targ->client->repulseChargeStart || targ->client->ps.fd.forcePowersActive & (1 << FP_DARK_STASIS | 1 << FP_PROJECTION)) && mod != MOD_TRIGGER_HURT && mod != MOD_SUICIDE
 		&& mod != MOD_CRUSH && mod != MOD_TELEFRAG)
 	{
 		return; // charging Force Repulse (2026-10-12) or Dark Stasis active (2026-10-27): invincible, no knockback, DH
@@ -8609,23 +8645,7 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
 	{
 		//do head shots: the SP list, for the weapons MP has; a pistol takes an arm or a hand at the most
 		const qboolean pistol_shot = G_IsPistolWeapon(inflictor->s.weapon);
-		if (pistol_shot
-			|| inflictor->s.weapon == WP_BLASTER
-			|| inflictor->s.weapon == WP_TUSKEN_RIFLE
-			|| inflictor->s.weapon == WP_FLECHETTE
-			|| inflictor->s.weapon == WP_TURRET
-			|| inflictor->s.weapon == WP_EMPLACED_GUN
-			|| inflictor->s.weapon == WP_BATTLEDROID
-			|| inflictor->s.weapon == WP_THEFIRSTORDER
-			|| inflictor->s.weapon == WP_REBELBLASTER
-			|| inflictor->s.weapon == WP_CLONECARBINE
-			|| inflictor->s.weapon == WP_CLONECOMMANDO
-			|| inflictor->s.weapon == WP_BOWCASTER
-			|| inflictor->s.weapon == WP_BOBA
-			|| inflictor->s.weapon == WP_DROIDEKA
-			|| inflictor->s.weapon == WP_CLONERIFLE
-			|| inflictor->s.weapon == WP_Z6_ROTARY_CANNON
-			|| inflictor->s.weapon == WP_REBELRIFLE)
+		if (pistol_shot || G_IsGunShotWeapon(inflictor->s.weapon))
 		{
 			float z_rel = 0.0f;
 			int height = 0;
@@ -8647,21 +8667,19 @@ void G_Damage(gentity_t* targ, gentity_t* inflictor, gentity_t* attacker, vec3_t
 			z_rel = point[2] - targ->r.currentOrigin[2] + abs(targ->r.mins[2]);
 			z_ratio = z_rel / height;
 
-			// too healthy: no head or body shot, as in SP
-			if (targ->health <= targ->client->ps.stats[STAT_MAX_HEALTH] * 0.25f)
+			// gun_shot is only used by player_die, so it only cuts when this shot kills. The old "only below 25% health
+			// before the shot" rule stopped every one-shot kill from cutting (2026-11-09).
+			if (pistol_shot)
 			{
-				if (pistol_shot)
-				{
-					gun_shot = GUN_SHOT_ARMS;
-				}
-				else if (z_ratio > 0.90f)
-				{
-					gun_shot = GUN_SHOT_HEAD;
-				}
-				else
-				{
-					gun_shot = GUN_SHOT_BODY;
-				}
+				gun_shot = GUN_SHOT_ARMS;
+			}
+			else if (z_ratio > 0.90f)
+			{
+				gun_shot = GUN_SHOT_HEAD;
+			}
+			else
+			{
+				gun_shot = GUN_SHOT_BODY;
 			}
 		}
 	}

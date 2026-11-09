@@ -2224,7 +2224,7 @@ static void G_SaberBounce(const gentity_t* attacker, gentity_t* victim)
 		return;
 	}
 
-	if (attacker->client->ps.saberFatigueChainCount < MISHAPLEVEL_HEAVY)
+	if (attacker->client->ps.saberFatigueChainCount < MISHAPLEVEL_HUDFLASH)
 	{
 		return;
 	}
@@ -3282,6 +3282,70 @@ int WP_SaberBlockCost(gentity_t* defender, const gentity_t* attacker, vec3_t hit
 
 qboolean wp_using_dual_saber_as_primary(const playerState_t* ps);
 
+// NPC / bot block (g_saberNPCBlockBox 1, SJE SP item 287 rounds 4 + 7, MP port 2026-11-09; DH: swings stopped at an
+// invisible box round the NPC, with no parry anim). An NPC parried every saber hit and a bot 80% of them the moment the
+// swing touched their collision box (wider than the body), even when no parry anim could play. Now an NPC / bot that
+// isn't swinging itself blocks only if it can show a parry right now; if it can't, the swing goes on to the model
+// (ghoul2 collision) and hits. 0 = the old blocks.
+static qboolean WP_SaberAIBlocker(const gentity_t* ent)
+{
+	return ent && ent->client && ((ent->s.number >= MAX_CLIENTS && !G_ControlledByPlayer(ent)) || (ent->r.svFlags & SVF_BOT))
+		? qtrue : qfalse;
+}
+
+// Can this NPC / bot play a parry anim now? The parry anim code's own checks (as SJE SP WP_SaberNPCCanShowParry).
+static qboolean WP_SaberAICanShowParry(const gentity_t* ent)
+{
+	const playerState_t* ps = &ent->client->ps;
+
+	if (ps->weaponstate == WEAPON_DROPPING || ps->weaponstate == WEAPON_RAISING)
+	{
+		return qfalse;
+	}
+	if (PM_SaberInAttack(ps->saberMove)
+		|| PM_SaberInTransitionAny(ps->saberMove)
+		|| PM_SaberInBounce(ps->saberMove)
+		|| PM_SaberInBrokenParry(ps->saberMove)
+		|| PM_SaberInKnockaway(ps->saberMove)
+		|| PM_SuperBreakLoseAnim(ps->torsoAnim)
+		|| PM_SuperBreakWinAnim(ps->torsoAnim)
+		|| PM_SaberInMassiveBounce(ps->torsoAnim)
+		|| PM_SaberInBashedAnim(ps->torsoAnim)
+		|| PM_InRoll(ps)
+		|| BG_InKnockDown(ps->legsAnim)
+		|| BG_InKnockDown(ps->torsoAnim)
+		|| PM_InKnockDown(ps))
+	{
+		return qfalse;
+	}
+	return ps->fd.blockPoints > BLOCKPOINTS_FAIL && ps->fd.forcePower > BLOCKPOINTS_DANGER ? qtrue : qfalse;
+}
+
+// The in-hand saber swing of atk reached self: with g_saberNPCBlockBox an NPC / bot that isn't swinging (a clash of two
+// swings is handled as before) and can't show a parry doesn't block it.
+static qboolean WP_SaberAINoParryShown(const gentity_t* self, const gentity_t* atk)
+{
+	if (!g_saberNPCBlockBox.integer || !WP_SaberAIBlocker(self) || !atk || !atk->client
+		|| atk->client->ps.weapon != WP_SABER || atk->client->ps.saberInFlight)
+	{
+		return qfalse;
+	}
+	if (PM_SaberInAttack(self->client->ps.saberMove) || PM_SaberInSpecialAttack(self->client->ps.torsoAnim))
+	{
+		return qfalse;
+	}
+	if (WP_SaberAICanShowParry(self))
+	{
+		return qfalse;
+	}
+	if (g_DebugSaberCombat.integer && WP_SaberAIBlocker(self) && !(atk->r.svFlags & SVF_BOT) && atk->s.number < MAX_CLIENTS)
+	{
+		Com_Printf(S_COLOR_MAGENTA"%d no block: %s can't show a parry (BP %d)\n", level.time,
+			self->NPC_type ? self->NPC_type : self->client->pers.netname, self->client->ps.fd.blockPoints);
+	}
+	return qtrue;
+}
+
 static int wp_saber_must_block(gentity_t* self, const gentity_t* atk, const qboolean check_b_box_block, vec3_t point, const int rSaberNum, const int rBladeNum)
 {
 	if (!self || !self->client || !atk)
@@ -3310,6 +3374,11 @@ static int wp_saber_must_block(gentity_t* self, const gentity_t* atk, const qboo
 
 	if (PM_SaberInKata(self->client->ps.saberMove))
 	{
+		return 0;
+	}
+
+	if (WP_SaberAINoParryShown(self, atk))
+	{// g_saberNPCBlockBox: an NPC / bot blocks a swing only with a parry anim (2026-11-09)
 		return 0;
 	}
 
@@ -7431,18 +7500,17 @@ static QINLINE qboolean CheckSaberDamage(gentity_t* self, const int rSaberNum, c
 			G_Sound(victim, CHAN_BODY, G_SoundIndex(va("sound/weapons/impacts/beskar_impact%d.mp3", index)));
 		}
 
-		// Perfect parry: defender in active block/parry state
-		qboolean perfectParry = qfalse;
-
-		if (victim->client &&
-			!(dflags & DAMAGE_NO_DAMAGE) &&
-			(self_m_blocking == qtrue))
-		{
-			perfectParry = qtrue;
-		}
-
-		// Hit-confirm chain boost: landing a hit speeds up next chain swing
-		if (!perfectParry && !(dflags & DAMAGE_NO_DAMAGE) && victim->client)
+		// Perfect parry (SJE SP item 287, MP port 2026-11-09; DH: a perfect parry costs block points, never shield). The
+		// perfect block code (sab_beh_attack_vs_block / sab_beh_block_vs_attack, w_saberblocking.c) takes the attacker's
+		// block points, gives the riposte window (g_saberPerfectParry) and clears the damage of the parried hit. A second
+		// perfect parry here zeroed every hit while the ATTACKER's own perfect-block timing flag was up, took 10 shield
+		// (STAT_ARMOR) from him and stunned him 350 ms: removed. The defender's flag is only read now, so a hit on a
+		// perfect-blocking defender doesn't count for the hit-confirm.
+		const qboolean perfectParry = victim->client &&
+			(victim->client->ps.ManualBlockingFlags & (1 << MBF_PERFECTBLOCKING)) != 0 ? qtrue : qfalse;
+		// Hit-confirm chain boost (g_saberHitConfirm, default 0 since 2026-11-09): landing a hit speeds up the next
+		// chain swing
+		if (g_saberHitConfirm.integer && !perfectParry && !(dflags & DAMAGE_NO_DAMAGE) && victim->client)
 		{
 			// reduce weaponTime to let the next swing chain faster
 			self->client->ps.weaponTime = (int)(self->client->ps.weaponTime * 0.5f);
@@ -7450,23 +7518,10 @@ static QINLINE qboolean CheckSaberDamage(gentity_t* self, const int rSaberNum, c
 				self->client->ps.weaponTime = 50;
 		}
 
-		if (perfectParry)
-		{// defender perfectly parried: zero damage, stagger attacker, riposte
-			dflags |= DAMAGE_NO_DAMAGE;
-			// stagger attacker for 350ms, cancel their combo
-			self->client->ps.weaponTime = 350;
-			self->client->ps.saberAttackChainCount = 0;
-			self->client->ps.saberMove = LS_READY;
-			// deduct armor from attacker
-			self->client->ps.stats[STAT_ARMOR] -= 10;
-			if (self->client->ps.stats[STAT_ARMOR] < 0)
-				self->client->ps.stats[STAT_ARMOR] = 0;
-			// grant defender riposte window for 500ms
-			victim->client->ps.saberRiposteTime = level.time + 500;
-		}
-
-		// Startup wind-up interrupt: if victim is in early attack frames, bypass armor
-		if (victim->client &&
+		// Startup wind-up interrupt (g_saberHitConfirm, default 0 since 2026-11-09): a hit on a victim who is starting
+		// an attack bypasses armor and cancels his swing
+		if (g_saberHitConfirm.integer &&
+			victim->client &&
 			!perfectParry &&
 			PM_SaberInAttack(victim->client->ps.saberMove) &&
 			victim->client->ps.weaponstate == WEAPON_FIRING)
@@ -9840,17 +9895,15 @@ void WP_saberBackToOwner(gentity_t* saberent)
 				WP_BlockPointsRegenerate(saber_owner, BLOCKPOINTS_TWENTYFIVE);
 				WP_ForcePowerRegenerate(saber_owner, BLOCKPOINTS_TWENTYFIVE);
 
-				// Schedule delayed saber-style switch (2.5 seconds)
-				saber_owner->client->botPendingFlags |= BOT_SABER_PENDING_MASK;
-				saber_owner->client->ps.botPendingStyleTime = level.time + 2500;
-
 				// Reset saber state
 				saber_owner->client->ps.saberMove = LS_READY;
 				saber_owner->client->ps.saberBlocked = BLOCKED_NONE;
 
-				// Schedule BOTH_STAND1TO2 to play 1.2 seconds later
-				saber_owner->client->botPendingFlags |= BOT_PENDING_STAND_ANIM;
-				saber_owner->client->ps.botPendingStandTime = level.time + 1200;
+				// (2026-11-09, DH: bots freeze for a few seconds after catching their thrown saber) A bot no longer
+				// plays a second draw anim (BOTH_STAND1TO2) 1.2 s after the catch and a style switch with the put away
+				// anim (BOTH_STAND2TO1) 2.5 s after it: the catch itself already plays the draw (HANDEXTEND_SABERCATCH),
+				// as for a player, and the bot AI picks its style in the fight. Any of those still pending is cleared.
+				saber_owner->client->botPendingFlags &= ~(BOT_SABER_PENDING_MASK | BOT_PENDING_STAND_ANIM);
 			}
 			else
 			{
@@ -10508,12 +10561,12 @@ static void WP_HolsterSaberAndPlayOffSounds(gentity_t* hit_ent)
 extern qboolean PM_KnockDownAnim(int anim);
 static void WP_KnockdownAndDrain(gentity_t* hit_ent, gentity_t* pusher, int knockAnimMin, int knockAnimMax, qboolean addFatigueBonus, qboolean useAbsorbDrain)
 {
-	const qboolean isBot = (qboolean)((hit_ent->r.svFlags & SVF_BOT) != 0);
-
 	if (!hit_ent || !hit_ent->client)
 	{
 		return;
 	}
+
+	const qboolean isBot = (qboolean)((hit_ent->r.svFlags & SVF_BOT) != 0); // read after the null check (2026-11-09)
 
 	G_SetAnim(hit_ent, &hit_ent->client->pers.cmd, SETANIM_BOTH, (knockAnimMin == knockAnimMax) ? knockAnimMin : Q_irand(knockAnimMin, knockAnimMax), SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
 
@@ -10594,19 +10647,31 @@ qboolean WP_AbsorbKick(gentity_t* hit_ent, gentity_t* pusher, vec3_t push_dir)
 	// ============================================================
 	if (BotCanAbsorbKick(hit_ent, push_dir) && npc_blocking && isBot)
 	{
-		if (hit_ent->client->ps.fd.blockPoints > 50 && hit_ent->client->ps.fd.forcePower > 50)
-		{
-			G_Stagger(hit_ent);
-			WP_BlockPointsDrain(hit_ent, FATIGUE_BP_ABSORB);
-			WP_DeactivateSaber(hit_ent);
-		}
-		else
+		// 2026-11-09 (SJE SP item 287 round 2, DH: NPCs/bots absorb a kick and turn the knockdown into a backflip). It was
+		// the wrong way round: a fresh bot (BP and FP > 50) staggered AND switched its saber off, a tired one backflipped,
+		// and the flip played standing on the floor with no lift. Now a fresh bot backflips out of it as a real jump (like
+		// the player's back-jump flip; the kick's throw pushes it back), a tired one only staggers, and the saber stays on.
+		// Sabers that forbid flips (SFL_NO_FLIPS) stagger.
+		const qboolean can_flip = (qboolean)(!(hit_ent->client->saber[0].saberFlags & SFL_NO_FLIPS)
+			&& (hit_ent->client->saber[1].model[0] == 0 || !(hit_ent->client->saber[1].saberFlags & SFL_NO_FLIPS)));
+
+		if (hit_ent->client->ps.fd.blockPoints > 50 && hit_ent->client->ps.fd.forcePower > 50 && can_flip)
 		{
 			G_SetAnim(hit_ent, &hit_ent->client->pers.cmd,
 				SETANIM_BOTH,
-				Q_irand(BOTH_FLIP_BACK1, BOTH_FLIP_BACK2),
+				Q_irand(BOTH_FLIP_BACK1, BOTH_FLIP_BACK3),
 				SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD,
 				0);
+			hit_ent->client->ps.pm_flags |= PMF_JUMP_HELD;
+			hit_ent->client->ps.groundEntityNum = ENTITYNUM_NONE;
+			hit_ent->client->ps.fd.forceJumpZStart = hit_ent->client->ps.origin[2];
+			hit_ent->client->ps.velocity[2] = JUMP_VELOCITY;
+			G_AddEvent(hit_ent, EV_JUMP, 0);
+			WP_BlockPointsDrain(hit_ent, FATIGUE_BP_ABSORB);
+		}
+		else
+		{
+			G_Stagger(hit_ent);
 			WP_BlockPointsDrain(hit_ent, FATIGUE_BP_ABSORB);
 		}
 
@@ -13895,14 +13960,14 @@ int PlayerCanAbsorbKick(const gentity_t* defender, const vec3_t push_dir) //Can 
 {
 	vec3_t p_l_angles, p_l_fwd;
 
-	const qboolean is_holding_block_button = ((defender->client->ps.ManualBlockingFlags & 1 << MBF_HOLDINGBLOCK) != 0) ? qtrue : qfalse;
-	//Normal Blocking
-
 	if (!defender || !defender->client)
 	{
 		//non-humanoids can't absorb kicks.
 		return qfalse;
 	}
+
+	const qboolean is_holding_block_button = ((defender->client->ps.ManualBlockingFlags & 1 << MBF_HOLDINGBLOCK) != 0) ? qtrue : qfalse;
+	//Normal Blocking (read after the null check, 2026-11-09)
 	if (!is_holding_block_button) // Must be holding Block button
 	{
 		// Not doing any blocking can't absorb kicks.

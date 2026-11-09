@@ -298,6 +298,7 @@ XCVAR_DEF(g_ledgeGrabMinAir, "16", NULL, CVAR_ARCHIVE) // a ledge is grabbed onl
 XCVAR_DEF(g_candojumpdash, "1", NULL, CVAR_SYSTEMINFO)
 XCVAR_DEF(g_candodoublejump, "1", NULL, CVAR_SYSTEMINFO)
 XCVAR_DEF(g_saberLockCinematicCamera, "1", NULL, CVAR_ARCHIVE)
+XCVAR_DEF(cg_saberLockMeter, "1", NULL, CVAR_ARCHIVE) // saber lock meter at the bottom of the screen (2026-11-09)
 XCVAR_DEF(g_AimingCinematicCamera, "1", NULL, CVAR_ARCHIVE)
 XCVAR_DEF(cg_aimShoulder, "1", NULL, CVAR_ARCHIVE)	// aiming camera over the right shoulder (x model size); 0 = centred
 XCVAR_DEF(cg_aimCamHorzOffset, "0", NULL, CVAR_ARCHIVE)	// aiming camera's side offset, used instead of cg_thirdPersonHorzOffset (same on every camera preset)

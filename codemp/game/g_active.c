@@ -54,6 +54,7 @@ extern float BG_WaterDeathFrame(const playerState_t* ps, const animation_t* anim
 #include <stdlib.h>
 
 extern void player_Cloak(gentity_t* self);
+extern void G_SaberRiposteUpdate(gentity_t* ent); // w_saberblocking.c: riposte window / swing timers (g_saberPerfectParry, 2026-11-09)
 extern void Jedi_Cloak(gentity_t* self);
 extern void Jedi_Decloak(gentity_t* self);
 extern int IsPressingKickButton(const gentity_t* self);
@@ -5767,6 +5768,12 @@ static void ClientThink_real(gentity_t* ent)
 			}
 		}
 	}
+	else if (ent->r.svFlags & SVF_BOT)
+	{
+		// saber off, thrown or bashed: no kick absorb. The flag used to stay set (for up to 5 s) from the last frame the
+		// saber was on, so a bot could keep absorbing kicks with its saber off (2026-11-09)
+		client->ps.ManualBlockingFlags &= ~(1 << MBF_NPCKICKBLOCK);
+	}
 
 	if (ent->r.svFlags & SVF_BOT)
 	{
@@ -6715,6 +6722,8 @@ static void ClientThink_real(gentity_t* ent)
 	ent->client->saberBlasterLockEnemy = ent->client->ps.saberLockTime >= level.time ? ent->client->ps.saberLockEnemy : ENTITYNUM_NONE;
 
 	Pmove(&pmove);
+
+	G_SaberRiposteUpdate(ent); // riposte window 500 ms, riposte swing 1.5 s at most (g_saberPerfectParry, 2026-11-09)
 
 	if (ent->client->solidHack)
 	{

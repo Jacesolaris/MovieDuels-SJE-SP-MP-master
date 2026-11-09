@@ -77,6 +77,7 @@ extern cvar_t* g_noFootSlide;
 extern cvar_t* g_noFootSlideRunScale;
 extern cvar_t* g_noFootSlideWalkScale;
 extern cvar_t* g_saberAnimSpeed;
+extern cvar_t* g_saberPerfectParry;
 extern cvar_t* g_saberAutoAim;
 extern cvar_t* g_speederControlScheme;
 extern cvar_t* g_saberNewControlScheme;
@@ -6385,6 +6386,14 @@ void PM_SaberStartTransAnim(const int saberAnimLevel,
 	if (!gent || !gent->client || gent->client->ps.weapon != WP_SABER)
 	{
 		return;
+	}
+
+	// Riposte (mode 2, g_saberPerfectParry, 2026-11-09, as SJE): the riposte swing after a perfect parry plays 15%
+	// faster (saberRiposteTime < 0 while it runs, set in PM_SetSaberMove). Here, before the cases below that return.
+	if (g_SerenityJediEngineMode->integer == 2 && gent->client->ps.saberRiposteTime < 0
+		&& -gent->client->ps.saberRiposteTime > level.time && g_saberPerfectParry && g_saberPerfectParry->integer)
+	{
+		*animSpeed *= 1.15f;
 	}
 
 	//======================================================================

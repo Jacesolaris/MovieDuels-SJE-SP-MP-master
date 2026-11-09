@@ -1571,6 +1571,347 @@ static void Bot_TooCloseShove(bot_state_t* bs, bot_input_t* bi)
 	bi->actionflags &= ~(ACTION_ATTACK | ACTION_ALT_ATTACK);
 }
 
+// Saber tactics (g_saberAITactics 1, 2026-11-09, the same rule as the saber NPCs' Jedi_MeleeGoodMoment): against a
+// human player a saber bot kicks only when he turtles (guard up, not swinging) or is low on block points. Bots and NPCs
+// as targets are unchanged. Bot_TooCloseShove (stuck blade to blade) is not gated: it has its own 4 - 7 s wait.
+extern qboolean WP_SaberAIEnemyTurtling(const gentity_t* enemy); // w_saberblocking.c
+static qboolean Bot_SaberKickGoodMoment(const bot_state_t* bs)
+{
+	const gentity_t* enemy = bs->currentEnemy;
+	if (!g_saberAITactics.integer || bs->cur_ps.weapon != WP_SABER || !enemy || !enemy->client)
+	{
+		return qtrue; // old behaviour
+	}
+	if (enemy->s.number >= MAX_CLIENTS || enemy->r.svFlags & SVF_BOT)
+	{
+		return qtrue; // vs bots and NPCs unchanged
+	}
+	if (enemy->client->ps.fd.blockPoints < BLOCKPOINTS_THIRTY)
+	{
+		return qtrue; // worn down: punish him
+	}
+	return WP_SaberAIEnemyTurtling(enemy);
+}
+
+// Saber bots get the saber NPCs' defend-first and recover (2026-11-09, DH: "add this to mp bots also"), under the same
+// cvars (g_saberAIDefend, g_saberAIRecover) and with the same numbers as NPC_AI_Jedi.c (Jedi_DefendFirst,
+// Jedi_RecoverBackOff). Feints: bg_saber.c / WP_SaberAIFeintWanted (g_saberAITactics) now take bots too.
+extern qboolean PM_SaberInSpecialAttack(int anim);
+extern void WP_ActivateSaber(gentity_t* self);
+#define BOT_MEDITATE_MAX		8000	// ms a recovering bot meditates at most
+static int s_botDefendRoll[MAX_CLIENTS];
+static int s_botDefendHold[MAX_CLIENTS];
+static int s_botRecoverUntil[MAX_CLIENTS];	// backing off until
+static int s_botRecoverNext[MAX_CLIENTS];	// the next back-off can start at
+static int s_botMeditateUntil[MAX_CLIENTS];	// meditating until (0: not meditating)
+static int s_botMeditateNext[MAX_CLIENTS];	// the next meditation can start at
+
+// 0 (easy) .. 3 (hardest), as WP_SaberAISkill (w_saberblocking.c): bot skill 1-5 -> 0-3
+static int Bot_SaberAISkill(const bot_state_t* bs)
+{
+	const int skill = (int)bs->settings.skill - 2;
+	return skill < 0 ? 0 : skill > 3 ? 3 : skill;
+}
+
+// The saber NPCs' enemy distance (NPC_AI_Jedi.c: centre distance less blade, 1.5 bbox widths and 16), so the NPC numbers
+// (48, 96, 192, 256, 320) mean the same for a bot.
+static float Bot_SaberAIEnemyDist(const bot_state_t* bs)
+{
+	const gentity_t* self = &g_entities[bs->client];
+	float blade = 40.0f;
+
+	if (self->client && self->client->saber[0].blade[0].lengthMax > 0.0f)
+	{
+		blade = self->client->saber[0].blade[0].lengthMax;
+	}
+	return bs->frame_Enemy_Len - (blade + self->r.maxs[0] * 1.5f + 16.0f);
+}
+
+// g_saberAIDefend: while the enemy swings his saber at me from close in, guard (a bot that isn't attacking blocks)
+// instead of swinging back into his attack. Always against a swing spammer (fatigue at the HUD flash level); otherwise by
+// skill, 50/65/80/90%, re-rolled every 400 ms. A riposte window (perfect parry) or a saber lock still attacks.
+static qboolean Bot_SaberDefendFirst(const bot_state_t* bs)
+{
+	static const int hold_chance[4] = { 50, 65, 80, 90 };
+	const int c = bs->client;
+	const gentity_t* self = &g_entities[c];
+	const gentity_t* enemy = bs->currentEnemy;
+	const playerState_t* eps;
+	vec3_t my_origin, enemy_origin, enemy_angles;
+
+	if (!g_saberAIDefend.integer || !self->client || self->client->ps.weapon != WP_SABER
+		|| self->client->ps.saberInFlight || self->client->ps.saberHolstered == 2
+		|| self->client->ps.saberLockTime > level.time)
+	{
+		return qfalse;
+	}
+	if (!enemy || !enemy->client || enemy->health <= 0 || enemy->client->ps.weapon != WP_SABER
+		|| enemy->client->ps.saberInFlight || enemy->client->ps.saberHolstered == 2)
+	{
+		return qfalse;
+	}
+	if (Bot_SaberAIEnemyDist(bs) > 48.0f)
+	{
+		return qfalse;
+	}
+	if (self->client->ps.userInt3 & 1 << FLAG_RIPOSTEREADY)
+	{// riposte window open: take it
+		return qfalse;
+	}
+	eps = &enemy->client->ps;
+	if (!PM_SaberInAttack(eps->saberMove) && !PM_SaberInStart(eps->saberMove) && !PM_SaberInSpecialAttack(eps->torsoAnim))
+	{// he isn't swinging
+		return qfalse;
+	}
+	VectorCopy(self->r.currentOrigin, my_origin);
+	VectorCopy(enemy->r.currentOrigin, enemy_origin);
+	VectorCopy(eps->viewangles, enemy_angles);
+	if (!InFront(my_origin, enemy_origin, enemy_angles, 0.3f))
+	{// not swinging at me
+		return qfalse;
+	}
+	if (eps->saberFatigueChainCount >= MISHAPLEVEL_HUDFLASH)
+	{// a swing spammer: always guard, let his fatigue break him
+		return qtrue;
+	}
+	if (s_botDefendRoll[c] > level.time + 400 || s_botDefendHold[c] > level.time + 400)
+	{// left over from an earlier map
+		s_botDefendRoll[c] = s_botDefendHold[c] = 0;
+	}
+	if (s_botDefendRoll[c] <= level.time)
+	{
+		s_botDefendRoll[c] = level.time + 400;
+		if (Q_irand(1, 100) <= hold_chance[Bot_SaberAISkill(bs)])
+		{
+			s_botDefendHold[c] = level.time + 400;
+			if (g_DebugSaberCombat.integer)
+			{
+				Com_Printf("(%d) DEFEND: bot %s holds guard vs swing (enemy fatigue %d)\n", level.time,
+					self->client->pers.netname, eps->saberFatigueChainCount);
+			}
+		}
+	}
+	return s_botDefendHold[c] > level.time ? qtrue : qfalse;
+}
+
+// Is the bot backing off or meditating to recover (g_saberAIRecover)? No dash in at the enemy then.
+static qboolean Bot_SaberRecovering(const bot_state_t* bs)
+{
+	return g_saberAIRecover.integer
+		&& (s_botRecoverUntil[bs->client] > level.time || s_botMeditateUntil[bs->client] > level.time) ? qtrue : qfalse;
+}
+
+// Swinging, in a special attack or a kick: busy (as Jedi_SaberBusy)
+static qboolean Bot_SaberBusy(const gclient_t* cl)
+{
+	return PM_SaberInAttack(cl->ps.saberMove) || PM_SaberInStart(cl->ps.saberMove)
+		|| PM_SaberInSpecialAttack(cl->ps.torsoAnim) || PM_KickMove(cl->ps.saberMove) ? qtrue : qfalse;
+}
+
+// Back off from the enemy, facing him: straight back, else back-left / back-right, else sideways, whichever has 64 units
+// of room and floor under it. qfalse: cornered.
+static qboolean Bot_SaberBackOffMove(const bot_state_t* bs, bot_input_t* bi)
+{
+	const gentity_t* self = &g_entities[bs->client];
+	vec3_t away, side, dirs[5], mins, maxs, end, down;
+	trace_t tr;
+	int i;
+
+	VectorSubtract(self->r.currentOrigin, bs->currentEnemy->r.currentOrigin, away);
+	away[2] = 0.0f;
+	if (VectorNormalize(away) < 0.001f)
+	{
+		return qfalse;
+	}
+	VectorSet(side, -away[1], away[0], 0.0f);
+	if (bs->meleeStrafeDir)
+	{
+		VectorScale(side, -1.0f, side);
+	}
+	VectorCopy(away, dirs[0]);
+	VectorAdd(away, side, dirs[1]);
+	VectorSubtract(away, side, dirs[2]);
+	VectorCopy(side, dirs[3]);
+	VectorScale(side, -1.0f, dirs[4]);
+
+	VectorCopy(self->r.mins, mins);
+	VectorCopy(self->r.maxs, maxs);
+	mins[2] += STEPSIZE; // steps are fine
+
+	for (i = 0; i < 5; i++)
+	{
+		VectorNormalize(dirs[i]);
+		VectorMA(self->r.currentOrigin, 64.0f, dirs[i], end);
+		trap->Trace(&tr, self->r.currentOrigin, mins, maxs, end, bs->client, MASK_PLAYERSOLID, qfalse, 0, 0);
+		if (tr.startsolid || tr.allsolid || tr.fraction < 0.9f)
+		{
+			continue;
+		}
+		VectorCopy(end, down);
+		down[2] -= 64.0f;
+		trap->Trace(&tr, end, NULL, NULL, down, bs->client, MASK_PLAYERSOLID, qfalse, 0, 0);
+		if (tr.fraction >= 1.0f)
+		{// a drop: not that way
+			continue;
+		}
+		bi->actionflags &= ~(ACTION_ATTACK | ACTION_ALT_ATTACK | ACTION_KICK | ACTION_WALK | ACTION_MOVEFORWARD
+			| ACTION_MOVEBACK | ACTION_MOVELEFT | ACTION_MOVERIGHT);
+		VectorCopy(dirs[i], bi->dir);
+		bi->speed = 400;
+		return qtrue;
+	}
+	return qfalse;
+}
+
+// Meditate for block points, saber off (BOTH_MEDITATE: a rest anim, so w_force.c gives the fast block point regen and
+// lowers the mishap level), when the enemy is far enough (> 256) - as the NPCs' Jedi_CombatDistance section 4.
+static qboolean Bot_SaberMeditateStart(const bot_state_t* bs, const float enemy_dist)
+{
+	const int c = bs->client;
+	gentity_t* self = &g_entities[c];
+	gclient_t* cl = self->client;
+
+	if (enemy_dist <= 256.0f || s_botMeditateNext[c] > level.time || cl->ps.fd.blockPoints >= BLOCKPOINTS_THIRTY
+		|| bs->currentEnemy->client->ps.weapon != WP_SABER || cl->ps.weaponTime > 0
+		|| cl->ps.groundEntityNum == ENTITYNUM_NONE || cl->ps.saberInFlight || PM_InKnockDown(&cl->ps)
+		|| cl->ps.saberLockTime > level.time || cl->ps.m_iVehicleNum || Bot_SaberBusy(cl)
+		|| cl->ps.fd.forceGripCripple || self->watertype == CONTENTS_WATER)
+	{
+		return qfalse;
+	}
+	if (cl->ps.saberHolstered == 1 && cl->saber[1].model[0])
+	{// turn off the second saber
+		G_Sound(self, CHAN_WEAPON, cl->saber[1].soundOff);
+	}
+	else if (cl->ps.saberHolstered == 0)
+	{
+		G_Sound(self, CHAN_WEAPON, cl->saber[0].soundOff);
+	}
+	cl->ps.saberHolstered = 2;
+	NPC_SetAnim(self, SETANIM_BOTH, BOTH_MEDITATE, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
+	VectorClear(cl->ps.velocity);
+	cl->ps.powerups[PW_MEDITATE] = level.time + cl->ps.torsoTimer + 3000;
+	s_botMeditateUntil[c] = level.time + BOT_MEDITATE_MAX;
+	s_botMeditateNext[c] = level.time + Q_irand(15000, 25000);
+	if (g_DebugSaberCombat.integer)
+	{
+		Com_Printf("bot %s meditates (block points %d)\n", cl->pers.netname, cl->ps.fd.blockPoints);
+	}
+	return qtrue;
+}
+
+// g_saberAIRecover: a saber bot low on block points (< 30) or on health (<= 1/3, with Force Heal to use) backs off for
+// up to 3-4 s, facing the enemy, until it is 320+ from him; there it meditates for block points (enemy > 256), and the
+// usual bot Force Heal heals it. An enemy that runs it down (< 96, in front) is fought, meditation stops when the enemy
+// comes within 192, and a back-off can only start once every 30 s (easy) down to 15 s (hardest). qtrue: it took over
+// the bot's input this frame.
+static qboolean Bot_SaberRecover(bot_state_t* bs, bot_input_t* bi)
+{
+	const int c = bs->client;
+	gentity_t* self = &g_entities[c];
+	gclient_t* cl = self->client;
+	const gentity_t* enemy = bs->currentEnemy;
+
+	if (s_botRecoverUntil[c] > level.time + 4000 || s_botRecoverNext[c] > level.time + 30000
+		|| s_botMeditateUntil[c] > level.time + BOT_MEDITATE_MAX || s_botMeditateNext[c] > level.time + 25000)
+	{// left over from an earlier map
+		s_botRecoverUntil[c] = s_botRecoverNext[c] = s_botMeditateUntil[c] = s_botMeditateNext[c] = 0;
+	}
+
+	if (!g_saberAIRecover.integer || !cl || self->health <= 0 || cl->ps.weapon != WP_SABER
+		|| !enemy || !enemy->client || enemy->health <= 0)
+	{
+		if (s_botMeditateUntil[c] && cl && self->health > 0)
+		{// was meditating: saber back on
+			WP_ActivateSaber(self);
+		}
+		s_botRecoverUntil[c] = s_botMeditateUntil[c] = 0;
+		return qfalse;
+	}
+
+	{
+		const float enemy_dist = Bot_SaberAIEnemyDist(bs);
+
+		// meditating
+		if (s_botMeditateUntil[c])
+		{
+			if (cl->ps.legsAnim != BOTH_MEDITATE || enemy_dist < 192.0f || s_botMeditateUntil[c] <= level.time
+				|| cl->ps.fd.blockPoints >= BLOCKPOINTS_FULL)
+			{// get up (the enemy is coming, or done): the next move or button ends the pose (BOTH_MEDITATE_END)
+				s_botMeditateUntil[c] = 0;
+				WP_ActivateSaber(self);
+				return qfalse;
+			}
+			bi->actionflags = 0;
+			VectorClear(bi->dir);
+			bi->speed = 0;
+			return qtrue;
+		}
+
+		if (PM_InKnockDown(&cl->ps) || cl->ps.saberLockTime > level.time || cl->ps.saberInFlight || Bot_SaberBusy(cl))
+		{
+			return qfalse;
+		}
+
+		if (s_botRecoverUntil[c] <= level.time)
+		{
+			// not backing off: meditate now (enemy far, low on block points), or should it start backing off?
+			const qboolean low_bp = cl->ps.fd.blockPoints < BLOCKPOINTS_THIRTY ? qtrue : qfalse;
+			const qboolean low_health = self->health <= cl->ps.stats[STAT_MAX_HEALTH] / 3
+				&& cl->ps.fd.forcePowersKnown & 1 << FP_HEAL && cl->ps.fd.forcePowerLevel[FP_HEAL] > FORCE_LEVEL_1
+				&& cl->ps.fd.forcePower >= 25 ? qtrue : qfalse;
+
+			s_botRecoverUntil[c] = 0;
+			if (Bot_SaberMeditateStart(bs, enemy_dist))
+			{
+				bi->actionflags = 0;
+				VectorClear(bi->dir);
+				bi->speed = 0;
+				return qtrue;
+			}
+			if ((!low_bp && !low_health) || enemy_dist >= 320.0f || s_botRecoverNext[c] > level.time)
+			{
+				return qfalse;
+			}
+			s_botRecoverUntil[c] = level.time + Q_irand(3000, 4000);
+			s_botRecoverNext[c] = level.time + 30000 - 5000 * Bot_SaberAISkill(bs);
+			if (g_DebugSaberCombat.integer)
+			{
+				Com_Printf("bot %s backs off to recover (%s)\n", cl->pers.netname, low_bp ? "block points" : "health");
+			}
+		}
+
+		// backing off
+		if (enemy_dist >= 320.0f)
+		{// far enough: meditate here (if low on block points) next frame
+			s_botRecoverUntil[c] = 0;
+			return qfalse;
+		}
+		if (enemy_dist < 96.0f)
+		{
+			vec3_t enemy_origin, my_origin, my_angles;
+			VectorCopy(enemy->r.currentOrigin, enemy_origin);
+			VectorCopy(self->r.currentOrigin, my_origin);
+			VectorCopy(cl->ps.viewangles, my_angles);
+			if (InFront(enemy_origin, my_origin, my_angles, 0.3f))
+			{// run down: stand and fight
+				s_botRecoverUntil[c] = 0;
+				return qfalse;
+			}
+		}
+		if (cl->ps.saberHolstered)
+		{
+			WP_ActivateSaber(self);
+		}
+		if (!Bot_SaberBackOffMove(bs, bi))
+		{// cornered: stand and fight
+			s_botRecoverUntil[c] = 0;
+			return qfalse;
+		}
+		return qtrue;
+	}
+}
+
 #define BOT_TIMED_ACTION_HOLD	250		// ms a timed action (kick) holds its button
 #define BOT_MELEE_SWING_RANGE	80.0f	// melee bots punch only this close
 static qboolean bot_try_timed_action(
@@ -2033,10 +2374,20 @@ static void bot_update_input(bot_state_t* bs, const int time, const int elapsed_
 	// Manual overrides
 	if (bs->doWalk)       bi.actionflags |= ACTION_WALK;
 	if (bs->doBotKick)    bi.actionflags |= ACTION_KICK;
+	if (bi.actionflags & ACTION_KICK && !Bot_SaberKickGoodMoment(bs))
+	{// g_saberAITactics: vs a human player only when he turtles or is low on block points (2026-11-09)
+		bi.actionflags &= ~ACTION_KICK;
+	}
 	Bot_TooCloseShove(bs, &bi); // too close too long: kick / hilt bash / slap
 	if (bs->doBotGesture) bi.actionflags |= ACTION_GESTURE;
 	if (bs->doBotBlock && bs->cur_ps.weapon == WP_SABER)
 		bi.actionflags |= ACTION_BLOCK;
+
+	// saber bots (2026-11-09): recover (g_saberAIRecover) and defend first (g_saberAIDefend), as the saber NPCs
+	if (!Bot_SaberRecover(bs, &bi) && bi.actionflags & (ACTION_ATTACK | ACTION_ALT_ATTACK) && Bot_SaberDefendFirst(bs))
+	{// guard against his swing, don't attack into it
+		bi.actionflags &= ~(ACTION_ATTACK | ACTION_ALT_ATTACK);
+	}
 
 	// Force selection
 	bi.forcesel = level.clients[bs->client].ps.fd.forcePowerSelected;
@@ -10668,26 +11019,9 @@ void bot_behave_attack_basic(bot_state_t* bs, const gentity_t* target)
 			//we want to attack, and we need to choose a new attack swing, pick randomly.
 			movefor_attack_quad(bs, move_dir, Bot_HeldAttackQuad(bs)); // held 0.4 - 0.8 s (was a new random one every frame)
 		}
-		else if (bs->cur_ps.userInt3 & 1 << FLAG_ATTACKFAKE)
-		{
-			//successfully started an attack fake, don't do it again for a while.
-			bs->saberBFTime = level.time + Q_irand(3000, 5000); //every 3-5 secs
-		}
-		else if (bs->saberBFTime < level.time
-			&& (PM_SaberInTransition(bs->cur_ps.saberMove)
-				|| PM_SaberInStart(bs->cur_ps.saberMove)))
-		{
-			//we can and want to do a saber attack fake.
-			int fake_quad = Q_irand(Q_BR, Q_B);
-			while (fake_quad == saberMoveData[bs->cur_ps.saberMove].endQuad)
-			{
-				//can't fake in the direction we're already trying to attack in
-				fake_quad = Q_irand(Q_BR, Q_B);
-			}
-			//start trying to fake
-			movefor_attack_quad(bs, move_dir, fake_quad);
-			trap->EA_Alt_Attack(bs->client);
-		}
+		// (2026-11-09) The old attack fake here pressed alt attack in every wind-up / transition frame: that is no fake
+		// in SJE (attack + use is), and with attack held while standing it started a kata past the bot kata cooldown.
+		// Bots feint now through bg_saber.c, as the saber NPCs (WP_SaberAIFeintWanted, g_saberAITactics).
 	}
 
 	if (!VectorCompare(vec3_origin, move_dir))
@@ -11213,6 +11547,7 @@ static void saber_combat_handling(bot_state_t* bs)
 		playerState_t* enemy_ps_for_dash = (bs->currentEnemy && bs->currentEnemy->client) ? &bs->currentEnemy->client->ps : NULL;
 
 		if (lowSkill == qfalse &&
+			!Bot_SaberRecovering(bs) && // g_saberAIRecover: backing off / meditating, no dash in
 			bs->DashInTime <= level.time &&
 			Bot_CanDash(bs) && // the 2 dash rule
 			bs->frame_Enemy_Len < MaxDashDist &&
@@ -11379,6 +11714,7 @@ static void Enhanced_saber_combat_handling(bot_state_t* bs)
 		playerState_t* ps = &bs->currentEnemy->client->ps;
 		// Dash cooldown using bot-local timer
 		if (bs->DashInTime <= level.time &&
+			!Bot_SaberRecovering(bs) && // g_saberAIRecover: backing off / meditating, no dash in
 			Bot_CanDash(bs) && // the 2 dash rule
 			bs->frame_Enemy_Len < MaxDashDist &&
 			bs->cur_ps.groundEntityNum != ENTITYNUM_NONE &&
@@ -13920,7 +14256,7 @@ static qboolean bot_vehicle_ai(bot_state_t* bs)
 
 	// run to it, looking at it, and get on. Use reaches only a little way from the eyes (USE_DISTANCE, TryUse), and the
 	// vehicle's own body keeps him off its middle: he goes for, and looks at, the nearest point of it
-	vec3_t near_point, dir;
+	vec3_t near_point = {0}, dir;
 	for (int axis = 0; axis < 3; axis++)
 	{
 		near_point[axis] = Com_Clamp(veh->r.absmin[axis] + 2.0f, veh->r.absmax[axis] - 2.0f, bs->eye[axis]);

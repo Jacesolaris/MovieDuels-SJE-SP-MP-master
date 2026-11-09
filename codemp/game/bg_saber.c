@@ -1718,6 +1718,8 @@ static int PM_SaberLockWinAnim(const saberLockResult_t result, const qboolean su
 #ifdef _GAME
 extern void NPC_SetAnim(gentity_t* ent, int setAnimParts, int anim, int setAnimFlags);
 extern gentity_t g_entities[];
+extern qboolean WP_SaberAIFeintWanted(gentity_t* npc); // w_saberblocking.c (g_saberAITactics, 2026-11-09)
+extern void WP_SaberAIAdaptRecord(const int clientNum, const int move); // w_saberblocking.c (g_saberAIAdapt, 2026-11-09)
 #elif defined(_CGAME)
 #include "cgame/cg_local.h"
 #endif
@@ -6942,10 +6944,15 @@ weapChecks:
 		// Attack + Use: fancy faking logic (attack fakes while holding USE).
 		// Only applies to players (clients) or controlled entities.
 		// ----------------------------------------------------------------------
+		// Saber NPCs and bots (g_saberAITactics 1, 2026-11-09) sometimes feint the same way when their wind-up ends and
+		// the player turtles: WP_SaberAIFeintWanted (w_saberblocking.c) rolls the chance and keeps the cooldown.
 #ifdef _GAME
 		else if ((pm->cmd.buttons & BUTTON_ATTACK) &&
-			(pm->cmd.buttons & BUTTON_USE) &&
-			(!(g_entities[pm->ps->clientNum].r.svFlags & SVF_BOT) && !(pm_entSelf->s.eType == ET_NPC)))
+			(((pm->cmd.buttons & BUTTON_USE) &&
+				(!(g_entities[pm->ps->clientNum].r.svFlags & SVF_BOT) && !(pm_entSelf->s.eType == ET_NPC)))
+				|| (curmove >= LS_S_TL2BR && curmove <= LS_S_T2B
+					&& (pm_entSelf->s.eType == ET_NPC || g_entities[pm->ps->clientNum].r.svFlags & SVF_BOT)
+					&& WP_SaberAIFeintWanted(&g_entities[pm->ps->clientNum]))))
 		{
 			// Do some fancy faking stuff.
 
@@ -7741,17 +7748,36 @@ void PM_SetSaberMove(saberMoveName_t new_move)
 		}
 	}
 
-	// Riposte speed boost: 1.15x faster counter-attack after perfect parry
-	if (PM_SaberInAttack(new_move) && pm->ps->saberRiposteTime > pm->cmd.serverTime)
+	// Riposte (g_saberPerfectParry, 2026-11-09). FLAG_RIPOSTEREADY in userInt3: the 500 ms window after a perfect parry
+	// is open (WP_SaberPerfectParryBonus, w_saberblocking.c). The first attack started in it is the riposte:
+	// FLAG_RIPOSTE is set, the swing plays 15% faster (PM_SaberStartTransAnim, bg_panimate.c) and can't be
+	// perfect-parried (sab_beh_attack_vs_block). The next move that is not that attack ends it. The timers live on
+	// the server (G_SaberRiposteUpdate, w_saberblocking.c); userInt3 is networked, so every client sees the speed.
+	// This replaces a riposte that cut torsoTimer to 87%, which only chopped the end off the swing.
+	if (pm->ps->userInt3 & 1 << FLAG_RIPOSTEREADY)
 	{
-		// 1.15x speed multiplier = reduce timer by ~13%
-		int oldTimer = pm->ps->torsoTimer;
-		if (oldTimer > 50)
+		if (PM_SaberInAttack(new_move))
 		{
-			pm->ps->torsoTimer = (int)(oldTimer * 0.87f);
+			pm->ps->userInt3 &= ~(1 << FLAG_RIPOSTEREADY);
+			pm->ps->userInt3 |= 1 << FLAG_RIPOSTE;
 		}
-		pm->ps->saberRiposteTime = 0;
 	}
+	else if (pm->ps->userInt3 & 1 << FLAG_RIPOSTE)
+	{
+		if (!PM_SaberInAttack(new_move)
+			|| (new_move != pm->ps->saberMove && PM_SaberInAttack(pm->ps->saberMove)))
+		{
+			pm->ps->userInt3 &= ~(1 << FLAG_RIPOSTE);
+		}
+	}
+
+#ifdef _GAME
+	// Adaptive duel AI (g_saberAIAdapt, 2026-11-09): saber NPCs and bots remember the human player's swing directions
+	if (PM_SaberInAttack(new_move) && new_move != pm->ps->saberMove && pm->ps->clientNum < MAX_CLIENTS)
+	{
+		WP_SaberAIAdaptRecord(pm->ps->clientNum, new_move);
+	}
+#endif
 
 	if (pm->ps->saberFatigueChainCount > MISHAPLEVEL_OVERLOAD)
 	{

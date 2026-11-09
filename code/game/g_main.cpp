@@ -341,6 +341,14 @@ cvar_t* g_AimingCinematicCamera;
 cvar_t* g_ffamode;
 
 cvar_t* g_SaberBounceOnWalls;
+// saber combat refinement (2026-11-09): all of these only act under g_SerenityJediEngineMode 2
+cvar_t* g_saberPerfectParry; // perfect parry: heavy swing cost, guard break, riposte
+cvar_t* g_saberHitConfirm; // hit-confirm chain boost + wind-up armour bypass
+cvar_t* g_saberAIAdapt; // saber NPCs read the player's favourite swings
+cvar_t* g_saberAIRecover; // saber NPCs back off to meditate / heal when low
+cvar_t* g_saberAITactics; // saber NPCs kick/slap at the right moments, feint and taunt now and then
+cvar_t* g_saberNPCBlockBox; // NPC saber block box: tight, and a block always shows a parry
+cvar_t* g_saberAIDefend; // saber NPCs defend first: quick parry re-think, no attack into a swing
 cvar_t* g_SaberMustReturn;
 
 cvar_t* com_rend2;
@@ -1009,6 +1017,15 @@ static void G_InitCvars()
 	g_ffamode = gi.cvar("g_ffamode", "0", CVAR_ARCHIVE);
 
 	g_SaberBounceOnWalls = gi.cvar("g_saberbounceonwalls", "0", CVAR_ARCHIVE);
+
+	// saber combat refinement (2026-11-09), g_SerenityJediEngineMode 2 only
+	g_saberPerfectParry = gi.cvar("g_saberPerfectParry", "1", CVAR_ARCHIVE);
+	g_saberHitConfirm = gi.cvar("g_saberHitConfirm", "0", CVAR_ARCHIVE);
+	g_saberAIAdapt = gi.cvar("g_saberAIAdapt", "1", CVAR_ARCHIVE);
+	g_saberAIRecover = gi.cvar("g_saberAIRecover", "1", CVAR_ARCHIVE);
+	g_saberAITactics = gi.cvar("g_saberAITactics", "1", CVAR_ARCHIVE);
+	g_saberNPCBlockBox = gi.cvar("g_saberNPCBlockBox", "1", CVAR_ARCHIVE);
+	g_saberAIDefend = gi.cvar("g_saberAIDefend", "1", CVAR_ARCHIVE);
 
 	g_SaberMustReturn = gi.cvar("g_sabermustreturn", "0", CVAR_ARCHIVE);
 

@@ -3129,6 +3129,46 @@ static void Jedi_CheckDecreasesaber_anim_level(void)
 	}
 }
 
+// Saber AI tactics (g_saberAITactics 1, SJE SP item 287 round 2, MP port 2026-11-09, DH: "kicks and slaps at
+// appropriate times", NPCs "kick or slap when far too far away"). With it on, saber NPCs kick or slap a player only
+// when it makes sense - he turtles behind his guard (holding block or parrying, not swinging) or his block points are
+// low - and only when he is really in reach. NPC vs NPC fights are unchanged.
+extern qboolean WP_SaberAIEnemyTurtling(const gentity_t* enemy);
+extern qboolean WP_SaberAITauntWanted(const gentity_t* npc);
+extern void WP_SaberAITauntClear(const gentity_t* npc);
+
+// real reach (origin to origin, about the same height); the AI's enemy_dist is a straight distance minus the saber
+// length, so it can't be used for fists and feet
+static qboolean Jedi_MeleeTargetInReach(const gentity_t* self, const gentity_t* enemy, const float reach)
+{
+	if (!self || !enemy)
+	{
+		return qfalse;
+	}
+	if (fabs(enemy->r.currentOrigin[2] - self->r.currentOrigin[2]) > 48.0f)
+	{
+		return qfalse;
+	}
+	return DistanceSquared(self->r.currentOrigin, enemy->r.currentOrigin) <= reach * reach ? qtrue : qfalse;
+}
+
+static qboolean Jedi_MeleeGoodMoment(const gentity_t* enemy)
+{
+	if (!g_saberAITactics.integer || !enemy || !enemy->client)
+	{
+		return qtrue; // old behaviour
+	}
+	if (enemy->s.number >= MAX_CLIENTS && !G_ControlledByPlayer(enemy))
+	{
+		return qtrue; // NPC vs NPC unchanged
+	}
+	if (enemy->client->ps.fd.blockPoints < BLOCKPOINTS_THIRTY)
+	{
+		return qtrue; // worn down: punish him
+	}
+	return WP_SaberAIEnemyTurtling(enemy);
+}
+
 static qboolean Jedi_DecideKick(void)
 {
 	if (PM_InKnockDown(&NPCS.NPC->client->ps))
@@ -3145,7 +3185,14 @@ static qboolean Jedi_DecideKick(void)
 	}
 	if (NPCS.NPC->enemy->s.number < MAX_CLIENTS)
 	{
-		return qfalse;
+		// a player: never (g_saberAITactics 0). With tactics on, only when he turtles or is low on block points, and
+		// only when he is really in reach (the callers check G_CanKickEntity as well) (2026-11-09)
+		if (!g_saberAITactics.integer
+			|| !Jedi_MeleeGoodMoment(NPCS.NPC->enemy)
+			|| !Jedi_MeleeTargetInReach(NPCS.NPC, NPCS.NPC->enemy, 72.0f))
+		{
+			return qfalse;
+		}
 	}
 	if (g_AllowMawKick.integer < 1 && jedi_forbidden_kicker(NPCS.NPC))
 	{
@@ -3342,10 +3389,17 @@ static qboolean NPC_HandleSlapMelee(gentity_t* NPC, gentity_t* enemy, int enemyD
 		return qfalse;
 	}
 
+	// 2026-11-09: enemyDist is a straight distance minus the saber length, but it was compared with MELEE_DIST_SQUARED
+	// (6400, a squared value), so NPCs started slaps - and landed them - from up to 6400 units away. Use the real
+	// distance instead: within 80 units (MELEE_DIST_SQUARED) and about the same height.
+	const qboolean in_reach = Jedi_MeleeTargetInReach(NPC, enemy, 80.0f);
+
 	qboolean in_melee_range = (qboolean)
-		((enemyDist <= MELEE_DIST_SQUARED) &&
+		(in_reach &&
 			(ps->weaponTime == 0) &&
 			(PM_InKnockDown(ps) == qfalse));
+
+	(void)enemyDist;
 
 	qboolean enemy_in_front = (qboolean)
 		InFront(enemy->r.currentOrigin, NPC->r.currentOrigin, ps->viewangles, 0.3f);
@@ -3354,8 +3408,58 @@ static qboolean NPC_HandleSlapMelee(gentity_t* NPC, gentity_t* enemy, int enemyD
 		(!enemy_in_front &&
 			!InFront(enemy->r.currentOrigin, NPC->r.currentOrigin, ps->viewangles, 0.25f));
 
+	int anim = ps->torsoAnim;
+
+	qboolean in_slap_anim = (qboolean)
+		((anim == BOTH_A7_SLAP_R || anim == BOTH_A7_SLAP_R_GALEN) ||
+			(anim == BOTH_A7_SLAP_L || anim == BOTH_A7_SLAP_L_GALEN) ||
+			anim == BOTH_A7_KICK_B ||
+			(anim == BOTH_SWEEP_KICK || anim == BOTH_SWEEP_KICK_GALEN) ||
+			anim == BOTH_A7_HILT);
+
 	// ------------------------------------------------------------
-	// 3. can_slap
+	// 1. In a slap/kick this function started: handle the hit every frame (it used to sit behind the 1-in-4 roll of
+	//    can_slap, so the hit landed late or not at all). Only when he is really in reach and in front, not already
+	//    knocked down, and once per swing (the kick trace G_KickTrace can hit with the same anim) (2026-11-09)
+	// ------------------------------------------------------------
+	if (in_slap_anim == qtrue && TIMER_Done(NPC, "slapHitWindow") == qfalse)
+	{
+		if (TIMER_Done(NPC, "smackTime") == qtrue &&
+			NPCS.NPCInfo->blockedDebounceTime == 0)
+		{
+			if (in_reach == qtrue && enemy_in_front == qtrue
+				&& enemy->client
+				&& !PM_InKnockDown(&enemy->client->ps)
+				&& TIMER_Done(enemy, "kickedDebounce"))
+			{
+				vec3_t smack_dir;
+				VectorSubtract(enemy->r.currentOrigin, NPC->r.currentOrigin, smack_dir);
+				smack_dir[2] += 20;
+				VectorNormalize(smack_dir);
+
+				// Punch sound
+				G_Sound(enemy, CHAN_AUTO, G_SoundIndex(va("sound/weapons/melee/punch%d", Q_irand(1, 4))));
+
+				// Pain sound
+				G_Sound(enemy, CHAN_AUTO, G_SoundIndex(va("sound/chars/%s/misc/pain0%d",
+					enemy->NPC_type, Q_irand(1, 3))));
+
+				G_Damage(enemy, NPC, NPC, smack_dir, NPC->r.currentOrigin,
+					(g_npcspskill.integer + 1) * Q_irand(2, 5),
+					DAMAGE_NO_KNOCKBACK, MOD_MELEE);
+
+				WP_AbsorbKick(enemy, NPC, smack_dir);
+				TIMER_Set(enemy, "kickedDebounce", 500);
+
+				NPCS.NPCInfo->blockedDebounceTime = 1;
+			}
+		}
+
+		return qtrue;
+	}
+
+	// ------------------------------------------------------------
+	// 2. can_slap
 	// ------------------------------------------------------------
 	qboolean can_slap = (qboolean)
 		(g_npcspskill.integer > 1 &&
@@ -3378,62 +3482,24 @@ static qboolean NPC_HandleSlapMelee(gentity_t* NPC, gentity_t* enemy, int enemyD
 		return qfalse;
 	}
 
-	// ------------------------------------------------------------
-	// 4. Already in slap/kick animation? Handle hit timing
-	// ------------------------------------------------------------
-	int anim = ps->torsoAnim;
-
-	qboolean in_slap_anim = (qboolean)
-		((anim == BOTH_A7_SLAP_R || anim == BOTH_A7_SLAP_R_GALEN) ||
-			(anim == BOTH_A7_SLAP_L || anim == BOTH_A7_SLAP_L_GALEN) ||
-			anim == BOTH_A7_KICK_B ||
-			(anim == BOTH_SWEEP_KICK || anim == BOTH_SWEEP_KICK_GALEN) ||
-			anim == BOTH_A7_HILT);
-
 	if (in_slap_anim == qtrue)
 	{
-		if (TIMER_Done(NPC, "smackTime") == qtrue &&
-			NPCS.NPCInfo->blockedDebounceTime == 0)
-		{
-			if (in_melee_range == qtrue && enemy_in_front == qtrue)
-			{
-				vec3_t smack_dir;
-				VectorSubtract(enemy->r.currentOrigin, NPC->r.currentOrigin, smack_dir);
-				smack_dir[2] += 20;
-				VectorNormalize(smack_dir);
-
-				// Punch sound
-				G_Sound(enemy, CHAN_AUTO, G_SoundIndex(va("sound/weapons/melee/punch%d", Q_irand(1, 4))));
-
-				// Pain sound
-				G_Sound(enemy, CHAN_AUTO, G_SoundIndex(va("sound/chars/%s/misc/pain0%d",
-					enemy->NPC_type, Q_irand(1, 3))));
-
-				G_Damage(enemy, NPC, NPC, smack_dir, NPC->r.currentOrigin,
-					(g_npcspskill.integer + 1) * Q_irand(2, 5),
-					DAMAGE_NO_KNOCKBACK, MOD_MELEE);
-
-				WP_AbsorbKick(enemy, NPC, smack_dir);
-
-				NPCS.NPCInfo->blockedDebounceTime = 1;
-			}
-		}
-
+		// a slap/kick anim started elsewhere: let it play
 		return qtrue;
 	}
 
 	// ------------------------------------------------------------
-	// 5. Not in slap anim — decide which melee attack to start
+	// 3. Not in slap anim - decide which melee attack to start
 	// ------------------------------------------------------------
 	if (in_melee_range == qfalse)
 	{
 		return qfalse;
 	}
 
-	// FRONT SLAP
+	// FRONT SLAP (g_saberAITactics: only when he turtles or is worn down)
 	if (enemy_in_front == qtrue)
 	{
-		if (TIMER_Done(NPC, "attackDelay") == qtrue)
+		if (TIMER_Done(NPC, "attackDelay") == qtrue && Jedi_MeleeGoodMoment(enemy))
 		{
 			int swing_anim =
 				(NPC->health > BLOCKPOINTS_HALF)
@@ -3459,6 +3525,7 @@ static qboolean NPC_HandleSlapMelee(gentity_t* NPC, gentity_t* enemy, int enemyD
 			}
 
 			TIMER_Set(NPC, "smackTime", 300);
+			TIMER_Set(NPC, "slapHitWindow", ps->torsoTimer);
 			NPCS.NPCInfo->blockedDebounceTime = 0;
 
 			return qtrue;
@@ -3490,6 +3557,7 @@ static qboolean NPC_HandleSlapMelee(gentity_t* NPC, gentity_t* enemy, int enemyD
 			}
 
 			TIMER_Set(NPC, "smackTime", 300);
+			TIMER_Set(NPC, "slapHitWindow", ps->torsoTimer);
 			NPCS.NPCInfo->blockedDebounceTime = 0;
 
 			return qtrue;
@@ -3498,6 +3566,155 @@ static qboolean NPC_HandleSlapMelee(gentity_t* NPC, gentity_t* enemy, int enemyD
 
 	return qfalse;     // no slap action taken
 }
+
+// Recover (g_saberAIRecover 1, SJE SP item 287, MP port 2026-11-09, DH: NPCs do what a player would do: back off to get
+// health back, meditate for block points when it is safe). A saber NPC low on block points (< 30) or on health (<= 1/3,
+// with Force Heal ready) backs off for up to 3-4 s, guard up, until it is 320+ units from its enemy; the meditation /
+// heal of Jedi_CombatDistance (sections 4 and 5) then happens there. An enemy that runs it down is fought, meditation
+// stops when the enemy comes within 192 units, and it can only start once every 30 s (easy) down to 15 s (hardest).
+static qboolean Jedi_RecoverBackOff(const int enemy_dist)
+{
+	playerState_t* ps = &NPCS.NPC->client->ps;
+	gentity_t* enemy = NPCS.NPC->enemy;
+	const int skill = g_npcspskill.integer < 0 ? 0 : g_npcspskill.integer > 3 ? 3 : g_npcspskill.integer;
+
+	if (!g_saberAIRecover.integer || jedi_in_camera || !enemy || !enemy->client || enemy->health <= 0
+		|| ps->weapon != WP_SABER || G_ControlledByPlayer(NPCS.NPC))
+	{
+		return qfalse;
+	}
+
+	// meditating and the enemy is coming: get up
+	if ((ps->legsAnim == BOTH_MEDITATE_SABER || ps->torsoAnim == BOTH_MEDITATE_SABER) && enemy_dist < 192)
+	{
+		ps->legsTimer = 0;
+		ps->torsoTimer = 0;
+		ps->powerups[PW_MEDITATE] = 0;
+		TIMER_Set(NPCS.NPC, "recoverBackOff", -level.time);
+		return qfalse;
+	}
+
+	if (PM_InKnockDown(ps) || ps->saberLockTime > level.time || ps->saberInFlight || Jedi_SaberBusy(NPCS.NPC))
+	{
+		return qfalse;
+	}
+
+	if (TIMER_Done(NPCS.NPC, "recoverBackOff"))
+	{
+		// not backing off: should it start?
+		const qboolean low_bp = ps->fd.blockPoints < BLOCKPOINTS_THIRTY ? qtrue : qfalse;
+		const qboolean low_health = NPCS.NPC->health <= ps->stats[STAT_MAX_HEALTH] / 3 && ps->fd.forcePowerLevel[FP_HEAL] > 0
+			&& ps->fd.forcePower >= 25 && TIMER_Done(NPCS.NPC, "heal") ? qtrue : qfalse;
+
+		if (!low_bp && !low_health)
+		{
+			return qfalse;
+		}
+		if (enemy_dist >= 320 || !TIMER_Done(NPCS.NPC, "recoverCooldown"))
+		{
+			return qfalse;
+		}
+		TIMER_Set(NPCS.NPC, "recoverBackOff", Q_irand(3000, 4000));
+		TIMER_Set(NPCS.NPC, "recoverCooldown", 30000 - 5000 * skill);
+		if (d_JediAI.integer || g_DebugSaberCombat.integer)
+		{
+			Com_Printf("%s backs off to recover (%s)\n", NPCS.NPC->NPC_type, low_bp ? "block points" : "health");
+		}
+	}
+
+	// backing off
+	if (enemy_dist >= 320)
+	{
+		TIMER_Set(NPCS.NPC, "recoverBackOff", -level.time); // far enough: sections 4 / 5 meditate or heal
+		return qfalse;
+	}
+	if (enemy_dist < 96 && InFront(enemy->r.currentOrigin, NPCS.NPC->r.currentOrigin, ps->viewangles, 0.3f))
+	{
+		TIMER_Set(NPCS.NPC, "recoverBackOff", -level.time); // run down: stand and fight
+		return qfalse;
+	}
+	if (ps->saberHolstered)
+	{
+		WP_ActivateSaber(NPCS.NPC);
+	}
+	ps->speed = NPCS.NPCInfo->stats.runSpeed;
+	NPCS.ucmd.buttons &= ~BUTTON_WALKING;
+	TIMER_Set(NPCS.NPC, "noRetreat", -level.time);
+	Jedi_Retreat();
+	return qtrue;
+}
+
+// Taunt (g_saberAITactics 1, 2026-11-09): now and then, like a player would - right after it perfect-parried a player
+// or broke his guard, or when the player backs off while it is still healthy. Only at a safe distance (128-400), never
+// while either of them swings, and at most once every 20 s.
+static qboolean Jedi_TacticalTaunt(const int enemy_dist)
+{
+	playerState_t* ps = &NPCS.NPC->client->ps;
+	const gentity_t* enemy = NPCS.NPC->enemy;
+	qboolean want;
+
+	if (!g_saberAITactics.integer
+		|| jedi_in_camera
+		|| !enemy || !enemy->client || enemy->health <= 0
+		|| ps->weapon != WP_SABER || ps->saberHolstered || ps->saberInFlight
+		|| enemy_dist < 128 || enemy_dist > 400
+		|| ps->weaponTime > 0
+		|| ps->groundEntityNum == ENTITYNUM_NONE
+		|| PM_InKnockDown(ps)
+		|| PM_SaberInAttack(ps->saberMove) || PM_SaberInStart(ps->saberMove)
+		|| PM_SaberInAttack(enemy->client->ps.saberMove) || PM_SaberInStart(enemy->client->ps.saberMove)
+		|| ps->torsoAnim == BOTH_ENGAGETAUNT || ps->torsoAnim == BOTH_ENGAGETAUNT_DOOKU || ps->torsoAnim == BOTH_DUAL_TAUNT || ps->torsoAnim == BOTH_STAFF_TAUNT
+		|| !TIMER_Done(NPCS.NPC, "tacticalTaunt")
+		|| !TIMER_Done(NPCS.NPC, "recoverBackOff"))
+	{
+		return qfalse;
+	}
+
+	want = WP_SaberAITauntWanted(NPCS.NPC);
+
+	if (!want && NPCS.NPC->health > ps->stats[STAT_MAX_HEALTH] / 2 && !Q_irand(0, 40))
+	{
+		// he is backing off from me
+		vec3_t away;
+		VectorSubtract(enemy->r.currentOrigin, NPCS.NPC->r.currentOrigin, away);
+		away[2] = 0;
+		VectorNormalize(away);
+		if (DotProduct(enemy->client->ps.velocity, away) > 100.0f)
+		{
+			want = qtrue;
+		}
+	}
+
+	if (!want)
+	{
+		return qfalse;
+	}
+
+	switch (ps->fd.saberAnimLevel)
+	{
+	case SS_DUAL:
+		NPC_SetAnim(NPCS.NPC, SETANIM_TORSO, BOTH_DUAL_TAUNT, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
+		break;
+	case SS_STAFF:
+		NPC_SetAnim(NPCS.NPC, SETANIM_TORSO, BOTH_STAFF_TAUNT, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
+		break;
+	default:
+		// MD anim styles: Count Dooku style taunts with his own anim (as the gesture reply)
+		NPC_SetAnim(NPCS.NPC, SETANIM_TORSO,
+			BG_MasterAnimStyleActive() && Jedi_Animationstyletable(NPCS.NPC).isCountDooku == qtrue
+			? BOTH_ENGAGETAUNT_DOOKU : BOTH_ENGAGETAUNT, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
+		break;
+	}
+	G_AddVoiceEvent(NPCS.NPC, Q_irand(EV_TAUNT1, EV_TAUNT3), 3000);
+	WP_SaberAITauntClear(NPCS.NPC);
+	TIMER_Set(NPCS.NPC, "tacticalTaunt", Q_irand(20000, 30000));
+	if (d_JediAI.integer || g_DebugSaberCombat.integer)
+	{
+		Com_Printf(S_COLOR_YELLOW"Debug: %s taunts\n", NPCS.NPC->NPC_type);
+	}
+	return qfalse; // the taunt is torso only: keep moving / keeping distance as usual
+}
+
 
 static void Jedi_CombatDistance(const int enemy_dist)
 {
@@ -3578,6 +3795,17 @@ static void Jedi_CombatDistance(const int enemy_dist)
 			return;
 		}
 	}
+
+	// ------------------------------------------------------------
+	// 3b. Recover (g_saberAIRecover): low on block points or health -> back off to a safe distance first
+	// ------------------------------------------------------------
+	if (Jedi_RecoverBackOff(enemy_dist))
+	{
+		return;
+	}
+
+	// 3c. Taunt now and then (g_saberAITactics)
+	Jedi_TacticalTaunt(enemy_dist);
 
 	// ------------------------------------------------------------
 	// 4. Regenerate block points (Serenity mode 2)
@@ -5091,7 +5319,15 @@ int Jedi_ReCalcParryTime(const gentity_t* self, const evasionType_t evasion_type
 			}
 			if (jedi_engine_mode == 2)
 			{
-				base_time += 400 * Q_irand(1, 2);
+				if (g_saberAIDefend.integer)
+				{// g_saberAIDefend: re-think the parry in 1 - 2 times the skill base (100 - 200 ms at the hardest) instead of
+				 // +400 - 800 ms, so the NPC can meet a fast chain of swings and the attacker's fatigue does the work (2026-11-09)
+					base_time += Q_irand(0, base_time);
+				}
+				else
+				{
+					base_time += 400 * Q_irand(1, 2);
+				}
 			}
 			else
 			{
@@ -7865,11 +8101,12 @@ static void Jedi_CombatTimersUpdate(const int enemy_dist)
 					// Enemy is standing around with saber off: charge harder
 					Jedi_Aggression(NPCS.NPC, 3);
 				}
-				else
-				{
-					// Saber on: moderate aggression
-					Jedi_Aggression(NPCS.NPC, 2);
-				}
+				// 2026-11-09 (SJE SP item 287 round 3, DH test: NPCs never block, just swing): this added +2 aggression every
+				// 2-5 s against an enemy with his saber on, so in any saber duel aggression climbed to the cap (15, Sith lords
+				// 20) within seconds and stayed there. At that level Jedi_EvasionSaber never defends: while the NPC attacks it
+				// bails out when Q_irand(0, 10) < aggression (always), and close in it picks Q_irand(aggression, 24), which
+				// never lands in the block range 4-12. Raven's code changed nothing here: aggression against a saber user now
+				// only moves with what happens in the fight (hits, parries, pain).
 				break;
 
 			case WP_BLASTER:
@@ -8025,7 +8262,7 @@ static void Jedi_CombatTimersUpdate(const int enemy_dist)
 			if (d_JediAI.integer != 0 || d_combatinfo.integer != 0 || g_DebugSaberCombat.integer != 0)
 			{
 				Com_Printf("(%d) PARRY: aggression %d, no parry until %d\n",
-					level.time, NPCS.NPCInfo->stats.aggression, level.time + 100);
+					level.time, NPCS.NPCInfo->stats.aggression, NPCS.NPC->client->ps.fd.forcePowerDebounce[FP_SABER_DEFENSE]); // the real re-parry time (2026-11-09)
 			}
 
 			newFlags &= ~SEF_PARRIED;
@@ -8265,6 +8502,72 @@ static void Jedi_CombatIdle(const int enemy_dist)
 	}
 }
 
+// g_saberAIDefend (SJE SP item 287 round 6, MP port 2026-11-09): while the enemy swings his saber at me from close in,
+// defend first instead of swinging back into his attack (an NPC that is attacking can't parry). Always defend against a
+// swing spammer (fatigue at the HUD flash level); otherwise hold the guard by skill, 50/65/80/90%, re-rolled every
+// 400 ms. A riposte window (perfect parry) still attacks.
+static qboolean Jedi_DefendFirst(const int enemy_dist)
+{
+	static const int hold_chance[4] = { 50, 65, 80, 90 };
+	const gentity_t* enemy;
+	const playerState_t* eps;
+	vec3_t enemy_origin, enemy_angles;
+
+	if (!g_saberAIDefend.integer)
+	{
+		return qfalse;
+	}
+	if (!NPCS.NPC || !NPCS.NPC->client || NPCS.NPC->s.weapon != WP_SABER || NPCS.NPC->client->ps.saberInFlight
+		|| NPCS.NPC->client->ps.saberHolstered)
+	{
+		return qfalse;
+	}
+	enemy = NPCS.NPC->enemy;
+	if (!enemy || !enemy->client || enemy->health <= 0 || enemy->s.weapon != WP_SABER
+		|| enemy->client->ps.saberInFlight || enemy->client->ps.saberHolstered == 2)
+	{
+		return qfalse;
+	}
+	if (enemy_dist > 48)
+	{
+		return qfalse;
+	}
+	if (NPCS.NPC->client->ps.userInt3 & 1 << FLAG_RIPOSTEREADY)
+	{// riposte window open: take it
+		return qfalse;
+	}
+	eps = &enemy->client->ps;
+	if (!PM_SaberInAttack(eps->saberMove) && !PM_SaberInStart(eps->saberMove) && !PM_SaberInSpecialAttack(eps->torsoAnim))
+	{// he isn't swinging
+		return qfalse;
+	}
+	VectorCopy(enemy->r.currentOrigin, enemy_origin);
+	VectorCopy(eps->viewangles, enemy_angles);
+	if (!InFront(NPCS.NPC->r.currentOrigin, enemy_origin, enemy_angles, 0.3f))
+	{// not swinging at me
+		return qfalse;
+	}
+	if (eps->saberFatigueChainCount >= MISHAPLEVEL_HUDFLASH)
+	{// a swing spammer: always guard, let his fatigue break him
+		return qtrue;
+	}
+	if (TIMER_Done(NPCS.NPC, "defendRoll"))
+	{
+		const int skill = g_npcspskill.integer < 0 ? 0 : g_npcspskill.integer > 3 ? 3 : g_npcspskill.integer;
+		TIMER_Set(NPCS.NPC, "defendRoll", 400);
+		if (Q_irand(1, 100) <= hold_chance[skill])
+		{
+			TIMER_Set(NPCS.NPC, "defendHold", 400);
+			if (d_JediAI.integer || g_DebugSaberCombat.integer)
+			{
+				Com_Printf("(%d) DEFEND: %s holds guard vs swing (enemy fatigue %d)\n", level.time,
+					NPCS.NPC->NPC_type, eps->saberFatigueChainCount);
+			}
+		}
+	}
+	return TIMER_Done(NPCS.NPC, "defendHold") ? qfalse : qtrue;
+}
+
 static qboolean Jedi_AttackDecide(const int enemy_dist)
 {
 	if (!TIMER_Done(NPCS.NPC, "allyJediDelay"))
@@ -8374,6 +8677,11 @@ static qboolean Jedi_AttackDecide(const int enemy_dist)
 				return qtrue;
 			}
 		}
+	}
+
+	if (Jedi_DefendFirst(enemy_dist))
+	{// g_saberAIDefend: guard against his swing, don't attack into it
+		return qfalse;
 	}
 
 	if (jedi_engine_mode > 1 &&
@@ -9537,8 +9845,12 @@ static void Jedi_Combat(void)
 						&& !PM_InKnockDown(&NPCS.NPC->client->ps) //lying on the ground or getting up: finish that first
 						&& !PM_InGetUp(&NPCS.NPC->client->ps)
 						&& !PM_InRoll(&NPCS.NPC->client->ps)
+						&& fabs(NPCS.NPC->enemy->r.currentOrigin[2] - NPCS.NPC->r.currentOrigin[2]) < 32.0f
+						&& InFront(NPCS.NPC->enemy->r.currentOrigin, NPCS.NPC->r.currentOrigin, NPCS.NPC->client->ps.viewangles, 0.3f)
+						&& Jedi_MeleeGoodMoment(NPCS.NPC->enemy)
 						&& irand(0, 100) > 75)
-					{// Close range - switch to melee... KICK!
+					{// Close range - switch to melee... KICK! (2026-11-09: only facing him, same height; g_saberAITactics:
+						// only when he turtles or is worn down)
 						if (d_JediAI.integer || g_DebugSaberCombat.integer)
 						{
 							Com_Printf(S_COLOR_RED"Debug: NPCS.NPC kicking...\n");
@@ -9569,27 +9881,9 @@ static void Jedi_Combat(void)
 
 						NPCS.NPC->next_kick_time = level.time + 15000;
 
-						if (NPC_IsAlive(NPCS.NPC, NPCS.NPC->enemy) && irand(0, 100) <= 25)
-						{// 25% of the time, knock them over...
-							vec3_t	smackDir;
-							VectorSubtract(NPCS.NPC->enemy->r.currentOrigin, NPCS.NPC->r.currentOrigin, smackDir);
-							smackDir[2] += 30;
-							VectorNormalize(smackDir);
-
-							//hurt them
-							G_Sound(NPCS.NPC->enemy, CHAN_AUTO, G_SoundIndex("sound/chars/%s/misc/pain0%d"));
-
-							//throw them
-							G_Throw(NPCS.NPC->enemy, smackDir, flrand(10, 20));
-
-							WP_AbsorbKick(NPCS.NPC->enemy, NPCS.NPC, smackDir);
-							//done with the damage
-							NPCS.NPCInfo->blockedDebounceTime = 1;
-							if (d_JediAI.integer || g_DebugSaberCombat.integer)
-							{
-								Com_Printf(S_COLOR_RED"Debug: NPCS.NPC kicking yeet...\n");
-							}
-						}
+						// 2026-11-09: removed the instant "25% knock them over" here. It threw him and ran WP_AbsorbKick the moment
+						// the anim started, before the foot or hand got there, and the kick trace (G_KickTrace) hits again with the
+						// same anim when it really lands (its pain sound path was also never formatted)
 
 						attacked = qtrue;
 					}
@@ -9767,7 +10061,7 @@ void NPC_Jedi_Pain(gentity_t* self, gentity_t* attacker, const int damage)
 		if (d_JediAI.integer || d_combatinfo.integer || g_DebugSaberCombat.integer)
 		{
 			Com_Printf("(%d) PAIN: aggression %d, no parry until %d\n", level.time, self->NPC->stats.aggression,
-				level.time + 500);
+				self->client->ps.fd.forcePowerDebounce[FP_SABER_DEFENSE]); // the real re-parry time (2026-11-09)
 		}
 		//for testing only
 		// Figure out what quadrant the hit was in.

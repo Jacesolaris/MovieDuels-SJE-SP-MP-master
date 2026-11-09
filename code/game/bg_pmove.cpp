@@ -22751,6 +22751,10 @@ static int PM_ApplySaberAnimOverride(int anim, saberMoveName_t new_move, const a
 	return anim;
 }
 
+extern cvar_t* g_saberPerfectParry;
+extern void WP_SaberAIAdaptRecord(const gentity_t* ent, int move); // wp_saberblocking.cpp (mode 2, g_saberAIAdapt)
+extern qboolean WP_SaberAIFeintWanted(gentity_t* npc); // wp_saberblocking.cpp (mode 2, g_saberAITactics)
+
 void PM_SetSaberMove(saberMoveName_t new_move)
 {
 	unsigned int setflags = saberMoveData[new_move].animSetFlags;
@@ -22846,16 +22850,53 @@ void PM_SetSaberMove(saberMoveName_t new_move)
 		}
 	}
 
-	// Riposte speed boost: 1.15x faster counter-attack after perfect parry
-	if (PM_SaberInAttack(new_move) && pm->ps->saberRiposteTime > pm->cmd.serverTime)
+	if (g_SerenityJediEngineMode->integer == 2)
 	{
-		// 1.15x speed multiplier = reduce timer by ~13%
-		int oldTimer = pm->ps->torsoAnimTimer;
-		if (oldTimer > 50)
+		// Riposte (mode 2, g_saberPerfectParry, 2026-11-09, as SJE). saberRiposteTime > now: the 500 ms window after a
+		// perfect parry is open (WP_SaberPerfectParryBonus, wp_saberblocking.cpp). The first attack started in it is
+		// the riposte: saberRiposteTime becomes -(end time), the swing plays 15% faster (PM_SaberStartTransAnim,
+		// bg_panimate.cpp) and can't be perfect-parried (sab_beh_attack_vs_block). The next move that is not that
+		// attack ends it. This replaces a riposte that cut torsoAnimTimer to 87%, which only chopped the end off the swing.
+		if (pm->ps->saberRiposteTime > 0)
 		{
-			pm->ps->torsoAnimTimer = (int)(oldTimer * 0.87f);
+			if (pm->ps->saberRiposteTime <= level.time || !g_saberPerfectParry || !g_saberPerfectParry->integer)
+			{
+				pm->ps->saberRiposteTime = 0;
+			}
+			else if (PM_SaberInAttack(new_move))
+			{
+				pm->ps->saberRiposteTime = -(level.time + 1500);
+			}
 		}
-		pm->ps->saberRiposteTime = 0;
+		else if (pm->ps->saberRiposteTime < 0)
+		{
+			if (-pm->ps->saberRiposteTime <= level.time
+				|| !PM_SaberInAttack(new_move)
+				|| (new_move != pm->ps->saberMove && PM_SaberInAttack(pm->ps->saberMove)))
+			{
+				pm->ps->saberRiposteTime = 0;
+			}
+		}
+
+		// Adaptive duel AI (mode 2, g_saberAIAdapt, 2026-11-09): saber NPCs remember the player's swing directions
+		if (pm->gent && PM_SaberInAttack(new_move) && new_move != pm->ps->saberMove)
+		{
+			WP_SaberAIAdaptRecord(pm->gent, new_move);
+		}
+	}
+	else
+	{
+		// Riposte speed boost: 1.15x faster counter-attack after perfect parry
+		if (PM_SaberInAttack(new_move) && pm->ps->saberRiposteTime > pm->cmd.serverTime)
+		{
+			// 1.15x speed multiplier = reduce timer by ~13%
+			int oldTimer = pm->ps->torsoAnimTimer;
+			if (oldTimer > 50)
+			{
+				pm->ps->torsoAnimTimer = (int)(oldTimer * 0.87f);
+			}
+			pm->ps->saberRiposteTime = 0;
+		}
 	}
 
 	if (pm->ps->BlasterAttackChainCount >= BLASTERMISHAPLEVEL_MAX)
@@ -24616,7 +24657,7 @@ saberMoveName_t PM_NPCSaberAttackFromQuad(const int quad)
 						}
 						break;
 					case 1:
-						newmove = PM_DoAI_Fake(qtrue);
+						newmove = PM_DoAI_Fake(pm->ps->saberMove); // bug fix 2026-11-09: was PM_DoAI_Fake(qtrue), i.e. move 1
 
 						if (d_attackinfo->integer)
 						{
@@ -30135,11 +30176,17 @@ static void PM_WeaponLightsaber(void)
 			// Check for finishing an animation if necessary.
 			// ------------------------------------------------------------------
 
+			// g_SerenityJediEngineMode 0 = base JKA (2026-11-09, DH; as OpenJK): a tap of attack is a full swing, so when
+			// the player lets go of attack (and isn't blocking) he follows through like an NPC in cases 1 and 3 below.
+			// Modes 1 and 2 (hold to attack): letting go in the wind-up or a transition is an attack fake.
+			const qboolean jka_follow_through = g_SerenityJediEngineMode->integer == 0
+				&& !is_holding_block_button && !is_holding_block_button_and_attack ? qtrue : qfalse;
+
 			// Case 1: We started a swing (LS_S_*), must continue from here.
 			if (curmove >= LS_S_TL2BR && curmove <= LS_S_T2B)
 			{
 				// NPCs never do attack fakes, they always follow through.
-				if (pm->ps->clientNum >= MAX_CLIENTS && !PM_ControlledByPlayer())
+				if ((pm->ps->clientNum >= MAX_CLIENTS && !PM_ControlledByPlayer()) || jka_follow_through)
 				{
 					// NPC: convert start-swing to actual attack swing.
 					newmove = LS_A_TL2BR + (curmove - LS_S_TL2BR);
@@ -30160,7 +30207,7 @@ static void PM_WeaponLightsaber(void)
 			else if (PM_SaberInTransition(curmove))
 			{
 				// In a transition, must play sequential attack or exit.
-				if (pm->ps->clientNum >= MAX_CLIENTS && !PM_ControlledByPlayer())
+				if ((pm->ps->clientNum >= MAX_CLIENTS && !PM_ControlledByPlayer()) || jka_follow_through)
 				{
 					// NPCs never stop attacking mid-attack, just follow through.
 					newmove = saberMoveData[curmove].chain_attack;
@@ -30212,6 +30259,29 @@ static void PM_WeaponLightsaber(void)
 					PM_SetSaberMove(LS_READY);
 				}
 				return;
+			}
+		}
+		// ----------------------------------------------------------------------
+		// Saber NPCs (mode 2, g_saberAITactics 1, 2026-11-09, as SJE) sometimes feint when their wind-up ends and the
+		// player turtles: WP_SaberAIFeintWanted (wp_saberblocking.cpp) rolls the chance and keeps the cooldown.
+		// PM_DoFake refuses NPCs, so this uses the NPC fake (PM_DoAI_Fake).
+		// ----------------------------------------------------------------------
+		else if ((pm->cmd.buttons & BUTTON_ATTACK)
+			&& curmove >= LS_S_TL2BR && curmove <= LS_S_T2B
+			&& g_SerenityJediEngineMode->integer == 2
+			&& pm->ps->clientNum >= MAX_CLIENTS && !PM_ControlledByPlayer()
+			&& pm->gent && pm->gent->NPC
+			&& WP_SaberAIFeintWanted(pm->gent))
+		{
+			if (pm->ps->weaponstate != WEAPON_READY)
+			{
+				pm->ps->weaponstate = WEAPON_IDLE;
+			}
+			newmove = PM_DoAI_Fake(curmove);
+			if (newmove == LS_NONE)
+			{
+				// No fake movement available, just do the actual attack.
+				newmove = LS_A_TL2BR + (curmove - LS_S_TL2BR);
 			}
 		}
 		// ----------------------------------------------------------------------

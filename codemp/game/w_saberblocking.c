@@ -778,6 +778,226 @@ static qboolean sab_beh_attack_vs_attack(gentity_t* attacker, gentity_t* blocker
 	return qtrue;
 }
 
+// Saber combat refinement (SJE SP item 287, 2026-11-09), MP port: the same perfect parry / riposte / adaptive AI /
+// feints / taunts as SJE SP. MP "AI" is a saber NPC or a bot, a "player" is a human client.
+extern qboolean PM_SaberInStart(int move);
+extern qboolean PM_SaberInAttack(int move);
+extern qboolean PM_SaberInParry(int move);
+extern qboolean PM_InKnockDown(const playerState_t* ps);
+static int saber_feint_next[MAX_GENTITIES];
+static int saber_taunt_want[MAX_GENTITIES];
+
+static qboolean WP_SaberAIIsHuman(const gentity_t* ent)
+{
+	return ent && ent->client && ent->s.number >= 0 && ent->s.number < MAX_CLIENTS && !(ent->r.svFlags & SVF_BOT)
+		&& !ent->NPC ? qtrue : qfalse;
+}
+
+static qboolean WP_SaberAIIsAI(const gentity_t* ent)
+{
+	return ent && ent->client && ((ent->NPC && !G_ControlledByPlayer(ent)) || (ent->r.svFlags & SVF_BOT)) ? qtrue : qfalse;
+}
+
+// 0 (easy) .. 3 (hardest): NPCs g_npcspskill, bots their skill (1-5)
+static int WP_SaberAISkill(const gentity_t* ent)
+{
+	int skill = g_npcspskill.integer;
+	if (ent && (ent->r.svFlags & SVF_BOT) && ent->s.number >= 0 && ent->s.number < MAX_CLIENTS && botstates[ent->s.number])
+	{
+		skill = (int)botstates[ent->s.number]->settings.skill - 2;
+	}
+	return skill < 0 ? 0 : skill > 3 ? 3 : skill;
+}
+
+// Is he turtling: guard up (holding block, or in a parry) and not swinging?
+qboolean WP_SaberAIEnemyTurtling(const gentity_t* enemy)
+{
+	const playerState_t* ps;
+	if (!enemy || !enemy->client || enemy->health <= 0)
+	{
+		return qfalse;
+	}
+	ps = &enemy->client->ps;
+	if (PM_SaberInAttack(ps->saberMove) || PM_SaberInStart(ps->saberMove))
+	{
+		return qfalse;
+	}
+	return (ps->ManualBlockingFlags & (1 << MBF_HOLDINGBLOCK | 1 << MBF_HOLDINGBLOCKANDATTACK | 1 << MBF_NPCBLOCKING))
+		|| PM_SaberInParry(ps->saberMove) ? qtrue : qfalse;
+}
+
+// Feint (g_saberAITactics): a saber NPC or bot whose swing wind-up (LS_S_*) is ending, against a player who turtles
+// within 128 units, sometimes cuts the swing and comes in from another side (PM_DoFake, as the player's attack + use fake;
+// it costs the NPC one mishap level like any fake). Chance 25% (easy) .. 55% (hardest); a feint can only follow 15 s ..
+// 9 s after the last one, and a failed roll waits 1.5 s before it is rolled again. Bots too since 2026-11-09 (their
+// enemy is the bot AI's current enemy).
+qboolean WP_SaberAIFeintWanted(gentity_t* npc)
+{
+	const gentity_t* enemy;
+	int skill;
+	if (!g_saberAITactics.integer || !npc || !npc->client || npc->s.number < 0 || npc->s.number >= MAX_GENTITIES)
+	{
+		return qfalse;
+	}
+	if (npc->r.svFlags & SVF_BOT)
+	{
+		enemy = npc->s.number < MAX_CLIENTS && botstates[npc->s.number] ? botstates[npc->s.number]->currentEnemy : NULL;
+	}
+	else if (npc->NPC && !G_ControlledByPlayer(npc))
+	{
+		enemy = npc->enemy;
+	}
+	else
+	{
+		return qfalse;
+	}
+	if (!WP_SaberAIIsHuman(enemy) || !WP_SaberAIEnemyTurtling(enemy)
+		|| DistanceSquared(npc->r.currentOrigin, enemy->r.currentOrigin) > 128.0f * 128.0f)
+	{
+		return qfalse;
+	}
+	if (saber_feint_next[npc->s.number] > level.time + 15000)
+	{
+		saber_feint_next[npc->s.number] = 0; // stale (map restart)
+	}
+	if (saber_feint_next[npc->s.number] > level.time)
+	{
+		return qfalse;
+	}
+	skill = WP_SaberAISkill(npc);
+	if (Q_irand(0, 99) >= 25 + 10 * skill)
+	{
+		saber_feint_next[npc->s.number] = level.time + 1500;
+		return qfalse;
+	}
+	saber_feint_next[npc->s.number] = level.time + 15000 - 2000 * skill;
+	if (d_blockinfo.integer || g_DebugSaberCombat.integer)
+	{
+		Com_Printf(S_COLOR_YELLOW"Saber AI: %s feints\n", npc->NPC ? npc->NPC_type : npc->client->pers.netname);
+	}
+	return qtrue;
+}
+
+// Taunt wish: set when an NPC perfect-parries a player or breaks his guard; NPC_AI_Jedi (Jedi_TacticalTaunt) taunts
+// within 3 s if it has room for it.
+qboolean WP_SaberAITauntWanted(const gentity_t* npc)
+{
+	int t;
+	if (!npc || npc->s.number < 0 || npc->s.number >= MAX_GENTITIES)
+	{
+		return qfalse;
+	}
+	t = saber_taunt_want[npc->s.number];
+	return t > level.time && t <= level.time + 3000 ? qtrue : qfalse;
+}
+
+void WP_SaberAITauntClear(const gentity_t* npc)
+{
+	if (npc && npc->s.number >= 0 && npc->s.number < MAX_GENTITIES)
+	{
+		saber_taunt_want[npc->s.number] = 0;
+	}
+}
+
+static void WP_SaberAITauntSet(const gentity_t* npc, const gentity_t* victim)
+{
+	if (g_saberAITactics.integer && npc && npc->NPC && !G_ControlledByPlayer(npc) && WP_SaberAIIsHuman(victim)
+		&& npc->s.number >= 0 && npc->s.number < MAX_GENTITIES)
+	{
+		saber_taunt_want[npc->s.number] = level.time + 3000;
+	}
+}
+
+// Is ent's riposte swing running (FLAG_RIPOSTE, set in PM_SetSaberMove)? A riposte can't be perfect-parried.
+static qboolean WP_SaberRiposteSwingActive(const gentity_t* ent)
+{
+	return g_saberPerfectParry.integer && ent && ent->client && (ent->client->ps.userInt3 & 1 << FLAG_RIPOSTE) ? qtrue : qfalse;
+}
+
+// Heavy swings (Strong, Desann, staff, two-handed sabers) cost the attacker more when perfect-parried.
+static qboolean WP_SaberHeavySwing(const gentity_t* ent)
+{
+	switch (ent->client->ps.fd.saberAnimLevel)
+	{
+	case SS_STRONG:
+	case SS_DESANN:
+	case SS_STAFF:
+		return qtrue;
+	default:
+		return ent->client->saber[0].saberFlags & SFL_TWO_HANDED ? qtrue : qfalse;
+	}
+}
+
+// Called after a perfect block has taken its block points from the attacker (every perfect block branch here):
+// a heavy swing costs 5 BP more, an attacker left with 0 BP has his guard broken (stagger; with 0 BP his next blocks
+// fail), and the blocker gets a 500 ms riposte window (FLAG_RIPOSTEREADY: PM_SetSaberMove turns the next attack into
+// the riposte; G_SaberRiposteUpdate ends the window / swing on time).
+static void WP_SaberPerfectParryBonus(gentity_t* blocker, gentity_t* attacker)
+{
+	if (!g_saberPerfectParry.integer || !blocker->client || !attacker->client)
+	{
+		return;
+	}
+	if (WP_SaberHeavySwing(attacker))
+	{
+		PM_AddBlockFatigue(&attacker->client->ps, BLOCKPOINTS_FIVE);
+	}
+	if (attacker->client->ps.fd.blockPoints <= 0 && attacker->health > 0
+		&& !attacker->client->ps.saberInFlight && !PM_InKnockDown(&attacker->client->ps))
+	{
+		G_Stagger(attacker);
+		if (d_blockinfo.integer || g_DebugSaberCombat.integer)
+		{
+			Com_Printf(S_COLOR_CYAN"Perfect parry: guard break, attacker out of block points\n");
+		}
+	}
+	blocker->client->ps.saberRiposteTime = level.time + 500;
+	blocker->client->ps.userInt3 |= 1 << FLAG_RIPOSTEREADY;
+	blocker->client->ps.userInt3 &= ~(1 << FLAG_RIPOSTE);
+	WP_SaberAITauntSet(blocker, attacker); // an NPC that perfect-parried a player may taunt him (g_saberAITactics)
+}
+
+// Every frame after Pmove (g_active.c ClientThink_real): the riposte window lasts 500 ms, the riposte swing 1.5 s at most.
+void G_SaberRiposteUpdate(gentity_t* ent)
+{
+	playerState_t* ps;
+	if (!ent || !ent->client)
+	{
+		return;
+	}
+	ps = &ent->client->ps;
+	if (!g_saberPerfectParry.integer)
+	{
+		ps->userInt3 &= ~(1 << FLAG_RIPOSTEREADY | 1 << FLAG_RIPOSTE);
+		ps->saberRiposteTime = 0;
+		return;
+	}
+	if (ps->userInt3 & 1 << FLAG_RIPOSTEREADY)
+	{
+		if (ps->saberRiposteTime <= level.time)
+		{
+			ps->userInt3 &= ~(1 << FLAG_RIPOSTEREADY);
+			ps->saberRiposteTime = 0;
+		}
+	}
+	else if (ps->userInt3 & 1 << FLAG_RIPOSTE)
+	{
+		if (ps->saberRiposteTime >= 0)
+		{
+			ps->saberRiposteTime = -(level.time + 1500); // the riposte swing started this frame
+		}
+		else if (-ps->saberRiposteTime <= level.time)
+		{
+			ps->userInt3 &= ~(1 << FLAG_RIPOSTE);
+			ps->saberRiposteTime = 0;
+		}
+	}
+	else
+	{
+		ps->saberRiposteTime = 0;
+	}
+}
+
 qboolean sab_beh_attack_vs_block(
 	gentity_t* attacker,
 	gentity_t* blocker,
@@ -792,7 +1012,8 @@ qboolean sab_beh_attack_vs_block(
 
 	const qboolean blocking = ((blocker->client->ps.ManualBlockingFlags & (1 << MBF_HOLDINGBLOCK)) != 0) ? qtrue : qfalse; // Normal blocking
 
-	const qboolean m_blocking = ((blocker->client->ps.ManualBlockingFlags & (1 << MBF_PERFECTBLOCKING)) != 0) ? qtrue : qfalse; // Perfect blocking
+	// a riposte swing can't be perfect-parried (g_saberPerfectParry, 2026-11-09)
+	const qboolean m_blocking = ((blocker->client->ps.ManualBlockingFlags & (1 << MBF_PERFECTBLOCKING)) != 0) && !WP_SaberRiposteSwingActive(attacker) ? qtrue : qfalse; // Perfect blocking
 
 	const qboolean is_holding_block_button_and_attack = ((blocker->client->ps.ManualBlockingFlags & (1 << MBF_HOLDINGBLOCKANDATTACK)) != 0) ? qtrue : qfalse; // Active blocking
 
@@ -815,6 +1036,12 @@ qboolean sab_beh_attack_vs_block(
 
 			// Remove damage
 			WP_SaberClearDamageForEntNum(attacker, blocker->s.number, saberNum, bladeNum);
+			// as SJE: a perfect parry of an unblockable swing punishes the attacker's block points (g_saberPerfectParry)
+			if (g_saberPerfectParry.integer)
+			{
+				PM_AddBlockFatigue(&attacker->client->ps, BLOCKPOINTS_TEN); //BP Punish Attacker
+			}
+			WP_SaberPerfectParryBonus(blocker, attacker); // g_saberPerfectParry (2026-11-09)
 		}
 		else
 		{
@@ -997,6 +1224,93 @@ qboolean sab_beh_attack_vs_block(
 
 void WP_SaberWearOnBlock(gentity_t* blocker, const gentity_t* attacker);
 
+// Adaptive duel AI (g_saberAIAdapt 1, 2026-11-09, as SJE SP): saber NPCs and bots remember each player's last 6 basic
+// swing directions. When a player starts a swing he has already used at least twice in those 6, a blocking NPC / bot
+// may read it and perfect-block it (the same perfect block as a player's, with the bounce and the block point cost).
+// The chance grows with every repeat and with the difficulty, up to 60%; mixing up the swings avoids it. Each NPC / bot
+// can do this once every 6 s (easy) to 3 s (hardest), so it is never spammed. Riposte swings are never read.
+#define SABER_ADAPT_HISTORY 6
+static int saber_adapt_hist[MAX_CLIENTS][SABER_ADAPT_HISTORY];
+static int saber_adapt_read_time[MAX_CLIENTS];
+static int saber_adapt_npc_next[MAX_GENTITIES];
+
+// PM_SetSaberMove (bg_saber.c, game side): a player starts a new attack
+void WP_SaberAIAdaptRecord(const int clientNum, const int move)
+{
+	int repeats = 0, chance, i;
+	if (!g_saberAIAdapt.integer || clientNum < 0 || clientNum >= MAX_CLIENTS || !WP_SaberAIIsHuman(&g_entities[clientNum]))
+	{
+		return;
+	}
+	saber_adapt_read_time[clientNum] = 0;
+	if (move < LS_A_TL2BR || move > LS_A_T2B)
+	{
+		return; // only the 7 basic swing directions
+	}
+	for (i = 0; i < SABER_ADAPT_HISTORY; i++)
+	{
+		if (saber_adapt_hist[clientNum][i] == move)
+		{
+			repeats++;
+		}
+	}
+	for (i = SABER_ADAPT_HISTORY - 1; i > 0; i--)
+	{
+		saber_adapt_hist[clientNum][i] = saber_adapt_hist[clientNum][i - 1];
+	}
+	saber_adapt_hist[clientNum][0] = move;
+	if (repeats < 2)
+	{
+		return;
+	}
+	chance = (repeats - 1) * (10 + 5 * 2); // the reader's own skill is applied in WP_SaberAIAdaptRead
+	if (chance > 60)
+	{
+		chance = 60;
+	}
+	if (Q_irand(0, 99) < chance)
+	{
+		saber_adapt_read_time[clientNum] = level.time + 1500;
+	}
+	if (g_DebugSaberCombat.integer)
+	{
+		Com_Printf(S_COLOR_YELLOW"Adaptive AI: swing %d used %d times in the last %d, %d%% read chance -> %s\n", move, repeats,
+			SABER_ADAPT_HISTORY, chance, saber_adapt_read_time[clientNum] ? "READ" : "not read");
+	}
+}
+
+// Has a blocking saber NPC / bot read this swing of attacker? Used once: the read is spent by the perfect block.
+static qboolean WP_SaberAIAdaptRead(const gentity_t* blocker, const gentity_t* attacker)
+{
+	int b, skill;
+	if (!g_saberAIAdapt.integer || !WP_SaberAIIsAI(blocker) || !WP_SaberAIIsHuman(attacker)
+		|| WP_SaberRiposteSwingActive(attacker))
+	{
+		return qfalse;
+	}
+	if (saber_adapt_read_time[attacker->s.number] <= level.time)
+	{
+		return qfalse;
+	}
+	b = blocker->s.number;
+	if (b < 0 || b >= MAX_GENTITIES)
+	{
+		return qfalse;
+	}
+	if (saber_adapt_npc_next[b] > level.time && saber_adapt_npc_next[b] - level.time <= 6000)
+	{
+		return qfalse; // this NPC / bot read a swing a moment ago (the 6000 check drops stale times after a map restart)
+	}
+	skill = WP_SaberAISkill(blocker);
+	if (skill < 2 && Q_irand(0, 3) >= 2 + skill)
+	{
+		return qfalse; // easier readers miss some reads (SP scales the read chance by skill: 10 + 5 x skill per repeat)
+	}
+	saber_adapt_read_time[attacker->s.number] = 0;
+	saber_adapt_npc_next[b] = level.time + 6000 - 1000 * skill;
+	return qtrue;
+}
+
 qboolean sab_beh_block_vs_attack(
 	gentity_t* blocker,
 	gentity_t* attacker,
@@ -1027,7 +1341,8 @@ qboolean sab_beh_block_vs_attack(
 
 	const qboolean blocking = ((blocker->client->ps.ManualBlockingFlags & (1 << MBF_HOLDINGBLOCK)) != 0) ? qtrue : qfalse;
 
-	const qboolean m_blocking = ((blocker->client->ps.ManualBlockingFlags & (1 << MBF_PERFECTBLOCKING)) != 0) ? qtrue : qfalse;
+	// a riposte swing can't be perfect-parried (g_saberPerfectParry, 2026-11-09)
+	const qboolean m_blocking = ((blocker->client->ps.ManualBlockingFlags & (1 << MBF_PERFECTBLOCKING)) != 0) && !WP_SaberRiposteSwingActive(attacker) ? qtrue : qfalse;
 
 	const qboolean is_holding_block_button_and_attack = ((blocker->client->ps.ManualBlockingFlags & (1 << MBF_HOLDINGBLOCKANDATTACK)) != 0) ? qtrue : qfalse;
 
@@ -1102,10 +1417,13 @@ qboolean sab_beh_block_vs_attack(
 			// ----------------------------------------------------
 			// ACTIVE BLOCK (block + attack)
 			// ----------------------------------------------------
-			if (is_holding_block_button_and_attack)
+			// Adaptive duel AI (g_saberAIAdapt, 2026-11-09): a blocking saber NPC / bot that read this swing perfect-blocks it
+			const qboolean npc_read = WP_SaberAIAdaptRead(blocker, attacker);
+
+			if (is_holding_block_button_and_attack || npc_read)
 			{
 				// PERFECT BLOCK
-				if (m_blocking)
+				if (m_blocking || npc_read)
 				{
 					WP_SaberMBlockDirection(blocker, hit_loc, qfalse);
 
@@ -1161,6 +1479,7 @@ qboolean sab_beh_block_vs_attack(
 						PM_AddBlockFatigue(&attacker->client->ps, BLOCKPOINTS_TEN); //BP Punish Attacker
 						sab_beh_add_balance(attacker, MPCOST_MBLOCKED); //SAC Punish attacker
 					}
+					WP_SaberPerfectParryBonus(blocker, attacker); // g_saberPerfectParry (2026-11-09)
 				}
 
 				// ------------------------------------------------
@@ -1402,6 +1721,7 @@ qboolean sab_beh_block_vs_attack(
 			PM_AddBlockFatigue(&attacker->client->ps, BLOCKPOINTS_TEN); //BP Punish Attacker
 			sab_beh_add_balance(blocker, -MPCOST_MBLOCKED); //SAC Reward blocker
 			sab_beh_add_balance(attacker, MPCOST_MBLOCKED); //SAC Punish attacker
+			WP_SaberPerfectParryBonus(blocker, attacker); // g_saberPerfectParry (2026-11-09)
 		}
 		else
 		{

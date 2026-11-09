@@ -7393,7 +7393,15 @@ void PM_SaberStartTransAnim(const int clientNum, const int saberAnimLevel, const
 			}
 		}
 	}
+
+	// Riposte (g_saberPerfectParry, 2026-11-09): the riposte swing after a perfect parry plays 15% faster
+	// (FLAG_RIPOSTE in userInt3 while it runs, set in PM_SetSaberMove; networked, so every client plays it the same)
+	if (fatigued & 1 << FLAG_RIPOSTE)
+	{
+		*animSpeed *= 1.15f;
+	}
 }
+
 /*
 -------------------------
 PM_SetAnimFinal

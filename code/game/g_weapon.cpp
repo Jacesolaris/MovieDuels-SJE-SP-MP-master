@@ -2108,7 +2108,7 @@ void FireWeapon(gentity_t* ent, const qboolean alt_fire)
 
 					if (ent->client->cloneFired == 4)
 					{
-						if (ent->client->pers.cmd.forwardmove == 0 && ent->client->pers.cmd.rightmove == 0)
+						if (ent->client->usercmd.forwardmove == 0 && ent->client->usercmd.rightmove == 0)
 						{
 							G_AddBlasterAttackChainCount(ent, BLASTERMISHAPLEVEL_MIN);
 						}
@@ -2152,7 +2152,7 @@ void FireWeapon(gentity_t* ent, const qboolean alt_fire)
 
 					if (ent->client->BoltsFired == 2)
 					{
-						if (ent->client->pers.cmd.forwardmove == 0 && ent->client->pers.cmd.rightmove == 0)
+						if (ent->client->usercmd.forwardmove == 0 && ent->client->usercmd.rightmove == 0)
 						{
 							G_AddBlasterAttackChainCount(ent, BLASTERMISHAPLEVEL_MIN);
 						}

@@ -656,6 +656,25 @@ static void sab_beh_add_balance(const gentity_t* self, int amount)
 
 //////////Actions////////////////
 
+// 2026-11-10 (DH: MP had saber locks a little too often): g_saberLockRandomNess as in MD 9 SP, a chance in 5 for every
+// saber lock (0 = never, 5 = always, default 1). A plain clash also needs the old g_saberLockFactor roll (in 20).
+qboolean WP_SaberLockChance(const qboolean fake_lock)
+{
+	if (g_debugSaberLocks.integer)
+	{
+		return qtrue;
+	}
+	if (Q_irand(1, 5) > g_saberLockRandomNess.integer)
+	{
+		return qfalse;
+	}
+	if (fake_lock)
+	{
+		return qtrue;
+	}
+	return Q_irand(1, 20) < g_saberLockFactor.integer ? qtrue : qfalse;
+}
+
 /////////Functions//////////////
 static qboolean sab_beh_attack_vs_attack(gentity_t* attacker, gentity_t* blocker)
 {
@@ -674,7 +693,7 @@ static qboolean sab_beh_attack_vs_attack(gentity_t* attacker, gentity_t* blocker
 	{
 		sab_beh_add_balance(attacker, MPCOST_PARRIED);
 
-		if (WP_SabersCheckLock(attacker, blocker))
+		if (WP_SaberLockChance(qtrue) && WP_SabersCheckLock(attacker, blocker))
 		{
 			attacker->client->ps.userInt3 |= (1 << FLAG_SABERLOCK_ATTACKER);
 			attacker->client->ps.saberBlocked = BLOCKED_NONE;
@@ -690,7 +709,7 @@ static qboolean sab_beh_attack_vs_attack(gentity_t* attacker, gentity_t* blocker
 	//
 	if (!atkfake && otherfake)
 	{
-		if (WP_SabersCheckLock(blocker, attacker))
+		if (WP_SaberLockChance(qtrue) && WP_SabersCheckLock(blocker, attacker))
 		{
 			attacker->client->ps.saberBlocked = BLOCKED_NONE;
 			blocker->client->ps.userInt3 |= (1 << FLAG_SABERLOCK_ATTACKER);
@@ -707,7 +726,7 @@ static qboolean sab_beh_attack_vs_attack(gentity_t* attacker, gentity_t* blocker
 	//
 	if (atkfake && otherfake)
 	{
-		if (WP_SabersCheckLock(attacker, blocker))
+		if (WP_SaberLockChance(qtrue) && WP_SabersCheckLock(attacker, blocker))
 		{
 			attacker->client->ps.userInt3 |= (1 << FLAG_SABERLOCK_ATTACKER);
 			attacker->client->ps.saberBlocked = BLOCKED_NONE;
@@ -759,7 +778,7 @@ static qboolean sab_beh_attack_vs_attack(gentity_t* attacker, gentity_t* blocker
 		else
 		{
 			G_Stagger(attacker);
-			PM_AddBlockFatigue(&attacker->client->ps, BLOCKPOINTS_TEN);
+			PM_AddBlockFatigue(&attacker->client->ps, WP_ClassBlockPointCost(attacker, BLOCKPOINTS_TEN, qfalse)); // 2026-11-10 (audit fix): class cost, as the other kata branch (was a flat 10)
 		}
 
 		return qtrue;
@@ -932,8 +951,167 @@ static qboolean WP_SaberHeavySwing(const gentity_t* ent)
 // a heavy swing costs 5 BP more, an attacker left with 0 BP has his guard broken (stagger; with 0 BP his next blocks
 // fail), and the blocker gets a 500 ms riposte window (FLAG_RIPOSTEREADY: PM_SetSaberMove turns the next attack into
 // the riposte; G_SaberRiposteUpdate ends the window / swing on time).
+// ---------------------------------------------------------------------------------------------------------------
+// Saber combat aim round 1 (2026-11-10, as SP; DH: cinematic duels that need timing; no swing spam, no block
+// turtling; NPCs / bots must not swing spam, a perfect-blocked NPC / bot is staggered and loses more block points).
+// ---------------------------------------------------------------------------------------------------------------
+#define SABER_AI_PERFECTBLOCKED_BP	30	// block points a perfect-blocked NPC / bot loses (was 20, players lose 10)
+#define SABER_UNBLOCKABLE_BLOCK_BP	25	// block points a fighter loses blocking an unblockable attack (kata) without a perfect block
+#define SABER_UNBLOCKABLE_PB_FATIGUE	8	// fatigue an attacker gets when his unblockable attack (kata) is perfect blocked (item 318: was 5)
+#define SABER_UNBLOCKABLE_PB_FP		25	// stamina (force power) an attacker loses when his kata is perfect blocked (item 318)
+#define SABER_RIPOSTE_BLOCK_BP		5	// extra block points a blocked riposte costs the blocker
+
+static int saber_stagger_frame[MAX_GENTITIES];
+
+static qboolean WP_SaberIsPlayer(const gentity_t* ent)
+{
+	return ent && ent->client && ent->s.number >= 0 && ent->s.number < MAX_CLIENTS && !(ent->r.svFlags & SVF_BOT) ? qtrue : qfalse;
+}
+
+// The massive stagger (G_Stagger), at most once a frame: block_vs_attack and attack_vs_block both run for one clash.
+static qboolean WP_SaberStaggerOnce(gentity_t* ent)
+{
+	if (!ent || !ent->client || ent->health <= 0 || ent->client->ps.saberInFlight || PM_InKnockDown(&ent->client->ps))
+	{
+		return qfalse;
+	}
+	if (saber_stagger_frame[ent->s.number] == level.time)
+	{
+		return qtrue;
+	}
+	saber_stagger_frame[ent->s.number] = level.time;
+	G_Stagger(ent);
+	return qtrue;
+}
+
+// Guard break moment: a camera shake for the player who broke a guard (0 BP stagger or disarm) or whose guard was
+// broken. (SP also slows time for 200 ms; MP can't slow one client's time.)
+static void WP_SaberGuardBreakMoment(gentity_t* breaker, gentity_t* victim)
+{
+	if (WP_SaberIsPlayer(breaker))
+	{
+		CGCam_BlockShakeMP(breaker->s.origin, breaker, 0.6f, 250);
+	}
+	else if (WP_SaberIsPlayer(victim))
+	{
+		CGCam_BlockShakeMP(victim->s.origin, victim, 0.6f, 250);
+	}
+}
+
+// Perfect block mash lockout (2026-11-10): a timed press (block held + attack pressed) opens the perfect block window
+// (g_active.c). A press that parried nothing locks the window out for 500 ms after its window ended; a press in that
+// time restarts the lockout. So mashing never gets a window, one well timed press does.
+#define SABER_PERFECTBLOCK_LOCKOUT	500
+static int saber_pb_press_time[MAX_GENTITIES];
+static int saber_pb_window[MAX_GENTITIES];
+static qboolean saber_pb_landed[MAX_GENTITIES];
+
+// g_active.c: a new timed press. qtrue: open the perfect block window (window ms).
+qboolean WP_SaberPerfectBlockPress(const gentity_t* ent, const int window)
+{
+	int n;
+	qboolean locked;
+	if (!ent)
+	{
+		return qfalse;
+	}
+	n = ent->s.number;
+	locked = !saber_pb_landed[n] && saber_pb_press_time[n] > 0
+		&& level.time < saber_pb_press_time[n] + saber_pb_window[n] + SABER_PERFECTBLOCK_LOCKOUT
+		&& saber_pb_press_time[n] <= level.time ? qtrue : qfalse;
+
+	saber_pb_press_time[n] = level.time;
+	saber_pb_window[n] = window;
+	saber_pb_landed[n] = qfalse;
+
+	if (locked && (d_blockinfo.integer || g_DebugSaberCombat.integer))
+	{
+		Com_Printf(S_COLOR_ORANGE"Perfect block press too soon after a missed one: no window\n");
+	}
+	return locked ? qfalse : qtrue;
+}
+
+static void WP_SaberPerfectBlockLanded(const gentity_t* blocker)
+{
+	if (blocker)
+	{
+		saber_pb_landed[blocker->s.number] = qtrue;
+	}
+}
+
+// Bots (2026-11-10, as the saber NPCs; DH: a blocked bot may not swing again before the player has finished his block
+// animation cycle): sab_beh_attack_vs_block notes when a swing was blocked; for 1.5 s after that, while the blocker is
+// still in his parry, knockaway, reflect or block bounce (or a block is about to start), bot_update_input (ai_main.c)
+// takes the bot's attack away.
+extern qboolean PM_SaberInKnockaway(int move);
+extern qboolean PM_SaberInReflect(int move);
+static int saber_blocked_time[MAX_GENTITIES];
+static int saber_blocked_by[MAX_GENTITIES];
+
+static void WP_SaberAIBlockedNote(const gentity_t* attacker, const gentity_t* blocker)
+{
+	if (attacker && blocker)
+	{
+		saber_blocked_time[attacker->s.number] = level.time;
+		saber_blocked_by[attacker->s.number] = blocker->s.number;
+	}
+}
+
+qboolean WP_SaberBotBlockedWait(const gentity_t* bot)
+{
+	const gentity_t* blocker;
+	const playerState_t* eps;
+	int n;
+	if (!bot || !bot->client)
+	{
+		return qfalse;
+	}
+	n = bot->s.number;
+	if (saber_blocked_time[n] <= 0 || saber_blocked_time[n] > level.time || level.time - saber_blocked_time[n] > 1500)
+	{
+		return qfalse;
+	}
+	blocker = &g_entities[saber_blocked_by[n]];
+	if (!blocker->inuse || !blocker->client || blocker->health <= 0)
+	{
+		return qfalse;
+	}
+	eps = &blocker->client->ps;
+	if (eps->saberBlocked != BLOCKED_NONE && eps->saberBlocked != BLOCKED_PARRY_BROKEN)
+	{//his block is about to start
+		return qtrue;
+	}
+	return PM_SaberInParry(eps->saberMove) || PM_SaberInKnockaway(eps->saberMove)
+		|| PM_SaberInReflect(eps->saberMove) || PM_SaberInBounce(eps->saberMove) ? qtrue : qfalse;
+}
+
+// A perfect-blocked NPC / bot (DH): always the massive stagger; worn out (fatigue 13+) a 1 in 3 chance to lose the
+// saber instead. Players keep the heavy slow bounce (fatigue 13+: a mishap).
+static void WP_SaberAIPerfectBlocked(gentity_t* attacker, gentity_t* blocker)
+{
+	if (attacker->client->ps.saberFatigueChainCount >= MISHAPLEVEL_THIRTEEN && !Q_irand(0, 2))
+	{
+		sab_beh_saber_should_be_disarmed_attacker(attacker, blocker);
+		WP_SaberGuardBreakMoment(blocker, attacker);
+		if (d_attackinfo.integer || g_DebugSaberCombat.integer)
+		{
+			Com_Printf(S_COLOR_RED"Perfect blocked worn out NPC / bot lost his saber\n");
+		}
+	}
+	else
+	{
+		WP_SaberStaggerOnce(attacker);
+		attacker->client->ps.userInt3 |= 1 << FLAG_MBLOCKBOUNCE;
+		if (d_attackinfo.integer || g_DebugSaberCombat.integer)
+		{
+			Com_Printf(S_COLOR_YELLOW"Perfect blocked NPC / bot staggered\n");
+		}
+	}
+}
+
 static void WP_SaberPerfectParryBonus(gentity_t* blocker, gentity_t* attacker)
 {
+	WP_SaberPerfectBlockLanded(blocker); // the press parried something: no mash lockout
 	if (!g_saberPerfectParry.integer || !blocker->client || !attacker->client)
 	{
 		return;
@@ -942,10 +1120,9 @@ static void WP_SaberPerfectParryBonus(gentity_t* blocker, gentity_t* attacker)
 	{
 		PM_AddBlockFatigue(&attacker->client->ps, BLOCKPOINTS_FIVE);
 	}
-	if (attacker->client->ps.fd.blockPoints <= 0 && attacker->health > 0
-		&& !attacker->client->ps.saberInFlight && !PM_InKnockDown(&attacker->client->ps))
+	if (attacker->client->ps.fd.blockPoints <= 0 && WP_SaberStaggerOnce(attacker))
 	{
-		G_Stagger(attacker);
+		WP_SaberGuardBreakMoment(blocker, attacker);
 		if (d_blockinfo.integer || g_DebugSaberCombat.integer)
 		{
 			Com_Printf(S_COLOR_CYAN"Perfect parry: guard break, attacker out of block points\n");
@@ -1029,7 +1206,24 @@ qboolean sab_beh_attack_vs_block(
 		// Perfect blocking vs unblockable
 		if (m_blocking)
 		{
-			sab_beh_saber_should_be_disarmed_attacker(attacker, blocker);
+			// 2026-11-10 (DH, as SJE): a perfect-blocked unblockable attack (kata) gives the attacker the massive
+			// stagger and a big stamina (fatigue) loss; item 318: he is disarmed too. sab_beh_block_vs_attack ran the perfect
+			// parry bonus.
+			// item 318 (DH): the attacker is disarmed (a saber that can't be disarmed: the stagger only)
+			if (!(attacker->client->saber[0].saberFlags & SFL_NOT_DISARMABLE) && !attacker->client->ps.saberInFlight)
+			{
+				sab_beh_saber_should_be_disarmed_attacker(attacker, blocker); // stagger + saber knocked out of his hand
+			}
+			else
+			{
+				WP_SaberStaggerOnce(attacker);
+			}
+			PM_AddFatigue(&attacker->client->ps, SABER_UNBLOCKABLE_PB_FP); // high stamina loss
+			attacker->client->ps.saberFatigueChainCount += SABER_UNBLOCKABLE_PB_FATIGUE;
+			if (attacker->client->ps.saberFatigueChainCount > MISHAPLEVEL_MAX)
+			{
+				attacker->client->ps.saberFatigueChainCount = MISHAPLEVEL_MAX;
+			}
 
 			// Attacker knows he was blocked
 			attacker->client->ps.saberEventFlags |= SEF_BLOCKED;
@@ -1041,7 +1235,11 @@ qboolean sab_beh_attack_vs_block(
 			{
 				PM_AddBlockFatigue(&attacker->client->ps, BLOCKPOINTS_TEN); //BP Punish Attacker
 			}
-			WP_SaberPerfectParryBonus(blocker, attacker); // g_saberPerfectParry (2026-11-09)
+			WP_SaberAIBlockedNote(attacker, blocker);
+			if (d_attackinfo.integer || g_DebugSaberCombat.integer)
+			{
+				Com_Printf(S_COLOR_CYAN"Unblockable attack perfect blocked: attacker disarmed + staggered, +8 fatigue, -25 stamina\n");
+			}
 		}
 		else
 		{
@@ -1097,6 +1295,8 @@ qboolean sab_beh_attack_vs_block(
 		if (m_blocking || npc_blocking)
 		{
 			// Defender parried the attack fake
+			WP_SaberPerfectBlockLanded(blocker); // no mash lockout (2026-11-10)
+			WP_SaberAIBlockedNote(attacker, blocker);
 			sab_beh_add_balance(attacker, MPCOST_PARRIED_ATTACKFAKE);
 
 			if (npc_blocking)
@@ -1123,7 +1323,7 @@ qboolean sab_beh_attack_vs_block(
 			// Defender stands a good chance of having their defense broken
 			sab_beh_add_balance(attacker, -MPCOST_PARRIED);
 
-			if (WP_SabersCheckLock(attacker, blocker))
+			if (WP_SaberLockChance(qtrue) && WP_SabersCheckLock(attacker, blocker))
 			{
 				attacker->client->ps.userInt3 |= (1 << FLAG_SABERLOCK_ATTACKER);
 				attacker->client->ps.saberBlocked = BLOCKED_NONE;
@@ -1152,6 +1352,7 @@ qboolean sab_beh_attack_vs_block(
 				if (npc_blocking &&
 					blocker->client->ps.fd.blockPoints >= BLOCKPOINTS_MISSILE &&
 					attacker->client->ps.saberFatigueChainCount >= MISHAPLEVEL_HUDFLASH &&
+					saber_stagger_frame[attacker->s.number] != level.time && // already staggered by this clash (2026-11-10)
 					!Q_irand(0, 4))
 				{
 					// 20% chance
@@ -1173,12 +1374,13 @@ qboolean sab_beh_attack_vs_block(
 				attacker->client->ps.userInt3 |= (1 << FLAG_PARRIED);
 			}
 
-			if (!m_blocking)
+			if (!m_blocking && saber_stagger_frame[attacker->s.number] != level.time) // not when this clash staggered him (2026-11-10)
 			{
 				sab_beh_attack_blocked(attacker, blocker, qfalse);
 			}
 
 			sab_beh_add_balance(blocker, -MPCOST_PARRIED);
+			WP_SaberAIBlockedNote(attacker, blocker); // 2026-11-10: bots wait for his block to finish
 
 			if ((d_attackinfo.integer || g_DebugSaberCombat.integer) &&
 				!(blocker->r.svFlags & SVF_BOT))
@@ -1369,12 +1571,11 @@ qboolean sab_beh_block_vs_attack(
 				{
 					SabBeh_SaberShouldBeDisarmedBlocker(blocker, attacker);
 				}
+				WP_SaberGuardBreakMoment(attacker, blocker); // 2026-11-10
 
-				if (attacker->r.svFlags & SVF_BOT)
-				{
-					WP_BlockPointsRegenerate(attacker, BLOCKPOINTS_FATIGUE);
-				}
-				else if (!blocker->client->ps.saberInFlight)
+				// The blocker recovers a little if he still holds his saber (a disarm already gives the disarmed
+				// fighter these points). 2026-11-10 bug fix (as SP): this gave them to the attacker whenever he was a bot.
+				if (!blocker->client->ps.saberInFlight)
 				{
 					WP_BlockPointsRegenerate(blocker, BLOCKPOINTS_FATIGUE);
 				}
@@ -1427,7 +1628,11 @@ qboolean sab_beh_block_vs_attack(
 				{
 					WP_SaberMBlockDirection(blocker, hit_loc, qfalse);
 
-					if (attacker->client->ps.saberFatigueChainCount >= MISHAPLEVEL_THIRTEEN)
+					if (WP_SaberAIIsAI(attacker))
+					{// 2026-11-10 (DH): a perfect-blocked NPC / bot is staggered
+						WP_SaberAIPerfectBlocked(attacker, blocker);
+					}
+					else if (attacker->client->ps.saberFatigueChainCount >= MISHAPLEVEL_THIRTEEN)
 					{
 						sab_beh_add_mishap_attacker(attacker, blocker);
 					}
@@ -1469,10 +1674,10 @@ qboolean sab_beh_block_vs_attack(
 					WP_BlockPointsRegenerate_over_ride(blocker, BLOCKPOINTS_FIFTEEN);//SAC Reward blocker
 					sab_beh_add_balance(blocker, -MPCOST_MBLOCKED); //SAC Reward blocker
 
-					if (attacker->r.svFlags & SVF_BOT)
+					if (WP_SaberAIIsAI(attacker))
 					{
-						PM_AddBlockFatigue(&attacker->client->ps, BLOCKPOINTS_FATIGUE); //BP Punish Attacker
-						sab_beh_add_balance(attacker, BLOCKPOINTS_TEN); //SAC Punish attacker
+						PM_AddBlockFatigue(&attacker->client->ps, SABER_AI_PERFECTBLOCKED_BP); //BP Punish Attacker (2026-11-10, DH: 30, was 20; NPCs too)
+						sab_beh_add_balance(attacker, MPCOST_MBLOCKED); //SAC Punish attacker (bug fix 2026-11-10: was BLOCKPOINTS_TEN, a block point value: +10 of the 15 fatigue levels)
 					}
 					else
 					{
@@ -1588,7 +1793,26 @@ qboolean sab_beh_block_vs_attack(
 				if ((attacker->client->ps.fd.saberAnimLevel == SS_DESANN || attacker->client->ps.fd.saberAnimLevel == SS_BLASTER) || // SS_BLASTER
 					attacker->client->ps.fd.saberAnimLevel == SS_STRONG)
 				{
+					int heavy_cost;
 					WP_SaberFatiguedParryDirection(blocker, hit_loc, qfalse);
+
+					// 2026-11-10 bug fix: blocking a heavy style cost nothing here. Now it costs the normal block
+					// cost for the blocker's block points plus 2.
+					if (WP_SaberAIIsAI(blocker))
+					{
+						heavy_cost = blocker->client->ps.fd.blockPoints <= BLOCKPOINTS_FOURTY ? BLOCKPOINTS_FIVE
+							: blocker->client->ps.fd.blockPoints <= BLOCKPOINTS_MISSILE ? BLOCKPOINTS_DANGER : BLOCKPOINTS_THREE;
+					}
+					else
+					{
+						heavy_cost = blocker->client->ps.fd.blockPoints <= BLOCKPOINTS_FOURTY ? BLOCKPOINTS_FAIL : BLOCKPOINTS_THREE;
+					}
+					PM_AddBlockFatigue(&blocker->client->ps, WP_ClassBlockPointCost(blocker, heavy_cost + 2, qfalse));
+
+					if (d_blockinfo.integer || g_DebugSaberCombat.integer)
+					{
+						Com_Printf(S_COLOR_CYAN"Blocked a heavy style, cost %d\n", heavy_cost + 2);
+					}
 				}
 				else if (blocker->client->ps.fd.blockPoints <= BLOCKPOINTS_MISSILE)
 				{
@@ -1602,7 +1826,7 @@ qboolean sab_beh_block_vs_attack(
 							Com_Printf(S_COLOR_CYAN "NPC Fatigued Parry\n");
 						}
 
-						PM_AddBlockFatigue(&blocker->client->ps, WP_ClassBlockPointCost(blocker, BLOCKPOINTS_FAIL, qfalse));
+						PM_AddBlockFatigue(&blocker->client->ps, WP_ClassBlockPointCost(blocker, WP_SaberAIIsAI(blocker) ? BLOCKPOINTS_FIVE : BLOCKPOINTS_FAIL, qfalse)); // 2026-11-10: NPC / bot 5
 					}
 					else
 					{
@@ -1614,7 +1838,7 @@ qboolean sab_beh_block_vs_attack(
 							Com_Printf(S_COLOR_CYAN "NPC normal Parry\n");
 						}
 
-						PM_AddBlockFatigue(&blocker->client->ps, WP_ClassBlockPointCost(blocker, BLOCKPOINTS_THREE, qfalse));
+						PM_AddBlockFatigue(&blocker->client->ps, WP_ClassBlockPointCost(blocker, WP_SaberAIIsAI(blocker) ? BLOCKPOINTS_DANGER : BLOCKPOINTS_THREE, qfalse)); // 2026-11-10: NPC / bot 4
 					}
 				}
 				else
@@ -1681,6 +1905,16 @@ qboolean sab_beh_block_vs_attack(
 				}
 			}
 		}
+
+		// 2026-11-10: a blocked riposte (the counter after a perfect parry) costs the blocker 5 block points more
+		if (WP_SaberRiposteSwingActive(attacker) && (blocker->client->ps.saberEventFlags & SEF_PARRIED))
+		{
+			PM_AddBlockFatigue(&blocker->client->ps, SABER_RIPOSTE_BLOCK_BP);
+			if (d_blockinfo.integer || g_DebugSaberCombat.integer)
+			{
+				Com_Printf(S_COLOR_CYAN"Blocked a riposte, extra cost 5\n");
+			}
+		}
 	}
 
 	// ------------------------------------------------------------
@@ -1718,10 +1952,11 @@ qboolean sab_beh_block_vs_attack(
 			WP_SaberClearDamageForEntNum(attacker, blocker->s.number, saberNum, bladeNum);
 
 			WP_BlockPointsRegenerate_over_ride(blocker, BLOCKPOINTS_FIFTEEN);
-			PM_AddBlockFatigue(&attacker->client->ps, BLOCKPOINTS_TEN); //BP Punish Attacker
+			PM_AddBlockFatigue(&attacker->client->ps, WP_SaberAIIsAI(attacker) ? SABER_AI_PERFECTBLOCKED_BP : BLOCKPOINTS_TEN); //BP Punish Attacker (NPC / bot 30, 2026-11-10)
 			sab_beh_add_balance(blocker, -MPCOST_MBLOCKED); //SAC Reward blocker
 			sab_beh_add_balance(attacker, MPCOST_MBLOCKED); //SAC Punish attacker
 			WP_SaberPerfectParryBonus(blocker, attacker); // g_saberPerfectParry (2026-11-09)
+			// the attacker's massive stagger and stamina loss: sab_beh_attack_vs_block
 		}
 		else
 		{
@@ -1729,11 +1964,21 @@ qboolean sab_beh_block_vs_attack(
 			{
 				SabBeh_SaberShouldBeDisarmedBlocker(blocker, attacker);
 				WP_BlockPointsRegenerate_over_ride(blocker, BLOCKPOINTS_FATIGUE);
+				WP_SaberGuardBreakMoment(attacker, blocker);
 			}
 			else
 			{
-				g_fatigue_bp_knockaway(blocker);
-				PM_AddBlockFatigue(&blocker->client->ps, WP_ClassBlockPointCost(blocker, BLOCKPOINTS_TEN, qfalse));
+				// 2026-11-10 (DH): blocking an unblockable attack (kata) without a perfect block gives the blocker
+				// the massive stagger and a big block point loss (was a knockaway and 10)
+				if (!WP_SaberStaggerOnce(blocker))
+				{
+					g_fatigue_bp_knockaway(blocker);
+				}
+				PM_AddBlockFatigue(&blocker->client->ps, WP_ClassBlockPointCost(blocker, SABER_UNBLOCKABLE_BLOCK_BP, qfalse));
+				if (WP_SaberIsPlayer(blocker))
+				{
+					CGCam_BlockShakeMP(blocker->s.origin, blocker, 0.6f, 250);
+				}
 			}
 
 			if (d_blockinfo.integer || g_DebugSaberCombat.integer)

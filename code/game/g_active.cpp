@@ -206,6 +206,7 @@ static qboolean s_dashHeld[MAX_GENTITIES]; // the dash button is still held sinc
 extern cvar_t* g_SaberPerfectBlockingTimerEasy;
 extern cvar_t* g_SaberPerfectBlockingTimerNormal;
 extern cvar_t* g_SaberPerfectBlockingTimerHard;
+extern qboolean WP_SaberPerfectBlockPress(const gentity_t* ent, int window);
 extern void BG_ReduceBlasterMishapLevelAdvanced(playerState_t* ps);
 extern void WP_SaberFatigueRegenerate(playerState_t* ps, int override_amt);
 extern void WP_BlasterFatigueRegenerate(playerState_t* ps, int override_amt);
@@ -2220,9 +2221,10 @@ static void ClientTimerActions(gentity_t* ent, const int msec)
 				}
 				else
 				{
-					// Half-speed regeneration:
-					// Regenerate 1 point every 2 frames instead of every frame.
-					if ((level.time & 1) == 0)  // even frame → regen
+					// Half-speed regeneration: this runs once a second (ClientTimerActions), so regenerate every 2nd second.
+					// 2026-11-10 (audit): was (level.time & 1), but level.time moves in whole frames (50 ms), so it was always
+					// even (full speed) or, on an MP server with odd frame times, never regenerated at all.
+					if (((level.time / 1000) & 1) == 0)
 					{
 						WP_SaberFatigueRegenerate(&client->ps, 1);
 					}
@@ -2273,9 +2275,10 @@ static void ClientTimerActions(gentity_t* ent, const int msec)
 						&& !PM_SaberInBrokenParry(client->ps.saberMove)
 						&& client->ps.saberBlockingTime < level.time) // npc, dont auto regen bp if doing this
 					{
-						// Half-speed regeneration:
-						// Regenerate 1 point every 2 frames instead of every frame.
-						if ((level.time & 1) == 0)  // even frame → regen
+						// Half-speed regeneration: this runs once a second (ClientTimerActions), so regenerate every 2nd second.
+						// 2026-11-10 (audit): was (level.time & 1), but level.time moves in whole frames (50 ms), so it was always
+						// even (full speed) or, on an MP server with odd frame times, never regenerated at all.
+						if (((level.time / 1000) & 1) == 0)
 						{
 							client->ps.blockPoints++;
 						}
@@ -2294,7 +2297,7 @@ static void ClientTimerActions(gentity_t* ent, const int msec)
 			{// only regenerate force if not holding down block, otherwise you can just hold down block and never have to worry about force
 				if (ent->flags & FL_FORCEMODE)
 				{
-					client->ps.forcePower = BLOCK_POINTS_MAX;
+					client->ps.forcePower = client->ps.forcePowerMax; // 2026-11-10 (audit): was BLOCK_POINTS_MAX
 				}
 				else
 				{
@@ -2304,9 +2307,10 @@ static void ClientTimerActions(gentity_t* ent, const int msec)
 						&& !PM_SaberInBrokenParry(client->ps.saberMove)
 						&& client->ps.saberBlockingTime < level.time) // npc, dont auto regen bp if doing this
 					{
-						// Half-speed regeneration:
-						// Regenerate 1 point every 2 frames instead of every frame.
-						if ((level.time & 1) == 0)  // even frame → regen
+						// Half-speed regeneration: this runs once a second (ClientTimerActions), so regenerate every 2nd second.
+						// 2026-11-10 (audit): was (level.time & 1), but level.time moves in whole frames (50 ms), so it was always
+						// even (full speed) or, on an MP server with odd frame times, never regenerated at all.
+						if (((level.time / 1000) & 1) == 0)
 						{
 							client->ps.forcePower++;
 						}
@@ -3342,15 +3346,7 @@ static gentity_t* G_KickTrace(gentity_t* ent, vec3_t kick_dir, const float kick_
 						{
 							G_Sound(ent, G_SoundIndex("sound/movers/objects/saber_slam"));
 						}
-						else if (ent->client->ps.torsoAnim == BOTH_SLAP_L ||
-							ent->client->ps.torsoAnim == BOTH_SLAP_R ||
-							(ent->client->ps.torsoAnim == BOTH_A7_SLAP_R || ent->client->ps.torsoAnim == BOTH_A7_SLAP_R_GALEN) ||
-							(ent->client->ps.torsoAnim == BOTH_A7_SLAP_L || ent->client->ps.torsoAnim == BOTH_A7_SLAP_L_GALEN))
-						{
-							G_Sound(ent, G_SoundIndex(va("sound/weapons/melee/punch%d", Q_irand(1, 4))));
-							G_PlayEffect(G_EffectIndex("melee/kick_impact.efx"), trace.endpos, trace.plane.normal);
-						}
-						else
+						else // 2026-11-10 (audit): the "else if (ent->client->ps.torsoAnim == BOTH_SLAP_L || ent->client->ps.torsoAnim == BOTH_SLAP_R ||...)" branch here was the same code; merged
 						{
 							G_Sound(ent, G_SoundIndex(va("sound/weapons/melee/punch%d", Q_irand(1, 4))));
 							G_PlayEffect(G_EffectIndex("melee/kick_impact.efx"), trace.endpos, trace.plane.normal);
@@ -10411,14 +10407,23 @@ static void ClientThink_real(gentity_t* ent, usercmd_t* ucmd)
 				}
 				client->usercmd.buttons &= ~BUTTON_ATTACK;
 
-				// Perfect block timing
+				// Perfect block timing. 2026-11-10: in mode 2 a press too soon after one that parried nothing opens
+				// no window (mash lockout, WP_SaberPerfectBlockPress in wp_saberblocking.cpp).
 				if (client->ps.ManualblockStartTime <= 0)
 				{
 					client->ps.ManualblockStartTime = level.time;
 
-					if ((client->ps.ManualBlockingFlags & (1 << MBF_PERFECTBLOCKING)) == 0)
+					const int pb_window = g_spskill->integer <= 0 ? g_SaberPerfectBlockingTimerEasy->integer
+						: g_spskill->integer == 1 ? g_SaberPerfectBlockingTimerNormal->integer
+						: g_SaberPerfectBlockingTimerHard->integer;
+
+					if (WP_SaberPerfectBlockPress(ent, pb_window))
 					{
 						client->ps.ManualBlockingFlags |= (1 << MBF_PERFECTBLOCKING);
+					}
+					else
+					{
+						client->ps.ManualBlockingFlags &= ~(1 << MBF_PERFECTBLOCKING);
 					}
 
 					if ((d_combatinfo->integer != 0) || (g_DebugSaberCombat->integer != 0))

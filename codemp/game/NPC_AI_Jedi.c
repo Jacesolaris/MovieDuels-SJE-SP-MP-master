@@ -84,6 +84,7 @@ extern qboolean PM_SaberInAttack(int move);
 extern qboolean PM_SaberInBounce(int move);
 extern qboolean PM_SaberInParry(int move);
 extern qboolean PM_SaberInKnockaway(int move);
+extern qboolean PM_SaberInReflect(int move);
 extern qboolean PM_SaberInBrokenParry(int move);
 extern qboolean PM_SaberInDeflect(int move);
 extern qboolean PM_SpinningSaberAnim(int anim);
@@ -2477,11 +2478,15 @@ Jedi_Move
 
 static qboolean Jedi_Move(gentity_t* goal, const qboolean retreat)
 {
-	const qboolean moved = NPC_MoveToGoal(qtrue);
 	navInfo_t info;
 
+	// bug fix 2026-11-10: the goal was set AFTER NPC_MoveToGoal (base JKA sets it first). One failed step (or bumping
+	// the enemy) runs Jedi_HoldPosition, which clears the goal, and from then on every advance steered to no goal,
+	// failed and cleared it again: two NPCs further apart than the close-range walk-in just stood there taunting.
 	NPCS.NPCInfo->combatMove = qtrue;
 	NPCS.NPCInfo->goalEntity = goal;
+
+	const qboolean moved = NPC_MoveToGoal(qtrue);
 
 	if (retreat)
 	{
@@ -2569,6 +2574,54 @@ static void Jedi_StartBackOff(void)
 		NPCS.NPC->client->ps.legsTimer = 0;
 	}
 	VectorClear(NPCS.NPC->client->ps.moveDir);
+}
+
+// Dash spacing (jedi_engine_mode 2 + g_saberAITactics, 2026-11-10, as SJE): two dashes are at least 1.5 - 2.5 s
+// apart (the two dash-outs could come on two frames in a row), and a dash-in uses the same 2-dash budget as the
+// dash-outs (DashOutTime, 10 - 15 s from the first dash), so an NPC can't dash in and straight back out.
+static qboolean Jedi_DashTactics(void)
+{
+	return jedi_engine_mode == 2 && g_saberAITactics.integer ? qtrue : qfalse;
+}
+
+static qboolean Jedi_DashGapDone(const gentity_t* self)
+{
+	return !Jedi_DashTactics() || TIMER_Done(self, "dashGap") ? qtrue : qfalse;
+}
+
+static void Jedi_DashGapSet(const gentity_t* self)
+{
+	if (Jedi_DashTactics())
+	{
+		TIMER_Set(self, "dashGap", Q_irand(1500, 2500));
+	}
+}
+
+static qboolean Jedi_DashInAllowed(gentity_t* self)
+{
+	if (!Jedi_DashTactics())
+	{
+		return qtrue; // dash-ins as before (DashInTime only)
+	}
+	if (TIMER_Done(self, "DashOutTime"))
+	{
+		self->Dash_NPC_Count = 0;
+	}
+	return self->Dash_NPC_Count < 2 && TIMER_Done(self, "dashGap") ? qtrue : qfalse;
+}
+
+static void Jedi_DashInUsed(gentity_t* self)
+{
+	if (!Jedi_DashTactics())
+	{
+		return;
+	}
+	self->Dash_NPC_Count++;
+	if (self->Dash_NPC_Count == 1)
+	{
+		TIMER_Set(self, "DashOutTime", Q_irand(10000, 15000));
+	}
+	Jedi_DashGapSet(self);
 }
 
 static void JediDirectionalDashDodge(gentity_t* NPC, gentity_t* enemy)
@@ -2742,307 +2795,154 @@ static void Jedi_AdjustSaberAnimLevel(const gentity_t* self, int new_level)
 		return;
 	}
 
-	if (self->client->playerTeam == NPCTEAM_ENEMY)
+	// 2026-11-10 (audit): "if (self->client->playerTeam == NPCTEAM_ENEMY)" had the same code in both branches; kept one
+	if (!Q_stricmp("cultist_saber_all", self->NPC_type)
+		|| !Q_stricmp("cultist_saber_all_throw", self->NPC_type)
+		|| !Q_stricmp("md_maul_tcw", self->NPC_type)
+		|| !Q_stricmp("md_maul_cyber_tcw", self->NPC_type))
 	{
-		if (!Q_stricmp("cultist_saber_all", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_all_throw", self->NPC_type)
-			|| !Q_stricmp("md_maul_tcw", self->NPC_type)
-			|| !Q_stricmp("md_maul_cyber_tcw", self->NPC_type))
-		{
-			//use any, regardless of rank, etc.
-		}
-		else if (!Q_stricmp("cultist_saber", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_throw", self->NPC_type))
-		{
-			//fast only
-			self->client->ps.fd.saberAnimLevel = SS_FAST;
-		}
-		else if (!Q_stricmp("cultist_saber_med", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_med_throw", self->NPC_type))
-		{
-			//med only
-			self->client->ps.fd.saberAnimLevel = SS_MEDIUM;
-		}
-		else if (!Q_stricmp("cultist_saber_strong", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_strong_throw", self->NPC_type))
-		{
-			//strong only
-			self->client->ps.fd.saberAnimLevel = SS_STRONG;
-		}
-		else if (!Q_stricmp("md_grievous", self->NPC_type)
-			|| !Q_stricmp("md_grievous4", self->NPC_type)
-			|| !Q_stricmp("md_grievous_robed", self->NPC_type)
-			|| !Q_stricmp("md_clone_assassin", self->NPC_type)
-			|| !Q_stricmp("md_jango", self->NPC_type)
-			|| !Q_stricmp("md_jango_geo", self->NPC_type)
-			|| !Q_stricmp("md_ani_ep2_dual", self->NPC_type)
-			|| !Q_stricmp("md_serra", self->NPC_type)
-			|| !Q_stricmp("md_ahsoka_rebels", self->NPC_type)
-			|| !Q_stricmp("md_ahsoka", self->NPC_type)
-			|| !Q_stricmp("md_ahsoka_s7", self->NPC_type)
-			|| !Q_stricmp("md_ventress", self->NPC_type)
-			|| !Q_stricmp("md_ven_ns", self->NPC_type)
-			|| !Q_stricmp("md_ven_bh", self->NPC_type)
-			|| !Q_stricmp("md_ven_dg", self->NPC_type)
-			|| !Q_stricmp("md_asharad", self->NPC_type)
-			|| !Q_stricmp("md_asharad_tus", self->NPC_type)
-			|| !Q_stricmp("boba_fett", self->NPC_type)
-			|| !Q_stricmp("boba_fett_esb", self->NPC_type)
-			|| !Q_stricmp("md_pguard4", self->NPC_type)
-			|| !Q_stricmp("md_grie_egg", self->NPC_type)
-			|| !Q_stricmp("md_grie3_egg", self->NPC_type)
-			|| !Q_stricmp("md_grie4_egg", self->NPC_type)
-			|| !Q_stricmp("md_fet_ga", self->NPC_type)
-			|| !Q_stricmp("md_fet2_ga", self->NPC_type)
-			|| !Q_stricmp("md_fet3_ga", self->NPC_type)
-			|| !Q_stricmp("md_ven2_ga", self->NPC_type)
-			|| !Q_stricmp("md_ket_jt", self->NPC_type)
-			|| !Q_stricmp("md_fet_ka", self->NPC_type)
-			|| !Q_stricmp("md_fet2_ka", self->NPC_type)
-			|| !Q_stricmp("md_clo2_rt", self->NPC_type)
-			|| !Q_stricmp("md_clo5_rt", self->NPC_type)
-			|| !Q_stricmp("reborn_dual", self->NPC_type)
-			|| !Q_stricmp("reborn_dual2", self->NPC_type)
-			|| !Q_stricmp("alora_dual", self->NPC_type)
-			|| !Q_stricmp("JediTrainer", self->NPC_type)
-			|| !Q_stricmp("jedi_zf2", self->NPC_type)
-			|| !Q_stricmp("RebornMasterDual", self->NPC_type)
-			|| !Q_stricmp("Tavion_scepter", self->NPC_type)
-			|| !Q_stricmp("md_jed6_jt", self->NPC_type)
-			|| !Q_stricmp("md_jed11_jt", self->NPC_type)
-			|| !Q_stricmp("md_jed13_jt", self->NPC_type)
-			|| !Q_stricmp("md_jediknight2_jt", self->NPC_type)
-			|| !Q_stricmp("md_jediveteran2_jt", self->NPC_type)
-			|| !Q_stricmp("md_jediveteran3_jt", self->NPC_type)
-			|| !Q_stricmp("md_serra_jt", self->NPC_type))
-		{
-			//dual only
-			self->client->ps.fd.saberAnimLevel = SS_DUAL;
-		}
-		else if (!Q_stricmp("md_magnaguard", self->NPC_type)
-			|| !Q_stricmp("md_inquisitor", self->NPC_type)
-			|| !Q_stricmp("md_5thbrother", self->NPC_type)
-			|| !Q_stricmp("md_7thsister", self->NPC_type)
-			|| !Q_stricmp("md_8thbrother", self->NPC_type)
-			|| !Q_stricmp("md_maul_rebels", self->NPC_type)
-			|| !Q_stricmp("md_maul_rebels2", self->NPC_type)
-			|| !Q_stricmp("md_maul_rebels3", self->NPC_type)
-			|| !Q_stricmp("md_maul_rebels4", self->NPC_type)
-			|| !Q_stricmp("md_maul_rebels5", self->NPC_type)
-			|| !Q_stricmp("md_maul_rebels6", self->NPC_type)
-			|| !Q_stricmp("md_jbrute", self->NPC_type)
-			|| !Q_stricmp("md_templeguard", self->NPC_type)
-			|| !Q_stricmp("md_sidious_tcw", self->NPC_type)
-			|| !Q_stricmp("md_maul_tcw_staff", self->NPC_type)
-			|| !Q_stricmp("md_savage", self->NPC_type)
-			|| !Q_stricmp("md_galen", self->NPC_type)
-			|| !Q_stricmp("md_galen_jt", self->NPC_type)
-			|| !Q_stricmp("md_galencjr", self->NPC_type)
-			|| !Q_stricmp("md_starkiller", self->NPC_type)
-			|| !Q_stricmp("md_sithstalker", self->NPC_type)
-			|| !Q_stricmp("md_stk_lord", self->NPC_type)
-			|| !Q_stricmp("md_stk_tat", self->NPC_type)
-			|| !Q_stricmp("darthdesolous", self->NPC_type)
-			|| !Q_stricmp("purge_trooper", self->NPC_type)
-			|| !Q_stricmp("cal_kestis_staff", self->NPC_type)
-			|| !Q_stricmp("md_2ndsister", self->NPC_type)
-			|| !Q_stricmp("md_shadowguard", self->NPC_type)
-			|| !Q_stricmp("md_ven_dual", self->NPC_type)
-			|| !Q_stricmp("md_pguard5", self->NPC_type)
-			|| !Q_stricmp("md_mau_dof", self->NPC_type)
-			|| !Q_stricmp("md_mau2_dof", self->NPC_type)
-			|| !Q_stricmp("md_mau3_dof", self->NPC_type)
-			|| !Q_stricmp("md_mag_egg", self->NPC_type)
-			|| !Q_stricmp("md_mag_ga", self->NPC_type)
-			|| !Q_stricmp("md_ven_ga", self->NPC_type)
-			|| !Q_stricmp("md_mau_luke", self->NPC_type)
-			|| !Q_stricmp("darthphobos", self->NPC_type)
-			|| !Q_stricmp("md_tus5_tc", self->NPC_type)
-			|| !Q_stricmp("md_sta_tfu", self->NPC_type)
-			|| !Q_stricmp("md_gua1_tfu", self->NPC_type)
-			|| !Q_stricmp("md_sta_cs", self->NPC_type)
-			|| !Q_stricmp("md_gua_am", self->NPC_type)
-			|| !Q_stricmp("md_gua2_am", self->NPC_type)
-			|| !Q_stricmp("md_mag_am", self->NPC_type)
-			|| !Q_stricmp("md_mag2_am", self->NPC_type)
-			|| !Q_stricmp("JediF", self->NPC_type)
-			|| !Q_stricmp("JediMaster", self->NPC_type)
-			|| !Q_stricmp("jedi_kdm1", self->NPC_type)
-			|| !Q_stricmp("jedi_tf1", self->NPC_type)
-			|| !Q_stricmp("reborn_staff", self->NPC_type)
-			|| !Q_stricmp("reborn_staff2", self->NPC_type)
-			|| !Q_stricmp("RebornMasterStaff", self->NPC_type)
-			|| !Q_stricmp("md_jed7_jt", self->NPC_type)
-			|| !Q_stricmp("md_jed12_jt", self->NPC_type)
-			|| !Q_stricmp("md_jed14_jt", self->NPC_type)
-			|| !Q_stricmp("md_jedimaster3_jt", self->NPC_type)
-			|| !Q_stricmp("md_jedimaster5_jt", self->NPC_type)
-			|| !Q_stricmp("md_guard_jt", self->NPC_type)
-			|| !Q_stricmp("md_guardboss_jt", self->NPC_type)
-			|| !Q_stricmp("md_jedibrute_jt", self->NPC_type)
-			|| !Q_stricmp("md_maul", self->NPC_type)
-			|| !Q_stricmp("md_maul_robed", self->NPC_type)
-			|| !Q_stricmp("md_maul_hooded", self->NPC_type)
-			|| !Q_stricmp("md_maul_wots", self->NPC_type))
-		{
-			//staff only
-			self->client->ps.fd.saberAnimLevel = SS_STAFF;
-		}
-		else
-		{
-			//use any, regardless of rank, etc.
-		}
+		//use any, regardless of rank, etc.
+	}
+	else if (!Q_stricmp("cultist_saber", self->NPC_type)
+		|| !Q_stricmp("cultist_saber_throw", self->NPC_type))
+	{
+		//fast only
+		self->client->ps.fd.saberAnimLevel = SS_FAST;
+	}
+	else if (!Q_stricmp("cultist_saber_med", self->NPC_type)
+		|| !Q_stricmp("cultist_saber_med_throw", self->NPC_type))
+	{
+		//med only
+		self->client->ps.fd.saberAnimLevel = SS_MEDIUM;
+	}
+	else if (!Q_stricmp("cultist_saber_strong", self->NPC_type)
+		|| !Q_stricmp("cultist_saber_strong_throw", self->NPC_type))
+	{
+		//strong only
+		self->client->ps.fd.saberAnimLevel = SS_STRONG;
+	}
+	else if (!Q_stricmp("md_grievous", self->NPC_type)
+		|| !Q_stricmp("md_grievous4", self->NPC_type)
+		|| !Q_stricmp("md_grievous_robed", self->NPC_type)
+		|| !Q_stricmp("md_clone_assassin", self->NPC_type)
+		|| !Q_stricmp("md_jango", self->NPC_type)
+		|| !Q_stricmp("md_jango_geo", self->NPC_type)
+		|| !Q_stricmp("md_ani_ep2_dual", self->NPC_type)
+		|| !Q_stricmp("md_serra", self->NPC_type)
+		|| !Q_stricmp("md_ahsoka_rebels", self->NPC_type)
+		|| !Q_stricmp("md_ahsoka", self->NPC_type)
+		|| !Q_stricmp("md_ahsoka_s7", self->NPC_type)
+		|| !Q_stricmp("md_ventress", self->NPC_type)
+		|| !Q_stricmp("md_ven_ns", self->NPC_type)
+		|| !Q_stricmp("md_ven_bh", self->NPC_type)
+		|| !Q_stricmp("md_ven_dg", self->NPC_type)
+		|| !Q_stricmp("md_asharad", self->NPC_type)
+		|| !Q_stricmp("md_asharad_tus", self->NPC_type)
+		|| !Q_stricmp("boba_fett", self->NPC_type)
+		|| !Q_stricmp("boba_fett_esb", self->NPC_type)
+		|| !Q_stricmp("md_pguard4", self->NPC_type)
+		|| !Q_stricmp("md_grie_egg", self->NPC_type)
+		|| !Q_stricmp("md_grie3_egg", self->NPC_type)
+		|| !Q_stricmp("md_grie4_egg", self->NPC_type)
+		|| !Q_stricmp("md_fet_ga", self->NPC_type)
+		|| !Q_stricmp("md_fet2_ga", self->NPC_type)
+		|| !Q_stricmp("md_fet3_ga", self->NPC_type)
+		|| !Q_stricmp("md_ven2_ga", self->NPC_type)
+		|| !Q_stricmp("md_ket_jt", self->NPC_type)
+		|| !Q_stricmp("md_fet_ka", self->NPC_type)
+		|| !Q_stricmp("md_fet2_ka", self->NPC_type)
+		|| !Q_stricmp("md_clo2_rt", self->NPC_type)
+		|| !Q_stricmp("md_clo5_rt", self->NPC_type)
+		|| !Q_stricmp("reborn_dual", self->NPC_type)
+		|| !Q_stricmp("reborn_dual2", self->NPC_type)
+		|| !Q_stricmp("alora_dual", self->NPC_type)
+		|| !Q_stricmp("JediTrainer", self->NPC_type)
+		|| !Q_stricmp("jedi_zf2", self->NPC_type)
+		|| !Q_stricmp("RebornMasterDual", self->NPC_type)
+		|| !Q_stricmp("Tavion_scepter", self->NPC_type)
+		|| !Q_stricmp("md_jed6_jt", self->NPC_type)
+		|| !Q_stricmp("md_jed11_jt", self->NPC_type)
+		|| !Q_stricmp("md_jed13_jt", self->NPC_type)
+		|| !Q_stricmp("md_jediknight2_jt", self->NPC_type)
+		|| !Q_stricmp("md_jediveteran2_jt", self->NPC_type)
+		|| !Q_stricmp("md_jediveteran3_jt", self->NPC_type)
+		|| !Q_stricmp("md_serra_jt", self->NPC_type))
+	{
+		//dual only
+		self->client->ps.fd.saberAnimLevel = SS_DUAL;
+	}
+	else if (!Q_stricmp("md_magnaguard", self->NPC_type)
+		|| !Q_stricmp("md_inquisitor", self->NPC_type)
+		|| !Q_stricmp("md_5thbrother", self->NPC_type)
+		|| !Q_stricmp("md_7thsister", self->NPC_type)
+		|| !Q_stricmp("md_8thbrother", self->NPC_type)
+		|| !Q_stricmp("md_maul_rebels", self->NPC_type)
+		|| !Q_stricmp("md_maul_rebels2", self->NPC_type)
+		|| !Q_stricmp("md_maul_rebels3", self->NPC_type)
+		|| !Q_stricmp("md_maul_rebels4", self->NPC_type)
+		|| !Q_stricmp("md_maul_rebels5", self->NPC_type)
+		|| !Q_stricmp("md_maul_rebels6", self->NPC_type)
+		|| !Q_stricmp("md_jbrute", self->NPC_type)
+		|| !Q_stricmp("md_templeguard", self->NPC_type)
+		|| !Q_stricmp("md_sidious_tcw", self->NPC_type)
+		|| !Q_stricmp("md_maul_tcw_staff", self->NPC_type)
+		|| !Q_stricmp("md_savage", self->NPC_type)
+		|| !Q_stricmp("md_galen", self->NPC_type)
+		|| !Q_stricmp("md_galen_jt", self->NPC_type)
+		|| !Q_stricmp("md_galencjr", self->NPC_type)
+		|| !Q_stricmp("md_starkiller", self->NPC_type)
+		|| !Q_stricmp("md_sithstalker", self->NPC_type)
+		|| !Q_stricmp("md_stk_lord", self->NPC_type)
+		|| !Q_stricmp("md_stk_tat", self->NPC_type)
+		|| !Q_stricmp("darthdesolous", self->NPC_type)
+		|| !Q_stricmp("purge_trooper", self->NPC_type)
+		|| !Q_stricmp("cal_kestis_staff", self->NPC_type)
+		|| !Q_stricmp("md_2ndsister", self->NPC_type)
+		|| !Q_stricmp("md_shadowguard", self->NPC_type)
+		|| !Q_stricmp("md_ven_dual", self->NPC_type)
+		|| !Q_stricmp("md_pguard5", self->NPC_type)
+		|| !Q_stricmp("md_mau_dof", self->NPC_type)
+		|| !Q_stricmp("md_mau2_dof", self->NPC_type)
+		|| !Q_stricmp("md_mau3_dof", self->NPC_type)
+		|| !Q_stricmp("md_mag_egg", self->NPC_type)
+		|| !Q_stricmp("md_mag_ga", self->NPC_type)
+		|| !Q_stricmp("md_ven_ga", self->NPC_type)
+		|| !Q_stricmp("md_mau_luke", self->NPC_type)
+		|| !Q_stricmp("darthphobos", self->NPC_type)
+		|| !Q_stricmp("md_tus5_tc", self->NPC_type)
+		|| !Q_stricmp("md_sta_tfu", self->NPC_type)
+		|| !Q_stricmp("md_gua1_tfu", self->NPC_type)
+		|| !Q_stricmp("md_sta_cs", self->NPC_type)
+		|| !Q_stricmp("md_gua_am", self->NPC_type)
+		|| !Q_stricmp("md_gua2_am", self->NPC_type)
+		|| !Q_stricmp("md_mag_am", self->NPC_type)
+		|| !Q_stricmp("md_mag2_am", self->NPC_type)
+		|| !Q_stricmp("JediF", self->NPC_type)
+		|| !Q_stricmp("JediMaster", self->NPC_type)
+		|| !Q_stricmp("jedi_kdm1", self->NPC_type)
+		|| !Q_stricmp("jedi_tf1", self->NPC_type)
+		|| !Q_stricmp("reborn_staff", self->NPC_type)
+		|| !Q_stricmp("reborn_staff2", self->NPC_type)
+		|| !Q_stricmp("RebornMasterStaff", self->NPC_type)
+		|| !Q_stricmp("md_jed7_jt", self->NPC_type)
+		|| !Q_stricmp("md_jed12_jt", self->NPC_type)
+		|| !Q_stricmp("md_jed14_jt", self->NPC_type)
+		|| !Q_stricmp("md_jedimaster3_jt", self->NPC_type)
+		|| !Q_stricmp("md_jedimaster5_jt", self->NPC_type)
+		|| !Q_stricmp("md_guard_jt", self->NPC_type)
+		|| !Q_stricmp("md_guardboss_jt", self->NPC_type)
+		|| !Q_stricmp("md_jedibrute_jt", self->NPC_type)
+		|| !Q_stricmp("md_maul", self->NPC_type)
+		|| !Q_stricmp("md_maul_robed", self->NPC_type)
+		|| !Q_stricmp("md_maul_hooded", self->NPC_type)
+		|| !Q_stricmp("md_maul_wots", self->NPC_type))
+	{
+		//staff only
+		self->client->ps.fd.saberAnimLevel = SS_STAFF;
 	}
 	else
 	{
-		if (!Q_stricmp("cultist_saber_all", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_all_throw", self->NPC_type)
-			|| !Q_stricmp("md_maul_tcw", self->NPC_type)
-			|| !Q_stricmp("md_maul_cyber_tcw", self->NPC_type))
-		{
-			//use any, regardless of rank, etc.
-		}
-		else if (!Q_stricmp("cultist_saber", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_throw", self->NPC_type))
-		{
-			//fast only
-			self->client->ps.fd.saberAnimLevel = SS_FAST;
-		}
-		else if (!Q_stricmp("cultist_saber_med", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_med_throw", self->NPC_type))
-		{
-			//med only
-			self->client->ps.fd.saberAnimLevel = SS_MEDIUM;
-		}
-		else if (!Q_stricmp("cultist_saber_strong", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_strong_throw", self->NPC_type))
-		{
-			//strong only
-			self->client->ps.fd.saberAnimLevel = SS_STRONG;
-		}
-		else if (!Q_stricmp("md_grievous", self->NPC_type)
-			|| !Q_stricmp("md_grievous4", self->NPC_type)
-			|| !Q_stricmp("md_grievous_robed", self->NPC_type)
-			|| !Q_stricmp("md_clone_assassin", self->NPC_type)
-			|| !Q_stricmp("md_jango", self->NPC_type)
-			|| !Q_stricmp("md_jango_geo", self->NPC_type)
-			|| !Q_stricmp("md_ani_ep2_dual", self->NPC_type)
-			|| !Q_stricmp("md_serra", self->NPC_type)
-			|| !Q_stricmp("md_ahsoka_rebels", self->NPC_type)
-			|| !Q_stricmp("md_ahsoka", self->NPC_type)
-			|| !Q_stricmp("md_ahsoka_s7", self->NPC_type)
-			|| !Q_stricmp("md_ventress", self->NPC_type)
-			|| !Q_stricmp("md_ven_ns", self->NPC_type)
-			|| !Q_stricmp("md_ven_bh", self->NPC_type)
-			|| !Q_stricmp("md_ven_dg", self->NPC_type)
-			|| !Q_stricmp("md_asharad", self->NPC_type)
-			|| !Q_stricmp("md_asharad_tus", self->NPC_type)
-			|| !Q_stricmp("boba_fett", self->NPC_type)
-			|| !Q_stricmp("boba_fett_esb", self->NPC_type)
-			|| !Q_stricmp("md_pguard4", self->NPC_type)
-			|| !Q_stricmp("md_grie_egg", self->NPC_type)
-			|| !Q_stricmp("md_grie3_egg", self->NPC_type)
-			|| !Q_stricmp("md_grie4_egg", self->NPC_type)
-			|| !Q_stricmp("md_fet_ga", self->NPC_type)
-			|| !Q_stricmp("md_fet2_ga", self->NPC_type)
-			|| !Q_stricmp("md_fet3_ga", self->NPC_type)
-			|| !Q_stricmp("md_ven2_ga", self->NPC_type)
-			|| !Q_stricmp("md_ket_jt", self->NPC_type)
-			|| !Q_stricmp("md_fet_ka", self->NPC_type)
-			|| !Q_stricmp("md_fet2_ka", self->NPC_type)
-			|| !Q_stricmp("md_clo2_rt", self->NPC_type)
-			|| !Q_stricmp("md_clo5_rt", self->NPC_type)
-			|| !Q_stricmp("reborn_dual", self->NPC_type)
-			|| !Q_stricmp("reborn_dual2", self->NPC_type)
-			|| !Q_stricmp("alora_dual", self->NPC_type)
-			|| !Q_stricmp("JediTrainer", self->NPC_type)
-			|| !Q_stricmp("jedi_zf2", self->NPC_type)
-			|| !Q_stricmp("RebornMasterDual", self->NPC_type)
-			|| !Q_stricmp("Tavion_scepter", self->NPC_type)
-			|| !Q_stricmp("md_jed6_jt", self->NPC_type)
-			|| !Q_stricmp("md_jed11_jt", self->NPC_type)
-			|| !Q_stricmp("md_jed13_jt", self->NPC_type)
-			|| !Q_stricmp("md_jediknight2_jt", self->NPC_type)
-			|| !Q_stricmp("md_jediveteran2_jt", self->NPC_type)
-			|| !Q_stricmp("md_jediveteran3_jt", self->NPC_type)
-			|| !Q_stricmp("md_serra_jt", self->NPC_type))
-		{
-			//dual only
-			self->client->ps.fd.saberAnimLevel = SS_DUAL;
-		}
-		else if (!Q_stricmp("md_magnaguard", self->NPC_type)
-			|| !Q_stricmp("md_inquisitor", self->NPC_type)
-			|| !Q_stricmp("md_5thbrother", self->NPC_type)
-			|| !Q_stricmp("md_7thsister", self->NPC_type)
-			|| !Q_stricmp("md_8thbrother", self->NPC_type)
-			|| !Q_stricmp("md_maul_rebels", self->NPC_type)
-			|| !Q_stricmp("md_maul_rebels2", self->NPC_type)
-			|| !Q_stricmp("md_maul_rebels3", self->NPC_type)
-			|| !Q_stricmp("md_maul_rebels4", self->NPC_type)
-			|| !Q_stricmp("md_maul_rebels5", self->NPC_type)
-			|| !Q_stricmp("md_maul_rebels6", self->NPC_type)
-			|| !Q_stricmp("md_jbrute", self->NPC_type)
-			|| !Q_stricmp("md_templeguard", self->NPC_type)
-			|| !Q_stricmp("md_sidious_tcw", self->NPC_type)
-			|| !Q_stricmp("md_maul_tcw_staff", self->NPC_type)
-			|| !Q_stricmp("md_savage", self->NPC_type)
-			|| !Q_stricmp("md_galen", self->NPC_type)
-			|| !Q_stricmp("md_galen_jt", self->NPC_type)
-			|| !Q_stricmp("md_galencjr", self->NPC_type)
-			|| !Q_stricmp("md_starkiller", self->NPC_type)
-			|| !Q_stricmp("md_sithstalker", self->NPC_type)
-			|| !Q_stricmp("md_stk_lord", self->NPC_type)
-			|| !Q_stricmp("md_stk_tat", self->NPC_type)
-			|| !Q_stricmp("darthdesolous", self->NPC_type)
-			|| !Q_stricmp("purge_trooper", self->NPC_type)
-			|| !Q_stricmp("cal_kestis_staff", self->NPC_type)
-			|| !Q_stricmp("md_2ndsister", self->NPC_type)
-			|| !Q_stricmp("md_shadowguard", self->NPC_type)
-			|| !Q_stricmp("md_ven_dual", self->NPC_type)
-			|| !Q_stricmp("md_pguard5", self->NPC_type)
-			|| !Q_stricmp("md_mau_dof", self->NPC_type)
-			|| !Q_stricmp("md_mau2_dof", self->NPC_type)
-			|| !Q_stricmp("md_mau3_dof", self->NPC_type)
-			|| !Q_stricmp("md_mag_egg", self->NPC_type)
-			|| !Q_stricmp("md_mag_ga", self->NPC_type)
-			|| !Q_stricmp("md_ven_ga", self->NPC_type)
-			|| !Q_stricmp("md_mau_luke", self->NPC_type)
-			|| !Q_stricmp("darthphobos", self->NPC_type)
-			|| !Q_stricmp("md_tus5_tc", self->NPC_type)
-			|| !Q_stricmp("md_sta_tfu", self->NPC_type)
-			|| !Q_stricmp("md_gua1_tfu", self->NPC_type)
-			|| !Q_stricmp("md_sta_cs", self->NPC_type)
-			|| !Q_stricmp("md_gua_am", self->NPC_type)
-			|| !Q_stricmp("md_gua2_am", self->NPC_type)
-			|| !Q_stricmp("md_mag_am", self->NPC_type)
-			|| !Q_stricmp("md_mag2_am", self->NPC_type)
-			|| !Q_stricmp("JediF", self->NPC_type)
-			|| !Q_stricmp("JediMaster", self->NPC_type)
-			|| !Q_stricmp("jedi_kdm1", self->NPC_type)
-			|| !Q_stricmp("jedi_tf1", self->NPC_type)
-			|| !Q_stricmp("reborn_staff", self->NPC_type)
-			|| !Q_stricmp("reborn_staff2", self->NPC_type)
-			|| !Q_stricmp("RebornMasterStaff", self->NPC_type)
-			|| !Q_stricmp("md_jed7_jt", self->NPC_type)
-			|| !Q_stricmp("md_jed12_jt", self->NPC_type)
-			|| !Q_stricmp("md_jed14_jt", self->NPC_type)
-			|| !Q_stricmp("md_jedimaster3_jt", self->NPC_type)
-			|| !Q_stricmp("md_jedimaster5_jt", self->NPC_type)
-			|| !Q_stricmp("md_guard_jt", self->NPC_type)
-			|| !Q_stricmp("md_guardboss_jt", self->NPC_type)
-			|| !Q_stricmp("md_jedibrute_jt", self->NPC_type)
-			|| !Q_stricmp("md_maul", self->NPC_type)
-			|| !Q_stricmp("md_maul_robed", self->NPC_type)
-			|| !Q_stricmp("md_maul_hooded", self->NPC_type)
-			|| !Q_stricmp("md_maul_wots", self->NPC_type))
-		{
-			//staff only
-			self->client->ps.fd.saberAnimLevel = SS_STAFF;
-		}
-		else
-		{
-			//use any, regardless of rank, etc.
-		}
+		//use any, regardless of rank, etc.
 	}
 	if (!G_ValidSaberStyle(self, new_level))
 	{
@@ -3759,7 +3659,7 @@ static void Jedi_CombatDistance(const int enemy_dist)
 		ps->weapon == WP_SABER &&
 		enemy->s.weapon == WP_SABER &&
 		!PM_SaberInMassiveBounce(ps->torsoAnim) &&
-		!PM_SaberInBounce(ps->torsoAnim) &&
+		!PM_SaberInBounce(ps->saberMove) && // bug fix 2026-11-10: was ps->torsoAnim (an anim in a saber-move check, never true)
 		!PM_SaberInBashedAnim(ps->torsoAnim) &&
 		!PM_InKnockDown(&NPCS.NPC->client->ps) &&
 		InFront(enemy->r.currentOrigin, NPCS.NPC->r.currentOrigin, ps->viewangles, 0.7f) &&
@@ -3774,13 +3674,15 @@ static void Jedi_CombatDistance(const int enemy_dist)
 
 		// Allow up to 2 dashes
 		if (NPCS.NPC->Dash_NPC_Count < 2 && NPCS.NPC->client->ps.fd.forcePower >= 50 &&
-			(jedi_engine_mode > 1) && (g_npc_is_smart.integer != 0))
+			(jedi_engine_mode > 1) && (g_npc_is_smart.integer != 0) &&
+			Jedi_DashGapDone(NPCS.NPC)) // 2026-11-10: spacing between dashes (mode 2, g_saberAITactics)
 		{
 			NPCS.NPC->client->ps.fd.forcePower -= 35;
 			JediDirectionalDashDodge(NPCS.NPC, enemy);
 			NPCS.NPC->Dash_NPC_Count++;
+			Jedi_DashGapSet(NPCS.NPC);
 
-			// Start cooldown after second dash
+			// The first dash starts the 10 - 15 s window; 2 dashes in it
 			if (NPCS.NPC->Dash_NPC_Count == 1)
 			{
 				TIMER_Set(NPCS.NPC, "DashOutTime", Q_irand(10000, 15000));
@@ -4154,26 +4056,8 @@ static void Jedi_CombatDistance(const int enemy_dist)
 				NPCS.NPC->client->renderInfo.eyeAngles,
 				0.6f))
 			{
-				if (jedi_engine_mode)
-				{
-					if (NPCS.NPC->client->NPC_class == CLASS_GALEN &&
-						(NPCS.NPC->s.weapon == WP_MELEE ||
-							NPCS.NPC->s.weapon == WP_NONE ||
-							(NPCS.NPC->s.weapon == WP_SABER &&
-								!(!NPCS.NPC->client->ps.saberHolstered))) &&
-						NPCS.NPC->client->ps.groundEntityNum == ENTITYNUM_NONE)
-					{
-						ForceThrow(NPCS.NPC, qfalse);
-					}
-					else
-					{
-						ForceThrow(NPCS.NPC, qfalse);
-					}
-				}
-				else
-				{
-					ForceThrow(NPCS.NPC, qfalse);
-				}
+				// 2026-11-10 (audit): "if (jedi_engine_mode)" had the same code in both branches; kept one
+				ForceThrow(NPCS.NPC, qfalse);
 			}
 		}
 
@@ -4211,26 +4095,8 @@ static void Jedi_CombatDistance(const int enemy_dist)
 				}
 			}
 
-			if (jedi_engine_mode)
-			{
-				if (NPCS.NPC->client->NPC_class == CLASS_GALEN &&
-					(NPCS.NPC->s.weapon == WP_MELEE ||
-						NPCS.NPC->s.weapon == WP_NONE ||
-						(NPCS.NPC->s.weapon == WP_SABER &&
-							!(!NPCS.NPC->client->ps.saberHolstered))) &&
-					NPCS.NPC->client->ps.groundEntityNum == ENTITYNUM_NONE)
-				{
-					ForceThrow(NPCS.NPC, qfalse);
-				}
-				else
-				{
-					ForceThrow(NPCS.NPC, qfalse);
-				}
-			}
-			else
-			{
-				ForceThrow(NPCS.NPC, qfalse);
-			}
+			// 2026-11-10 (audit): "if (jedi_engine_mode)" had the same code in both branches; kept one
+			ForceThrow(NPCS.NPC, qfalse);
 		}
 
 		Jedi_Retreat();
@@ -4549,24 +4415,8 @@ static void Jedi_CombatDistance(const int enemy_dist)
 				&& TIMER_Done(NPCS.NPC, "kyleTakesSaber")
 				&& !Q_irand(0, 20))
 			{
-				if (jedi_engine_mode)
-				{
-					if (NPCS.NPC->client->NPC_class == CLASS_GALEN
-						&& (NPCS.NPC->s.weapon == WP_MELEE || NPCS.NPC->s.weapon == WP_NONE || NPCS.NPC->s.weapon == WP_SABER && !
-							(!NPCS.NPC->client->ps.saberHolstered))
-						&& NPCS.NPC->client->ps.groundEntityNum == ENTITYNUM_NONE)
-					{
-						ForceThrow(NPCS.NPC, qtrue);
-					}
-					else
-					{
-						ForceThrow(NPCS.NPC, qtrue);
-					}
-				}
-				else
-				{
-					ForceThrow(NPCS.NPC, qtrue);
-				}
+				// 2026-11-10 (audit): "if (jedi_engine_mode)" had the same code in both branches; kept one
+				ForceThrow(NPCS.NPC, qtrue);
 			}
 			else if ((NPCS.NPC->client->NPC_class == CLASS_TAVION && NPCS.NPC->client->weaponGhoul2[1] != NULL)
 				&& !Q_irand(0, 20))
@@ -4626,25 +4476,8 @@ static void Jedi_CombatDistance(const int enemy_dist)
 					{
 						if (WP_ForcePowerUsable(NPCS.NPC, FP_PULL) && !Q_irand(0, 2))
 						{
-							if (jedi_engine_mode)
-							{
-								if (NPCS.NPC->client->NPC_class == CLASS_GALEN
-									&& (NPCS.NPC->s.weapon == WP_MELEE || NPCS.NPC->s.weapon == WP_NONE || NPCS.NPC->s.weapon ==
-										WP_SABER && !
-										(!NPCS.NPC->client->ps.saberHolstered))
-									&& NPCS.NPC->client->ps.groundEntityNum == ENTITYNUM_NONE)
-								{
-									ForceThrow(NPCS.NPC, qtrue);
-								}
-								else
-								{
-									ForceThrow(NPCS.NPC, qtrue);
-								}
-							}
-							else
-							{
-								ForceThrow(NPCS.NPC, qtrue);
-							}
+							// 2026-11-10 (audit): "if (jedi_engine_mode)" had the same code in both branches; kept one
+							ForceThrow(NPCS.NPC, qtrue);
 							//maybe strafe too?
 							TIMER_Set(NPCS.NPC, "duck", enemy_dist * 3);
 							if (Q_irand(0, 1))
@@ -7242,24 +7075,8 @@ static void Jedi_EvasionSaber(vec3_t enemy_movedir, const float enemy_dist, vec3
 				}
 				else if ((NPCS.NPCInfo->rank == RANK_ENSIGN || NPCS.NPCInfo->rank > RANK_LT_JG) && TIMER_Done(NPCS.NPC, "parryTime"))
 				{
-					if (jedi_engine_mode)
-					{
-						if (NPCS.NPC->client->NPC_class == CLASS_GALEN
-							&& (NPCS.NPC->s.weapon == WP_MELEE || NPCS.NPC->s.weapon == WP_NONE || NPCS.NPC->s.weapon == WP_SABER &&
-								!(!NPCS.NPC->client->ps.saberHolstered))
-							&& NPCS.NPC->client->ps.groundEntityNum == ENTITYNUM_NONE)
-						{
-							ForceThrow(NPCS.NPC, qfalse);
-						}
-						else
-						{
-							ForceThrow(NPCS.NPC, qfalse);
-						}
-					}
-					else
-					{
-						ForceThrow(NPCS.NPC, qfalse);
-					}
+					// 2026-11-10 (audit): "if (jedi_engine_mode)" had the same code in both branches; kept one
+					ForceThrow(NPCS.NPC, qfalse);
 				}
 				else if (!Jedi_SaberBlock())
 				{
@@ -7295,24 +7112,8 @@ static void Jedi_EvasionSaber(vec3_t enemy_movedir, const float enemy_dist, vec3
 							if ((NPCS.NPCInfo->rank == RANK_ENSIGN || NPCS.NPCInfo->rank > RANK_LT_JG) && !shooting_lightning &&
 								Q_irand(0, 2))
 							{
-								if (jedi_engine_mode)
-								{
-									if (NPCS.NPC->client->NPC_class == CLASS_GALEN
-										&& (NPCS.NPC->s.weapon == WP_MELEE || NPCS.NPC->s.weapon == WP_NONE || NPCS.NPC->s.weapon ==
-											WP_SABER && !(!NPCS.NPC->client->ps.saberHolstered))
-										&& NPCS.NPC->client->ps.groundEntityNum == ENTITYNUM_NONE)
-									{
-										ForceThrow(NPCS.NPC, qfalse);
-									}
-									else
-									{
-										ForceThrow(NPCS.NPC, qfalse);
-									}
-								}
-								else
-								{
-									ForceThrow(NPCS.NPC, qfalse);
-								}
+								// 2026-11-10 (audit): "if (jedi_engine_mode)" had the same code in both branches; kept one
+								ForceThrow(NPCS.NPC, qfalse);
 							}
 							else if ((NPCS.NPCInfo->rank == RANK_CREWMAN || NPCS.NPCInfo->rank > RANK_LT_JG)
 								&& !(NPCS.NPCInfo->scriptFlags & SCF_NO_ACROBATICS)
@@ -7988,6 +7789,107 @@ static void Jedi_DebounceDirectionChanges(void)
 	}
 }
 
+// 2026-11-10 (DH: "the npc should stop pressing forward at saberlength distance", videos: the NPC walked into the
+// player's body and the fight turned into a shoving match): once the enemy is inside the NPC's saber reach (the same
+// reach jedi_set_enemy_info uses for "in striking range": blade length + 1.5 x body radius + 16), any movement
+// toward him is taken out. Strafing, circling and backing off stay. Item 300 made the advance code steer to the
+// enemy again, and the close-range "pressure" walk-in (Jedi_CombatTimersUpdate, forwardmove 48 every 1-2 s, held
+// at full speed for 0.5-2 s by Jedi_DebounceDirectionChanges) never looked at the distance, so it pushed into him.
+// Left alone: cultist destroyers (they run in and blow up), stepping into an enemy kick / hilt bash / slap / A6
+// attack (base JKA "run into the kick"), the NPC's own kick or grab, and while in the air.
+static void Jedi_HoldAtSaberReach(void)
+{
+	gentity_t* npc = NPCS.NPC;
+	playerState_t* ps;
+	const playerState_t* eps;
+	vec3_t to_enemy;
+	float dist, reach;
+	qboolean held = qfalse;
+
+	if (!npc || !npc->client || !npc->enemy || !npc->enemy->client || npc->enemy->health <= 0)
+	{
+		return;
+	}
+
+	ps = &npc->client->ps;
+	eps = &npc->enemy->client->ps;
+
+	if (ps->weapon != WP_SABER || ps->saberHolstered == 2 || ps->saberInFlight
+		|| ps->groundEntityNum == ENTITYNUM_NONE
+		|| Jedi_CultistDestroyer(npc)
+		|| PM_KickingAnim(ps->legsAnim) || ps->torsoAnim == BOTH_KYLE_GRAB
+		|| PM_KickingAnim(eps->legsAnim)
+		|| eps->torsoAnim == BOTH_A7_HILT || eps->torsoAnim == BOTH_SLAP_R || eps->torsoAnim == BOTH_SLAP_L
+		|| eps->torsoAnim == BOTH_A6_FB || eps->torsoAnim == BOTH_A6_LR)
+	{
+		return;
+	}
+
+	VectorSubtract(npc->enemy->r.currentOrigin, npc->r.currentOrigin, to_enemy);
+	to_enemy[2] = 0;
+	dist = VectorNormalize(to_enemy);
+	reach = npc->client->saber[0].blade[0].lengthMax + npc->r.maxs[0] * 1.5f + 16.0f;
+
+	if (dist > reach)
+	{
+		return;
+	}
+
+	// nav movement (NPC_MoveToGoal): moveDir drives the NPC whenever it is set
+	if (!VectorCompare(ps->moveDir, vec3_origin))
+	{
+		const float toward = DotProduct(ps->moveDir, to_enemy);
+		if (toward > 0.0f)
+		{
+			VectorMA(ps->moveDir, -toward, to_enemy, ps->moveDir); // keep only the sideways part (slower, not renormalised)
+			if (VectorLengthSquared(ps->moveDir) < 0.01f)
+			{
+				VectorClear(ps->moveDir);
+			}
+			held = qtrue;
+		}
+	}
+
+	// ucmd movement
+	if (NPCS.ucmd.forwardmove || NPCS.ucmd.rightmove)
+	{
+		vec3_t yaw_angles, fwd, right, wish;
+		float toward;
+
+		VectorSet(yaw_angles, 0, ps->viewangles[YAW], 0);
+		AngleVectors(yaw_angles, fwd, right, NULL);
+		VectorScale(fwd, NPCS.ucmd.forwardmove, wish);
+		VectorMA(wish, NPCS.ucmd.rightmove, right, wish);
+		wish[2] = 0;
+
+		toward = DotProduct(wish, to_enemy);
+		if (toward > 0.0f)
+		{
+			float fm, rm;
+
+			VectorMA(wish, -toward, to_enemy, wish);
+			fm = DotProduct(wish, fwd);
+			rm = DotProduct(wish, right);
+			fm = fm > 127.0f ? 127.0f : (fm < -127.0f ? -127.0f : fm);
+			rm = rm > 127.0f ? 127.0f : (rm < -127.0f ? -127.0f : rm);
+			NPCS.ucmd.forwardmove = (signed char)fm;
+			NPCS.ucmd.rightmove = (signed char)rm;
+			held = qtrue;
+		}
+	}
+
+	if (held)
+	{
+		// end the "keep moving forward" hold of Jedi_DebounceDirectionChanges too, or it pushes in again next frame
+		TIMER_Set(npc, "moveforward", -level.time);
+		if ((d_JediAI.integer || g_DebugSaberCombat.integer) && TIMER_Done(npc, "holdReachDebug"))
+		{
+			TIMER_Set(npc, "holdReachDebug", 1000);
+			Com_Printf("Debug: %s holds at saber reach (%.0f of %.0f)\n", npc->NPC_type, dist, reach);
+		}
+	}
+}
+
 void Jedi_TimersApply(void)
 {
 	//use careful anim/slower movement if not already moving
@@ -8034,6 +7936,7 @@ void Jedi_TimersApply(void)
 	}
 
 	Jedi_DebounceDirectionChanges();
+	Jedi_HoldAtSaberReach(); // 2026-11-10: no pushing into the enemy once he is in saber reach
 
 	if (!TIMER_Done(NPCS.NPC, "gripping"))
 	{
@@ -8192,8 +8095,10 @@ static void Jedi_CombatTimersUpdate(const int enemy_dist)
 						}
 					}
 				}
-				else
+				else if (enemy_dist > 0)
 				{//postpone any strafing for a while
+					// 2026-11-10 (DH): only walk in while he is still out of saber reach (enemy_dist <= 0 = in reach);
+					// this walk-in used to run at any distance, even with the NPC already in the enemy's body
 					NPCS.ucmd.forwardmove = 48;
 				}
 			}
@@ -8313,6 +8218,9 @@ static void Jedi_CombatTimersUpdate(const int enemy_dist)
 		// Blocked while attacking
 		if ((NPCS.NPC->client->ps.saberEventFlags & SEF_BLOCKED) != 0)
 		{
+			// 2026-11-10 (DH): no new swing before the enemy has finished his block (Jedi_WaitForBlockCycle)
+			TIMER_Set(NPCS.NPC, "blockedWait", 1500);
+
 			if (PM_SaberInBrokenParry(NPCS.NPC->client->ps.saberMove) == qtrue ||
 				NPCS.NPC->client->ps.saberBlocked == BLOCKED_PARRY_BROKEN)
 			{
@@ -8568,8 +8476,57 @@ static qboolean Jedi_DefendFirst(const int enemy_dist)
 	return TIMER_Done(NPCS.NPC, "defendHold") ? qfalse : qtrue;
 }
 
+// 2026-11-10 (as SP; DH: NPCs must not swing spam; a blocked NPC may not swing again before the player has finished
+// his block animation cycle). Jedi_CombatTimersUpdate starts "blockedWait" (at most 1.5 s) when the NPC's swing was
+// blocked (SEF_BLOCKED). While it runs and the enemy is still in his parry, knockaway, reflect or block bounce (or a
+// block is about to start), Jedi_AttackDecide does not attack and NPC_BSJedi_Default takes the attack button away.
+static qboolean Jedi_EnemyInBlockCycle(const gentity_t* enemy)
+{
+	const playerState_t* eps;
+	if (!enemy || !enemy->client || enemy->health <= 0)
+	{
+		return qfalse;
+	}
+	eps = &enemy->client->ps;
+
+	if (eps->saberBlocked != BLOCKED_NONE && eps->saberBlocked != BLOCKED_PARRY_BROKEN)
+	{//his block is about to start
+		return qtrue;
+	}
+	return PM_SaberInParry(eps->saberMove) || PM_SaberInKnockaway(eps->saberMove)
+		|| PM_SaberInReflect(eps->saberMove) || PM_SaberInBounce(eps->saberMove) ? qtrue : qfalse;
+}
+
+static qboolean Jedi_WaitForBlockCycle(void)
+{
+	if (!NPCS.NPC || !NPCS.NPC->client || TIMER_Done(NPCS.NPC, "blockedWait"))
+	{
+		return qfalse;
+	}
+	return Jedi_EnemyInBlockCycle(NPCS.NPC->enemy);
+}
+
+static void Jedi_HoldSwingForBlockCycle(void)
+{
+	if ((NPCS.ucmd.buttons & BUTTON_ATTACK) && Jedi_WaitForBlockCycle())
+	{
+		NPCS.ucmd.buttons &= ~BUTTON_ATTACK;
+
+		if ((d_JediAI.integer || g_DebugSaberCombat.integer) && TIMER_Done(NPCS.NPC, "blockedWaitDebug"))
+		{
+			TIMER_Set(NPCS.NPC, "blockedWaitDebug", 500);
+			Com_Printf(S_COLOR_GREEN"%s: blocked, waits for the enemy's block to finish\n", NPCS.NPC->NPC_type);
+		}
+	}
+}
+
 static qboolean Jedi_AttackDecide(const int enemy_dist)
 {
+	if (Jedi_WaitForBlockCycle())
+	{//blocked: wait for the enemy's block to finish (2026-11-10)
+		return qfalse;
+	}
+
 	if (!TIMER_Done(NPCS.NPC, "allyJediDelay"))
 	{
 		return qfalse;
@@ -9895,12 +9852,14 @@ static void Jedi_Combat(void)
 							&& (NPCS.NPC->s.weapon == WP_SABER))
 						{
 							if (TIMER_Done(NPCS.NPC, "DashInTime") &&
+								Jedi_DashInAllowed(NPCS.NPC) &&
 								Distance(NPCS.NPC->enemy->r.currentOrigin, NPCS.NPC->r.currentOrigin) > 128 &&
 								Distance(NPCS.NPC->enemy->r.currentOrigin, NPCS.NPC->r.currentOrigin) < 256 &&
 								NPCS.NPC->client->ps.groundEntityNum != ENTITYNUM_NONE &&
 								PM_InKnockDown(&NPCS.NPC->client->ps) == qfalse)
 							{//try to dash to TargetPosition
 								JediDirectionalDashAttack(NPCS.NPC, NPCS.NPC->enemy);
+								Jedi_DashInUsed(NPCS.NPC);
 								TIMER_Set(NPCS.NPC, "DashInTime", Q_irand(20000, 30000));
 								if (d_JediAI.integer || g_DebugSaberCombat.integer)
 								{
@@ -11225,10 +11184,21 @@ static void JediHandleSpacing(gentity_t* self)
 
 	float pSpeed = VectorLength(pvel);
 
+	// bug fix 2026-11-10: the checks below read pvel[0] / pvel[1], the WORLD x / y velocity, as if they were the
+	// enemy's motion toward / across the NPC, so "backing up" (forwardmove 127) fired whenever he walked toward world
+	// -x, even straight into the NPC. Now measured along the NPC -> enemy line and across it.
+	vec3_t to_enemy_dir, side_dir;
+	VectorSubtract(self->enemy->r.currentOrigin, self->r.currentOrigin, to_enemy_dir);
+	to_enemy_dir[2] = 0;
+	VectorNormalize(to_enemy_dir);
+	VectorSet(side_dir, to_enemy_dir[1], -to_enemy_dir[0], 0); // the NPC's right when it faces him
+	const float p_away = DotProduct(pvel, to_enemy_dir); // > 0: he moves away from the NPC
+	const float p_side = DotProduct(pvel, side_dir); // > 0: he moves to the NPC's right (his left)
+
 	if (pSpeed > 50.0f)
 	{
 		// Player strafing right
-		if (pvel[1] > 80)
+		if (p_side < -80)
 		{
 			NPCS.ucmd.rightmove = -64;
 			NPCS.ucmd.forwardmove = 48;
@@ -11238,7 +11208,7 @@ static void JediHandleSpacing(gentity_t* self)
 		}
 
 		// Player strafing left
-		if (pvel[1] < -80)
+		if (p_side > 80)
 		{
 			NPCS.ucmd.rightmove = 64;
 			NPCS.ucmd.forwardmove = 48;
@@ -11248,7 +11218,7 @@ static void JediHandleSpacing(gentity_t* self)
 		}
 
 		// Player backing up
-		if (pvel[0] < -80)
+		if (p_away > 80)
 		{
 			NPCS.ucmd.forwardmove = 127;
 			Jedi_FaceEnemy(qtrue);
@@ -11257,7 +11227,7 @@ static void JediHandleSpacing(gentity_t* self)
 		}
 
 		// Player rushing forward
-		if (pvel[0] > 80)
+		if (p_away < -80)
 		{
 			NPCS.ucmd.rightmove = (Q_irand(0, 1) ? 64 : -64);
 			Jedi_FaceEnemy(qtrue);
@@ -11588,14 +11558,8 @@ static void JediExecuteCombo(gentity_t* self, const saberCombo_t* combo)
 			self->client->ps.fd.forcePowerLevel[FP_PUSH] >= FORCE_LEVEL_1)
 		{
 			// Use your existing ForceThrow logic
-			if (jedi_engine_mode)
-			{
-				ForceThrow(self, qfalse);
-			}
-			else
-			{
-				ForceThrow(self, qfalse);
-			}
+			// 2026-11-10 (audit): "if (jedi_engine_mode)" had the same code in both branches; kept one
+			ForceThrow(self, qfalse);
 		}
 	}
 
@@ -11733,14 +11697,8 @@ static void Jedi_Attack(void)
 		{
 			if (g_saberLockCinematicCamera.integer < 1)
 			{
-				if (jedi_engine_mode)
-				{
-					ForceThrow(NPCS.NPC, qfalse);
-				}
-				else
-				{
-					ForceThrow(NPCS.NPC, qfalse);
-				}
+				// 2026-11-10 (audit): "if (jedi_engine_mode)" had the same code in both branches; kept one
+				ForceThrow(NPCS.NPC, qfalse);
 			}
 		}
 		else
@@ -12409,6 +12367,9 @@ static void Jedi_Attack(void)
 	// =====================
 	// Otherwise: Raven fallback logic continues below
 	// =====================
+
+	// 2026-11-10 (DH): the cinematic spacing above runs after Jedi_TimersApply, so hold at saber reach again here
+	Jedi_HoldAtSaberReach();
 
 	// If NAV is not moving us but ucmds are, set movement speed manually
 	if (VectorCompare(NPCS.NPC->client->ps.moveDir, vec3_origin) &&
@@ -13511,6 +13472,8 @@ void NPC_BSJedi_Default(void)
 
 			Jedi_Attack();
 		}
+
+		Jedi_HoldSwingForBlockCycle(); // 2026-11-10: blocked, no swing before his block has finished
 
 		npc_check_speak(NPCS.NPC); // (SP)
 

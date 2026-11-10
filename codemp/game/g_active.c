@@ -55,6 +55,7 @@ extern float BG_WaterDeathFrame(const playerState_t* ps, const animation_t* anim
 
 extern void player_Cloak(gentity_t* self);
 extern void G_SaberRiposteUpdate(gentity_t* ent); // w_saberblocking.c: riposte window / swing timers (g_saberPerfectParry, 2026-11-09)
+extern qboolean WP_SaberPerfectBlockPress(const gentity_t* ent, int window); // w_saberblocking.c: perfect block mash lockout (2026-11-10)
 extern void Jedi_Cloak(gentity_t* self);
 extern void Jedi_Decloak(gentity_t* self);
 extern int IsPressingKickButton(const gentity_t* self);
@@ -1451,7 +1452,10 @@ static void ClientTimerActions(gentity_t* ent, const int msec)
 			}
 			else if (isBot)
 			{
-				if ((level.time & 1) == 0)  // even frame → regen
+				// half speed: this runs once a second (ClientTimerActions), so regenerate every 2nd second.
+				// 2026-11-10 (audit): was (level.time & 1), but level.time moves in whole frames, so it was always
+				// even (full speed) or, on a server with odd frame times, never regenerated at all.
+				if (((level.time / 1000) & 1) == 0)
 				{
 					WP_SaberFatigueRegenerate(&client->ps, 1);
 				}
@@ -1693,7 +1697,6 @@ static void ClientEvents(gentity_t* ent, int old_event_sequence)
 		case EV_FALL:
 		{
 			const int delta = Client->ps.eventParms[index];
-			qboolean knockDownage = qfalse;
 
 			if (Client->ps.fallingToDeath)
 			{
@@ -1716,7 +1719,6 @@ static void ClientEvents(gentity_t* ent, int old_event_sequence)
 				{
 					break;
 				}
-				knockDownage = qtrue;
 			}
 			else
 			{
@@ -1726,21 +1728,9 @@ static void ClientEvents(gentity_t* ent, int old_event_sequence)
 				}
 			}
 
-			if (knockDownage)
-			{
-				damage = delta * 1;
-			}
-			else
-			{
-				if (level.gametype == GT_SIEGE && delta > 60)
-				{
-					damage = delta * 1;
-				}
-				else
-				{
-					damage = delta * 1;
-				}
-			}
+			// 2026-11-10 (audit): full fall damage in every case: the old "knocked down" / "Siege and delta > 60" branches all
+			// did delta * 1, so they were merged and the unused knockDownage flag removed.
+			damage = delta * 1;
 
 			VectorSet(dir, 0, 0, 1);
 
@@ -4227,14 +4217,8 @@ static void CG_BreathPuffsVader(gentity_t* ent)
 			}
 			else
 			{
-				if (!Q_irand(0, 4))
-				{
-					G_Sound(ent, CHAN_VOICE, G_SoundIndex("sound/chars/darthvader/breath2.mp3"));
-				}
-				else
-				{
-					G_Sound(ent, CHAN_VOICE, G_SoundIndex("sound/chars/darthvader/breath2.mp3"));
-				}
+				// 2026-11-10 (audit): "if (!Q_irand(0, 4))" had the same code in both branches; kept one
+				G_Sound(ent, CHAN_VOICE, G_SoundIndex("sound/chars/darthvader/breath2.mp3"));
 			}
 		}
 	}
@@ -5506,24 +5490,10 @@ static void ClientThink_real(gentity_t* ent)
 							G_Sound(ent, CHAN_WEAPON, client->saber[1].soundOn);
 							client->ps.saberHolstered = 0;
 						}
-						else if (client->saber[0].type == SABER_STAFF
-							|| client->saber[0].type == SABER_SINGLE_BACKHAND
-							|| client->saber[0].type == SABER_STAFF_UNSTABLE
-							|| client->saber[0].type == SABER_STAFF_THIN
-							|| client->saber[0].type == SABER_SINGLE_ASBACKHAND
-							|| client->saber[0].type == SABER_STAFF_MAUL
-							|| client->saber[0].type == SABER_STAFF_ELECTROSTAFF)
-						{
-							if (client->ps.saberHolstered == 2)
-							{
-								//turn on all blades
-								G_Sound(ent, CHAN_WEAPON, client->saber[0].soundOn);
-								client->ps.saberHolstered = 0;
-							}
-						}
+						// 2026-11-10 (audit): a staff-type "else if" here did the same as this one; merged
 						else if (client->ps.saberHolstered == 2)
 						{
-							//turn on first
+							//turn on first (all blades of a staff)
 							G_Sound(ent, CHAN_WEAPON, client->saber[0].soundOn);
 							client->ps.saberHolstered = 0;
 						}
@@ -5553,71 +5523,33 @@ static void ClientThink_real(gentity_t* ent)
 				}
 				ucmd->buttons &= ~BUTTON_ATTACK;
 
-				if (g_npcspskill.integer == 0) //easy blocking
+				// 2026-11-10: one window table (g_SaberPerfectBlockingTimerEasy / Normal / Hard, 500 / 200 / 80, the
+				// same in SJE + MD 9, SP + MP), and a press too soon after one that parried nothing opens no window
+				// (mash lockout, WP_SaberPerfectBlockPress in w_saberblocking.c).
 				{
-					// started function
+					const int pb_window = g_npcspskill.integer <= 0 ? g_SaberPerfectBlockingTimerEasy.integer
+						: g_npcspskill.integer == 1 ? g_SaberPerfectBlockingTimerNormal.integer
+						: g_SaberPerfectBlockingTimerHard.integer;
+
 					if (client->ps.ManualblockStartTime <= 0) //fresh start
 					{
 						// They just pressed block. Mark the time...
 						client->ps.ManualblockStartTime = level.time;
 
-						if (!(client->ps.ManualBlockingFlags & 1 << MBF_PERFECTBLOCKING))
+						if (WP_SaberPerfectBlockPress(ent, pb_window))
 						{
 							client->ps.ManualBlockingFlags |= 1 << MBF_PERFECTBLOCKING; // activate the function
 						}
-					}
-					else
-					{
-						if (client->ps.ManualBlockingFlags & 1 << MBF_PERFECTBLOCKING && level.time - client->ps.
-							ManualblockStartTime >= g_SaberPerfectBlockingTimerEasy.integer) // SP's cvar (was 500)
+						else
 						{
-							// Been holding block for too long....Turn off
 							client->ps.ManualBlockingFlags &= ~(1 << MBF_PERFECTBLOCKING);
 						}
 					}
-				}
-				else if (g_npcspskill.integer == 1) // medium blocking
-				{
-					if (client->ps.ManualblockStartTime <= 0) //fresh start
+					else if (client->ps.ManualBlockingFlags & 1 << MBF_PERFECTBLOCKING
+						&& level.time - client->ps.ManualblockStartTime >= pb_window)
 					{
-						// They just pressed block. Mark the time...
-						client->ps.ManualblockStartTime = level.time;
-
-						if (!(client->ps.ManualBlockingFlags & 1 << MBF_PERFECTBLOCKING))
-						{
-							client->ps.ManualBlockingFlags |= 1 << MBF_PERFECTBLOCKING; // activate the function
-						}
-					}
-					else
-					{
-						if (client->ps.ManualBlockingFlags & 1 << MBF_PERFECTBLOCKING && level.time - client->ps.
-							ManualblockStartTime >= g_SaberPerfectBlockingTimerNormal.integer) // SP's cvar (was 200)
-						{
-							// Been holding block for too long....Turn off
-							client->ps.ManualBlockingFlags &= ~(1 << MBF_PERFECTBLOCKING);
-						}
-					}
-				}
-				else // hard blocking
-				{
-					if (client->ps.ManualblockStartTime <= 0) //fresh start
-					{
-						// They just pressed block. Mark the time...
-						client->ps.ManualblockStartTime = level.time;
-
-						if (!(client->ps.ManualBlockingFlags & 1 << MBF_PERFECTBLOCKING))
-						{
-							client->ps.ManualBlockingFlags |= 1 << MBF_PERFECTBLOCKING; // activate the function
-						}
-					}
-					else
-					{
-						if (client->ps.ManualBlockingFlags & 1 << MBF_PERFECTBLOCKING && level.time - client->ps.
-							ManualblockStartTime >= g_SaberPerfectBlockingTimerHard.integer) // SP's cvar (was 80)
-						{
-							// Been holding block for too long....Turn off
-							client->ps.ManualBlockingFlags &= ~(1 << MBF_PERFECTBLOCKING);
-						}
+						// Been holding block for too long....Turn off
+						client->ps.ManualBlockingFlags &= ~(1 << MBF_PERFECTBLOCKING);
 					}
 				}
 

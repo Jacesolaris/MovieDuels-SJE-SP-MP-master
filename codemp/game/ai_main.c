@@ -2262,6 +2262,8 @@ static void bot_droid_input(const bot_state_t* bs, bot_input_t* bi)
 	}
 }
 
+extern qboolean WP_SaberBotBlockedWait(const gentity_t* bot); // w_saberblocking.c (2026-11-10)
+
 static void bot_update_input(bot_state_t* bs, const int time, const int elapsed_time)
 {
 	bot_input_t bi;
@@ -2387,6 +2389,13 @@ static void bot_update_input(bot_state_t* bs, const int time, const int elapsed_
 	if (!Bot_SaberRecover(bs, &bi) && bi.actionflags & (ACTION_ATTACK | ACTION_ALT_ATTACK) && Bot_SaberDefendFirst(bs))
 	{// guard against his swing, don't attack into it
 		bi.actionflags &= ~(ACTION_ATTACK | ACTION_ALT_ATTACK);
+	}
+
+	// 2026-11-10 (DH: bots must not swing spam): a blocked bot doesn't swing again before the blocker has finished his
+	// block animation (at most 1.5 s, WP_SaberBotBlockedWait in w_saberblocking.c)
+	if (bi.actionflags & ACTION_ATTACK && bs->cur_ps.weapon == WP_SABER && WP_SaberBotBlockedWait(&g_entities[bs->client]))
+	{
+		bi.actionflags &= ~ACTION_ATTACK;
 	}
 
 	// Force selection
@@ -10336,8 +10345,18 @@ static void JediDirectionalDashDodge(bot_state_t* bs, const vec3_t enemyPos);
 // the cooldown (5-10 s) is over. The counter was reset before every dash (the cooldown time was 0, so "expired"),
 // so bots dashed without limit (Jace 2026-10-29)
 // ---------------------------------------------------------
+// Dash spacing (g_saberAITactics, 2026-11-10): two dashes at least 1.5 - 2.5 s apart, so a bot can't dash in and
+// straight back out (the dash-in and the kata dash-out could come on the same or the next frame). By client number;
+// a time left from an earlier map (more than 2.5 s ahead) is ignored.
+static int s_botDashGap[MAX_CLIENTS];
+
 static qboolean Bot_CanDash(bot_state_t* bs)
 {
+	if (g_saberAITactics.integer && bs->client >= 0 && bs->client < MAX_CLIENTS
+		&& s_botDashGap[bs->client] > level.time && s_botDashGap[bs->client] - level.time <= 2500)
+	{
+		return qfalse; // too soon after the last dash
+	}
 	if (bs->DashOutTime > level.time)
 	{
 		return qfalse; // cooling down
@@ -10353,6 +10372,10 @@ static qboolean Bot_CanDash(bot_state_t* bs)
 
 static void Bot_CountDash(bot_state_t* bs)
 {
+	if (bs->client >= 0 && bs->client < MAX_CLIENTS)
+	{
+		s_botDashGap[bs->client] = level.time + Q_irand(1500, 2500);
+	}
 	bs->Dash_BOT_Count++;
 	if (bs->Dash_BOT_Count >= 2)
 	{
@@ -19895,7 +19918,11 @@ void trace_move(bot_state_t* bs, vec3_t move_dir, const int target_num)
 	// ------------------------------------------------------------
 	// FOURTH: Randomize melee strafe direction occasionally
 	// ------------------------------------------------------------
-	if (bs->meleeStrafeTime > level.time)
+	// Bug fix 2026-11-10: the test was "> level.time", i.e. WHILE the strafe time ran, so every blocked move picked a
+	// new random strafe direction (0 none / 1 right / 2 left) and pushed the time on: with something in the way at close
+	// saber range the bot's strafe flipped left / right from frame to frame (the jittery movement). Now only when the
+	// strafe time is over, as everywhere else.
+	if (bs->meleeStrafeTime < level.time)
 	{
 		bs->meleeStrafeDir = Q_irand(0, 2); // 0 = none, 1 = right, 2 = left
 		bs->meleeStrafeTime = level.time + Q_irand(500, 1800);

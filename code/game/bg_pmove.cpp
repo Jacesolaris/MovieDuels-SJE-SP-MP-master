@@ -9272,6 +9272,13 @@ static qboolean PM_CheckRollGetup()
 
 extern int G_MinGetUpTime(const gentity_t* ent);
 
+extern cvar_t* g_npcQuickGetUp;
+constexpr int QUICK_GETUP_MIN_DOWN_TIME = 1200; //item 319: least time in a knockdown before a quick getup (the fall)
+constexpr int QUICK_GETUP_MIN_FLOOR_TIME = 300; //item 319: least time left on the floor after the cut
+//item 319: Force powers that make an NPC a Force user. Force jump (levitation) and the saber skills don't count:
+//many gunner NPC files give force jump only so the AI can jump
+constexpr int QUICK_GETUP_FORCE_USER_POWERS = ~(1 << FP_LEVITATION | 1 << FP_SABER_OFFENSE | 1 << FP_SABER_DEFENSE | 1 << FP_SABERTHROW);
+
 qboolean PM_GettingUpFromKnockDown(const float standheight, const float crouchheight)
 {
 	const int legs_anim = pm->ps->legsAnim;
@@ -9289,6 +9296,60 @@ qboolean PM_GettingUpFromKnockDown(const float standheight, const float crouchhe
 	{
 		//in a knockdown
 		const int min_time_left = G_MinGetUpTime(pm->gent);
+
+		// Item 319 (DH 2026-11-10): gunners and other non-Force NPCs get up 1-2 s sooner after a knockdown (random
+		// each time), so they don't lie on the floor waiting. Cut once per knockdown, never into the fall: at least
+		// QUICK_GETUP_MIN_DOWN_TIME in the knockdown in all. Force users (any power but force jump / saber skills),
+		// saber users and the player keep the full knockdown. g_npcQuickGetUp 0 = old behaviour, 2 = debug print.
+		if (g_npcQuickGetUp && g_npcQuickGetUp->integer
+			&& pm->gent && pm->gent->client && pm->gent->NPC
+			&& pm->ps->clientNum >= MAX_CLIENTS && !PM_ControlledByPlayer()
+			&& (legs_anim == BOTH_KNOCKDOWN1
+				|| legs_anim == BOTH_KNOCKDOWN2
+				|| legs_anim == BOTH_KNOCKDOWN3
+				|| legs_anim == BOTH_KNOCKDOWN4
+				|| legs_anim == BOTH_KNOCKDOWN5
+				|| legs_anim == BOTH_SLAPDOWNRIGHT
+				|| legs_anim == BOTH_SLAPDOWNLEFT)
+			&& pm->ps->legsAnimTimer > 0
+			&& (!TIMER_Exists(pm->gent, "quickGetUp") || TIMER_Done2(pm->gent, "quickGetUp", qtrue)))
+		{
+			const int old_timer = pm->ps->legsAnimTimer;
+			const qboolean force_user = (pm->ps->weapon == WP_SABER
+				|| (pm->ps->forcePowersKnown & QUICK_GETUP_FORCE_USER_POWERS) != 0) ? qtrue : qfalse;
+
+			if (!force_user && pm->gent->health > 0)
+			{
+				const int anim_length = PM_AnimLength(pm->gent->client->clientInfo.animFileIndex, static_cast<animNumber_t>(legs_anim));
+				const int time_down = anim_length - old_timer;
+				int min_timer = QUICK_GETUP_MIN_DOWN_TIME - time_down;
+				if (min_timer < QUICK_GETUP_MIN_FLOOR_TIME)
+				{
+					min_timer = QUICK_GETUP_MIN_FLOOR_TIME;
+				}
+				int new_timer = old_timer - Q_irand(1000, 2000);
+				if (new_timer < min_timer)
+				{
+					new_timer = min_timer;
+				}
+				if (new_timer < old_timer)
+				{
+					if (pm->ps->torsoAnim == legs_anim)
+					{
+						pm->ps->torsoAnimTimer = new_timer;
+					}
+					pm->ps->legsAnimTimer = new_timer;
+				}
+			}
+			if (g_npcQuickGetUp->integer > 1)
+			{
+				gi.Printf("quick getup: %s anim %d timer %d -> %d (force user %d, powers 0x%x, weapon %d, on ground %d)\n",
+					pm->gent->NPC_type ? pm->gent->NPC_type : "?", legs_anim, old_timer, pm->ps->legsAnimTimer,
+					static_cast<int>(force_user), static_cast<unsigned>(pm->ps->forcePowersKnown), pm->ps->weapon, pm->ps->groundEntityNum != ENTITYNUM_NONE ? 1 : 0);
+			}
+			//don't look at this knockdown again
+			TIMER_Set(pm->gent, "quickGetUp", pm->ps->legsAnimTimer + 1000);
+		}
 
 		if (pm->ps->legsAnimTimer <= min_time_left)
 		{
@@ -19355,14 +19416,8 @@ int PM_ReadyPoseForSaberAnimLevel(void)
 
 	case SS_MEDIUM:
 	case SS_BLASTER: // SS_BLASTER (2026-10-14)
-		if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)
-		{
-			anim = BOTH_STAND2;
-		}
-		else
-		{
-			anim = BOTH_STAND2;
-		}
+		// 2026-11-10 (audit): "if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)" had the same code in both branches; kept one
+		anim = BOTH_STAND2;
 		break;
 
 	case SS_NONE:
@@ -22289,22 +22344,10 @@ static void PM_SaberFatigue(playerState_t* ps, const int new_move)
 					PM_AddBlockFatigue(ps, Fatigue_SaberAttack());
 				}
 				else if (PM_SaberInTransition(new_move) && pm->ps->userInt3 & 1 << FLAG_ATTACKFAKE)
-				{//attack fakes cost sf as well
-					if (ps->saberAnimLevel == SS_DUAL)
-					{//dual sabers don't have transition/sf costs.
-					}
-					else
-					{//single sabers
-						if (pm->ps->saberFatigueChainCount < MISHAPLEVEL_MAX)
-						{ //reduced cost for attack fakes, but still costs something.
-							if ((pm->ps->saberAttackChainCount & 1) == 0)  // even number
-							{
-								if (pm->ps->saberFatigueChainCount < MISHAPLEVEL_MAX)
-								{
-									pm->ps->saberFatigueChainCount++;
-								}
-							}
-						}
+				{//attack fakes cost fatigue as well (2026-11-10, as SJE: +1 for every feint, all styles; was every 2nd)
+					if (pm->ps->saberFatigueChainCount < MISHAPLEVEL_MAX)
+					{
+						pm->ps->saberFatigueChainCount++;
 					}
 				}
 			}
@@ -22374,17 +22417,10 @@ static void PM_NPCFatigue(playerState_t* ps, const int new_move)
 				}
 				else if (PM_SaberInTransition(new_move) && pm->ps->userInt3 & 1 << FLAG_ATTACKFAKE)
 				{
-					//attack fakes cost FP as well
-					if (ps->saberAnimLevel == SS_DUAL)
+					//attack fakes cost fatigue as well (2026-11-10: all styles, as for players)
+					if (pm->ps->saberFatigueChainCount < MISHAPLEVEL_MAX)
 					{
-						//dual sabers don't have transition/FP costs.
-					}
-					else
-					{
-						if (pm->ps->saberFatigueChainCount < MISHAPLEVEL_MAX)
-						{
-							pm->ps->saberFatigueChainCount++;
-						}
+						pm->ps->saberFatigueChainCount++;
 					}
 				}
 			}
@@ -22446,6 +22482,11 @@ void WP_SaberFatigueRegenerate(playerState_t* ps, const int override_amt)
 		if (ps->saberFatigueChainCount > MISHAPLEVEL_MAX)
 		{
 			ps->saberFatigueChainCount = MISHAPLEVEL_MAX;
+		}
+		// 2026-11-10 (audit): a 2-point regen from 1 left the meter at -1 (one free swing before fatigue counted)
+		if (ps->saberFatigueChainCount < MISHAPLEVEL_NONE)
+		{
+			ps->saberFatigueChainCount = MISHAPLEVEL_NONE;
 		}
 	}
 }
@@ -22757,6 +22798,13 @@ extern qboolean WP_SaberAIFeintWanted(gentity_t* npc); // wp_saberblocking.cpp (
 
 void PM_SetSaberMove(saberMoveName_t new_move)
 {
+	// 2026-11-10 (audit): range check moved up, saberMoveData[new_move] was read before it
+	if (new_move < LS_NONE || new_move >= LS_MOVE_MAX)
+	{
+		assert(0);
+		return;
+	}
+
 	unsigned int setflags = saberMoveData[new_move].animSetFlags;
 	int anim = saberMoveData[new_move].animToUse;
 	int parts = SETANIM_TORSO;
@@ -22765,12 +22813,6 @@ void PM_SetSaberMove(saberMoveName_t new_move)
 
 	const qboolean is_holding_block_button = ((pm->ps->ManualBlockingFlags & (1 << MBF_HOLDINGBLOCK)) != 0) ? qtrue : qfalse;
 	const qboolean is_walking_and_blocking = ((pm->cmd.buttons & BUTTON_WALKING) && (is_holding_block_button)) ? qtrue : qfalse;
-
-	if (new_move < LS_NONE || new_move >= LS_MOVE_MAX)
-	{
-		assert(0);
-		return;
-	}
 
 	if (pm->ps->eFlags & EF_HELD_BY_WAMPA)
 	{
@@ -22825,22 +22867,10 @@ void PM_SetSaberMove(saberMoveName_t new_move)
 			//continuing with a kata, increment attack counter
 			pm->ps->saberAttackChainCount++;
 
-			if (pm->ps->clientNum < MAX_CLIENTS || PM_ControlledByPlayer()) //player
-			{// Only add fatigue every 2 swings (half as fast)
-				//if ((pm->ps->saberAttackChainCount & 1) == 0)  // even number
-				//{
-				if (pm->ps->saberFatigueChainCount < MISHAPLEVEL_MAX)
-				{
-					pm->ps->saberFatigueChainCount++;
-				}
-				//}
-			}
-			else
+			// 2026-11-10 (audit): "if (pm->ps->clientNum < MAX_CLIENTS || PM_ControlledByPlayer())" had the same code in both branches; kept one
+			if (pm->ps->saberFatigueChainCount < MISHAPLEVEL_MAX)
 			{
-				if (pm->ps->saberFatigueChainCount < MISHAPLEVEL_MAX)
-				{
-					pm->ps->saberFatigueChainCount++;
-				}
+				pm->ps->saberFatigueChainCount++;
 			}
 		}
 		else
@@ -23083,54 +23113,7 @@ void PM_SetSaberMove(saberMoveName_t new_move)
 				anim = pm->ps->saber[1].readyAnim;
 			}
 		}
-		else if (pm->ps->saber[0].type == SABER_LANCE || pm->ps->saber[0].type == SABER_TRIDENT
-			|| (pm->ps->dualSabers && pm->ps->saber[1].Active()
-				|| (pm->ps->SaberStaff() && (!pm->ps->saber[0].singleBladeStyle
-					|| pm->ps->saber[0].blade[1].active)
-					|| pm->ps->saber[0].type == SABER_ARC)))
-		{
-			if (is_holding_block_button)
-			{
-				if (pm->ps->saberAnimLevel == SS_DUAL)
-				{
-					if (g_SerenityJediEngineMode->integer == 2)
-					{
-						anim = PM_BlockingPoseForSaberAnimLevelDualAMD();
-					}
-					else
-					{
-						anim = PM_BlockingPoseForSaberAnimLevelDualMD();
-					}
-				}
-				else if (pm->ps->saberAnimLevel == SS_STAFF)
-				{
-					if (g_SerenityJediEngineMode->integer == 2)
-					{
-						anim = PM_BlockingPoseForSaberAnimLevelStaffAMD();
-					}
-					else
-					{
-						anim = PM_BlockingPoseForSaberAnimLevelStaffMD();
-					}
-				}
-				else
-				{
-					if (g_SerenityJediEngineMode->integer == 2)
-					{
-						anim = PM_BlockingPoseForSaberAnimLevelSingleAMD();
-					}
-					else
-					{
-						anim = PM_BlockingPoseForSaberAnimLevelSingleMD();
-					}
-				}
-			}
-			else
-			{
-				anim = PM_ReadyPoseForSaberAnimLevel();
-			}
-		}
-		else
+		else // 2026-11-10 (audit): the "else if (pm->ps->saber[0].type == SABER_LANCE || pm->ps->saber[0].type == SABER_TRIDENT || (pm->...)" branch here was the same code; merged
 		{
 			if (is_holding_block_button)
 			{
@@ -24274,12 +24257,8 @@ void PM_SetSaberMove(saberMoveName_t new_move)
 				}
 			}
 			else if (PM_SaberInStart(new_move))
-			{//don't damage on the first few frames of a start anim because it may pop from one position to some drastically different one, killing the enemy without hitting them.
-				int damageDelay = 150;
-				if (pm->ps->torsoAnimTimer < damageDelay)
-				{
-					damageDelay = pm->ps->torsoAnimTimer;
-				}
+			{// 2026-11-10 (audit, harmless): removed the "start anim damage delay" stub here. It worked out a delay and then
+				// threw it away (the line that used it, saberDamageDebounceTime, was already commented out in base JKA).
 				if (pm->ps->saberAnimLevel == SS_STRONG)
 				{
 					WP_SaberSwingSound(pm->gent, 0, SWING_FAST);
@@ -28834,16 +28813,85 @@ static qboolean PM_KataEnemyDistance(float* dist, float* dz, float* dot)
 	return qtrue;
 }
 
-// An NPC wants a kata: the smashdown is the better choice when the kata can't reach the enemy but the smashdown can
-// (in front, roughly level). No enemy known: the old check (no enemy in the kata's arc).
-static qboolean PM_SmashdownBetterThanKata(void)
+// Smart smashdown (DH 2026-11-10). The smashdown is a ground slam: every enemy within 300 units of it is thrown and
+// knocked down, those within 150 also take damage (G_PlayerSaberSmash). An NPC / bot that wants a kata now does the
+// smashdown when that pays off (PM_SmashdownWorthIt). It used to need the enemy 100 - 240 units away, but NPCs only
+// start a kata while swinging at a close enemy, and it needed 99% force, so it never happened.
+#define PM_SMASHDOWN_CROWD_RANGE	200.0f	// enemies this close count as "surrounded"
+#define PM_SMASHDOWN_TURTLE_MS		1500	// an enemy holding block this long is turtling
+
+// Living enemies of the NPC within range (horizontally, roughly level): its enemy, anyone on its enemy team and
+// anyone after it
+static int PM_SmashdownEnemiesNear(const float range)
+{
+	const gentity_t* self = pm->gent;
+	gentity_t* ents[128];
+	vec3_t mins, maxs;
+	for (int i = 0; i < 3; i++)
+	{
+		mins[i] = pm->ps->origin[i] - range;
+		maxs[i] = pm->ps->origin[i] + range;
+	}
+	const int num = gi.EntitiesInBox(mins, maxs, ents, 128);
+	int count = 0;
+	for (int i = 0; i < num; i++)
+	{
+		const gentity_t* ent = ents[i];
+		if (!ent || ent == self || !ent->inuse || !ent->client || ent->health <= 0)
+		{
+			continue;
+		}
+		if (ent != self->enemy && ent->enemy != self && ent->client->playerTeam != self->client->enemyTeam)
+		{
+			continue;
+		}
+		vec3_t diff;
+		VectorSubtract(ent->currentOrigin, pm->ps->origin, diff);
+		if (fabs(diff[2]) > 72.0f)
+		{
+			continue;
+		}
+		diff[2] = 0.0f;
+		if (VectorLength(diff) <= range)
+		{
+			count++;
+		}
+	}
+	return count;
+}
+
+// Smashdown or kata? The smashdown when it pays off:
+// - 2 or more enemies close by (surrounded),
+// - the enemy turtles (holds block 1.5 s or more) or is worn out (30 block points or less, or fatigue at the flash
+//   level), so the slam knocks him over,
+// - the kata can't reach the enemy but the smashdown can (100 - 240 units, in front),
+// never when the enemy is already knocked down or on another level. No enemy known: the old check (no enemy in the
+// kata's arc).
+static qboolean PM_SmashdownWorthIt(void)
 {
 	float dist = 0.0f, dz = 0.0f, dot = 0.0f;
 	if (!PM_KataEnemyDistance(&dist, &dz, &dot))
 	{
 		return PM_EnemyCloseEnoughForNormalKata() ? qfalse : qtrue;
 	}
-	return dist > PM_KATA_REACH && dist <= PM_SMASHDOWN_REACH && fabs(dz) <= 72.0f && dot >= 0.7f ? qtrue : qfalse;
+	const playerState_t* eps = &pm->gent->enemy->client->ps;
+	if (PM_InKnockDown(eps) || dist > PM_SMASHDOWN_REACH || fabs(dz) > 72.0f)
+	{
+		return qfalse;
+	}
+	if (PM_SmashdownEnemiesNear(PM_SMASHDOWN_CROWD_RANGE) >= 2)
+	{
+		return qtrue;
+	}
+	const qboolean turtling = eps->ManualblockStartTime > 0
+		&& level.time - eps->ManualblockStartTime >= PM_SMASHDOWN_TURTLE_MS ? qtrue : qfalse;
+	const qboolean worn_out = eps->blockPoints <= BLOCKPOINTS_THIRTY
+		|| eps->saberFatigueChainCount >= MISHAPLEVEL_HUDFLASH ? qtrue : qfalse;
+	if (turtling || worn_out)
+	{
+		return qtrue;
+	}
+	return dist > PM_KATA_REACH && dot >= 0.7f ? qtrue : qfalse;
 }
 
 static qboolean PM_CanDoSmashdown(const pmove_t* pm)
@@ -28886,6 +28934,8 @@ static qboolean PM_CanDoSmashdown(const pmove_t* pm)
 	const int forceMax = pm->ps->forcePowerMax;
 
 	const qboolean hasEnoughForce = (forceCurrent >= (int)(forceMax * 0.99f)) ? qtrue : qfalse;
+	// NPCs / bots: half their force (the kata cost is checked in PM_CanDoKata); was 99%, which they hardly ever had
+	const qboolean npcHasEnoughForce = (forceCurrent >= forceMax / 2) ? qtrue : qfalse;
 	// Cooldown
 	const qboolean smashReady = (PM_SaberSmashOnCooldown(pm->ps) == qfalse) ? qtrue : qfalse;
 	// Serenity mode
@@ -28899,10 +28949,11 @@ static qboolean PM_CanDoSmashdown(const pmove_t* pm)
 		// Final combined rule
 		if (smashReady == qtrue &&                 // Not on cooldown
 			NPCMustHaveForceSaberOffense >= FORCE_LEVEL_1 &&  // Must have Force saber offense level 1
-			hasEnoughForce == qtrue &&             // Must have enough Force power
+			npcHasEnoughForce == qtrue &&             // Must have enough Force power
 			serenityMode == qtrue &&               // Must be in Serenity mode
 			AllowSmashDown == qtrue &&             // Server must allow Smashdown
-			PM_SmashdownBetterThanKata() == qtrue) // the kata can't reach the enemy, the smashdown can
+			Chance == qtrue &&                     // style chance (was worked out but never used)
+			PM_SmashdownWorthIt() == qtrue)        // it pays off (PM_SmashdownWorthIt)
 		{
 			return qtrue;
 		}
@@ -29219,27 +29270,14 @@ static void PM_KataAnimationStyle(void)
 
 		case SS_STAFF:
 		{
-			if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1) // permission for the new anims
+			// 2026-11-10 (audit): "if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1)" had the same code in both branches; kept one
+			if (PM_CanDoSmashdown(pm) == qtrue)
 			{
-				if (PM_CanDoSmashdown(pm) == qtrue)
-				{
-					PM_SetSaberMove(LS_SMASHDOWN_STAFF); // If you have enough power and are level 3, you can do a smashdown attack.
-				}
-				else
-				{
-					PM_SetSaberMove(LS_STAFF_SOULCAL);
-				}
+				PM_SetSaberMove(LS_SMASHDOWN_STAFF);
 			}
 			else
 			{
-				if (PM_CanDoSmashdown(pm) == qtrue)
-				{
-					PM_SetSaberMove(LS_SMASHDOWN_STAFF);
-				}
-				else
-				{
-					PM_SetSaberMove(LS_STAFF_SOULCAL); // or just do this
-				}
+				PM_SetSaberMove(LS_STAFF_SOULCAL); // or just do this
 			}
 		}
 		break;
@@ -29443,6 +29481,7 @@ static void PM_WeaponLightsaber(void)
 		anim_level_overridden = qtrue;
 	}
 	else if (pm->gent
+		&& (pm->ps->clientNum < MAX_CLIENTS || PM_ControlledByPlayer()) // bug fix 2026-11-10: cg.saberAnimLevelPending is the player's style; for NPCs it skipped the checks below, so a dual / staff NPC kept a single-saber style (e.g. fast) whenever the player used dual or staff
 		&& cg.saberAnimLevelPending != pm->ps->saberAnimLevel
 		&& WP_SaberStyleValidForSaber(pm->gent, cg.saberAnimLevelPending))
 	{
@@ -30005,10 +30044,7 @@ static void PM_WeaponLightsaber(void)
 						}
 					}
 				}
-				else
-				{
-					PM_ReadyPoseForSaberAnimLevel();
-				}
+				// 2026-11-10 (audit): removed an "else PM_ReadyPoseForSaberAnimLevel();" here (it threw the pose away)
 			}
 		}
 		else
@@ -30195,6 +30231,12 @@ static void PM_WeaponLightsaber(void)
 				{
 					// Player: perform an attack fake, returning to a block/ready quad.
 					newmove = PM_ReturnforQuad(saberMoveData[curmove].endQuad);
+
+					// 2026-11-10 (mode 2, as SJE): a feint (letting go of attack in the wind-up) costs 1 fatigue, as a swing does
+					if (g_SerenityJediEngineMode->integer == 2 && pm->ps->saberFatigueChainCount < MISHAPLEVEL_MAX)
+					{
+						pm->ps->saberFatigueChainCount++;
+					}
 				}
 			}
 			// Case 2: We finished an attack (LS_A_*), must continue into a return move.
@@ -30221,8 +30263,10 @@ static void PM_WeaponLightsaber(void)
 			// Case 4: We are in a bounce state.
 			else if (PM_SaberInBounce(curmove))
 			{
-				// In a bounce.
-				if (pm->ps->clientNum >= MAX_CLIENTS && !PM_ControlledByPlayer())
+				// In a bounce. 2026-11-10 (mode 2, as SJE; DH: NPCs must not swing spam): NPCs chained straight into
+				// another attack here with no attack input; in mode 2 they follow their input as players do (their AI
+				// holds the next swing until the blocker's block has finished, AI_Jedi.cpp).
+				if (pm->ps->clientNum >= MAX_CLIENTS && !PM_ControlledByPlayer() && g_SerenityJediEngineMode->integer != 2)
 				{
 					// NPCs must play sequential attack from a bounce.
 					if (PM_SaberKataDone(LS_NONE, LS_NONE))
@@ -30877,46 +30921,8 @@ static void PM_WeaponLightsaber(void)
 				}
 				else
 				{
-					if (is_walking_and_blocking)
-					{
-						if (pm->ps->saberAnimLevel == SS_DUAL)
-						{
-							if (g_SerenityJediEngineMode->integer == 2)
-							{
-								PM_BlockingPoseForSaberAnimLevelDualAMD();
-							}
-							else
-							{
-								PM_BlockingPoseForSaberAnimLevelDualMD();
-							}
-						}
-						else if (pm->ps->saberAnimLevel == SS_STAFF)
-						{
-							if (g_SerenityJediEngineMode->integer == 2)
-							{
-								PM_BlockingPoseForSaberAnimLevelStaffAMD();
-							}
-							else
-							{
-								PM_BlockingPoseForSaberAnimLevelStaffMD();
-							}
-						}
-						else
-						{
-							if (g_SerenityJediEngineMode->integer == 2)
-							{
-								PM_BlockingPoseForSaberAnimLevelSingleAMD();
-							}
-							else
-							{
-								PM_BlockingPoseForSaberAnimLevelSingleMD();
-							}
-						}
-					}
-					else
-					{
-						PM_ReadyPoseForSaberAnimLevel();
-					}
+					// 2026-11-10 (audit): holding block. The blocking code sets the pose. The calls that were here worked out a
+					// blocking / ready pose and threw the result away.
 				}
 
 				newmove = LS_READY;
@@ -31719,11 +31725,7 @@ void PM_SetMeleeBlock()
 					{
 						anim = pm->ps->torsoAnim;
 					}
-					else if (Q_irand(0, 1))
-					{
-						anim = MELEE_STANCE_T;
-					}
-					else
+					else // 2026-11-10 (audit): the "else if (Q_irand(0, 1))" branch here was the same code; merged
 					{
 						anim = MELEE_STANCE_T;
 					}
@@ -31737,11 +31739,7 @@ void PM_SetMeleeBlock()
 					{
 						anim = pm->ps->torsoAnim;
 					}
-					else if (Q_irand(0, 1))
-					{
-						anim = MELEE_STANCE_B;
-					}
-					else
+					else // 2026-11-10 (audit): the "else if (Q_irand(0, 1))" branch here was the same code; merged
 					{
 						anim = MELEE_STANCE_B;
 					}

@@ -327,6 +327,7 @@ cvar_t* g_remove_unused_weapons;
 
 cvar_t* g_allowcallout;
 cvar_t* g_allowslipping;
+cvar_t* g_npcQuickGetUp; //item 319: non-Force NPCs get up 1-2 s sooner after a knockdown
 
 cvar_t* g_RealisticBlockingMode;
 
@@ -920,11 +921,11 @@ static void G_InitCvars()
 	g_SaberPerfectBlockingTimerMissile = gi.cvar("g_SaberPerfectBlockingTimerMissile", "750", CVAR_ARCHIVE);
 	//Alternate saber combat system 3 sec
 
-	g_SaberPerfectBlockingTimerEasy = gi.cvar("g_SaberPerfectBlockingTimerEasy", "250", CVAR_ARCHIVE);
+	g_SaberPerfectBlockingTimerEasy = gi.cvar("g_SaberPerfectBlockingTimerEasy", "500", CVAR_ARCHIVE); // 2026-11-10: one table in SJE + MD 9, SP + MP (500 / 200 / 80, was 250 / 150 / 50)
 	//Alternate saber combat system 2 sec
-	g_SaberPerfectBlockingTimerNormal = gi.cvar("g_SaberPerfectBlockingTimerNormal", "150", CVAR_ARCHIVE);
+	g_SaberPerfectBlockingTimerNormal = gi.cvar("g_SaberPerfectBlockingTimerNormal", "200", CVAR_ARCHIVE);
 	//Alternate saber combat system 1.5 sec
-	g_SaberPerfectBlockingTimerHard = gi.cvar("g_SaberPerfectBlockingTimerHard", "50", CVAR_ARCHIVE);
+	g_SaberPerfectBlockingTimerHard = gi.cvar("g_SaberPerfectBlockingTimerHard", "80", CVAR_ARCHIVE);
 	//Alternate saber combat system 1 sec
 
 	g_SaberAttackSpeedMD = gi.cvar("g_SaberAttackSpeedMD", "0", CVAR_ARCHIVE); //how fast saber animations run
@@ -995,6 +996,7 @@ static void G_InitCvars()
 	g_remove_unused_weapons = gi.cvar("g_removedroppedweapons", "0", CVAR_ARCHIVE);
 
 	g_allowslipping = gi.cvar("g_allowslipping", "1", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
+	g_npcQuickGetUp = gi.cvar("g_npcQuickGetUp", "1", CVAR_ARCHIVE);
 
 	g_RealisticBlockingMode = gi.cvar("g_RealisticBlockingMode", "0", CVAR_ARCHIVE); //Alternate saber combat system
 
@@ -2985,10 +2987,10 @@ void G_RunFrame(const int level_time)
 					//using jetpack, drain fuel
 					if (ent->client->jetPackDebReduce < level.time)
 					{
-						if ((ent->client->pers.cmd.forwardmove || ent->client->pers.cmd.upmove || ent->client->pers.cmd.
+						if ((ent->client->usercmd.forwardmove || ent->client->usercmd.upmove || ent->client->usercmd.
 							rightmove) && ent->client->jetPackOn)
 						{
-							//take more if they're thrusting
+							//take more if they're thrusting (usercmd: pers.cmd is never filled in SP)
 							ent->client->ps.jetpackFuel -= 10;
 						}
 						else if (ent->client->flamethrowerOn && ent->client->jetPackOn)

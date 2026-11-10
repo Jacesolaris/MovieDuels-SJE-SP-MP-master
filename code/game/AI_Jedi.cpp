@@ -96,6 +96,7 @@ extern qboolean PM_SaberInAttack(int move);
 extern qboolean PM_SaberInBounce(int move);
 extern qboolean PM_SaberInParry(int move);
 extern qboolean PM_SaberInKnockaway(int move);
+extern qboolean PM_SaberInReflect(int move);
 extern qboolean PM_SaberInBrokenParry(int move);
 extern qboolean PM_SaberInDeflect(int move);
 extern qboolean PM_SpinningSaberAnim(int anim);
@@ -1858,11 +1859,15 @@ Jedi_Move
 
 static qboolean Jedi_Move(gentity_t* goal, const qboolean retreat)
 {
-	const qboolean moved = NPC_MoveToGoal(qtrue);
 	navInfo_t info;
 
+	// bug fix 2026-11-10: the goal was set AFTER NPC_MoveToGoal (base JKA sets it first). One failed step (or bumping
+	// the enemy) runs jedi_hold_position, which clears the goal, and from then on every advance steered to no goal,
+	// failed and cleared it again: two NPCs further apart than the close-range walk-in just stood there taunting.
 	NPCInfo->combatMove = qtrue;
 	NPCInfo->goalEntity = goal;
+
+	const qboolean moved = NPC_MoveToGoal(qtrue);
 
 	if (retreat)
 	{
@@ -1952,6 +1957,55 @@ static void Jedi_StartBackOff()
 	VectorClear(NPC->client->ps.moveDir);
 }
 
+// Dash spacing (g_SerenityJediEngineMode 2 + g_saberAITactics, 2026-11-10, as SJE): two dashes are at least 1.5 - 2.5 s
+// apart (the two dash-outs could come on two frames in a row), and a dash-in uses the same 2-dash budget as the
+// dash-outs (DashOutTime, 10 - 15 s from the first dash), so an NPC can't dash in and straight back out.
+extern cvar_t* g_saberAITactics;
+static qboolean Jedi_DashTactics()
+{
+	return g_SerenityJediEngineMode->integer == 2 && g_saberAITactics && g_saberAITactics->integer ? qtrue : qfalse;
+}
+
+static qboolean Jedi_DashGapDone(const gentity_t* self)
+{
+	return !Jedi_DashTactics() || TIMER_Done(self, "dashGap") ? qtrue : qfalse;
+}
+
+static void Jedi_DashGapSet(const gentity_t* self)
+{
+	if (Jedi_DashTactics())
+	{
+		TIMER_Set(self, "dashGap", Q_irand(1500, 2500));
+	}
+}
+
+static qboolean Jedi_DashInAllowed(gentity_t* self)
+{
+	if (!Jedi_DashTactics())
+	{
+		return qtrue; // dash-ins as before (DashInTime only)
+	}
+	if (TIMER_Done(self, "DashOutTime"))
+	{
+		self->Dash_NPC_Count = 0;
+	}
+	return self->Dash_NPC_Count < 2 && TIMER_Done(self, "dashGap") ? qtrue : qfalse;
+}
+
+static void Jedi_DashInUsed(gentity_t* self)
+{
+	if (!Jedi_DashTactics())
+	{
+		return;
+	}
+	self->Dash_NPC_Count++;
+	if (self->Dash_NPC_Count == 1)
+	{
+		TIMER_Set(self, "DashOutTime", Q_irand(10000, 15000));
+	}
+	Jedi_DashGapSet(self);
+}
+
 extern void ForceDashAnimDash(gentity_t* self);
 static void JediDirectionalDashDodge(gentity_t* NPC, gentity_t* enemy)
 {
@@ -1995,10 +2049,10 @@ static void JediDirectionalDashDodge(gentity_t* NPC, gentity_t* enemy)
 		// DASH ANIMATION + SOUND
 		// -------------------------------------------------
 
-		NPC->client->pers.cmd.rightmove = ucmd.rightmove;
-		NPC->client->pers.cmd.forwardmove = ucmd.forwardmove;
+		NPC->client->usercmd.rightmove = ucmd.rightmove;
+		NPC->client->usercmd.forwardmove = ucmd.forwardmove;
 
-		// play dash anim (reads pers.cmd)
+		// play dash anim (reads usercmd, like the player's dash)
 		ForceDashAnimDash(NPC);
 		G_SoundOnEnt(NPC, CHAN_BODY, "sound/weapons/force/dash.mp3");
 
@@ -2049,8 +2103,8 @@ static void JediDirectionalDashAttack(gentity_t* NPC, gentity_t* enemy)
 		// -------------------------------------------------
 		// DASH ANIMATION + SOUND
 		// -------------------------------------------------
-		NPC->client->pers.cmd.forwardmove = ucmd.forwardmove;
-		NPC->client->pers.cmd.rightmove = ucmd.rightmove;
+		NPC->client->usercmd.forwardmove = ucmd.forwardmove;
+		NPC->client->usercmd.rightmove = ucmd.rightmove;
 
 		ForceDashAnimDash(NPC);
 		G_SoundOnEnt(NPC, CHAN_BODY, "sound/weapons/force/dash.mp3");
@@ -2132,93 +2186,47 @@ static void Jedi_AdjustSaberAnimLevel(const gentity_t* self, const int new_level
 		return;
 	}
 
-	if (self->client->playerTeam == TEAM_ENEMY)
+	// 2026-11-10 (audit): "if (self->client->playerTeam == TEAM_ENEMY)" had the same code in both branches; kept one
+	if (!Q_stricmp("cultist_saber_all", self->NPC_type)
+		|| !Q_stricmp("cultist_saber_all_throw", self->NPC_type)
+		|| !Q_stricmp("md_maul_tcw", self->NPC_type)
+		|| !Q_stricmp("md_maul_cyber_tcw", self->NPC_type))
 	{
-		if (!Q_stricmp("cultist_saber_all", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_all_throw", self->NPC_type)
-			|| !Q_stricmp("md_maul_tcw", self->NPC_type)
-			|| !Q_stricmp("md_maul_cyber_tcw", self->NPC_type))
-		{
-			//use any, regardless of rank, etc.
-		}
-		else if (!Q_stricmp("cultist_saber", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_throw", self->NPC_type))
-		{
-			//fast only
-			self->client->ps.saberAnimLevel = SS_FAST;
-		}
-		else if (!Q_stricmp("cultist_saber_med", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_med_throw", self->NPC_type))
-		{
-			//med only
-			self->client->ps.saberAnimLevel = SS_MEDIUM;
-		}
-		else if (!Q_stricmp("cultist_saber_strong", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_strong_throw", self->NPC_type))
-		{
-			//strong only
-			self->client->ps.saberAnimLevel = SS_STRONG;
-		}
-		else if (npc_is_dual_style(self))
-		{
-			//dual only (and stay: the random style picked below used to replace it)
-			self->client->ps.saberAnimLevel = SS_DUAL;
-			return;
-		}
-		else if (npc_is_staff_style(self))
-		{
-			//staff only (and stay: the random style picked below used to replace it)
-			self->client->ps.saberAnimLevel = SS_STAFF;
-			return;
-		}
-		else
-		{
-			//use any, regardless of rank, etc.
-		}
+		//use any, regardless of rank, etc.
+	}
+	else if (!Q_stricmp("cultist_saber", self->NPC_type)
+		|| !Q_stricmp("cultist_saber_throw", self->NPC_type))
+	{
+		//fast only
+		self->client->ps.saberAnimLevel = SS_FAST;
+	}
+	else if (!Q_stricmp("cultist_saber_med", self->NPC_type)
+		|| !Q_stricmp("cultist_saber_med_throw", self->NPC_type))
+	{
+		//med only
+		self->client->ps.saberAnimLevel = SS_MEDIUM;
+	}
+	else if (!Q_stricmp("cultist_saber_strong", self->NPC_type)
+		|| !Q_stricmp("cultist_saber_strong_throw", self->NPC_type))
+	{
+		//strong only
+		self->client->ps.saberAnimLevel = SS_STRONG;
+	}
+	else if (npc_is_dual_style(self))
+	{
+		//dual only (and stay: the random style picked below used to replace it)
+		self->client->ps.saberAnimLevel = SS_DUAL;
+		return;
+	}
+	else if (npc_is_staff_style(self))
+	{
+		//staff only (and stay: the random style picked below used to replace it)
+		self->client->ps.saberAnimLevel = SS_STAFF;
+		return;
 	}
 	else
 	{
-		if (!Q_stricmp("cultist_saber_all", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_all_throw", self->NPC_type)
-			|| !Q_stricmp("md_maul_tcw", self->NPC_type)
-			|| !Q_stricmp("md_maul_cyber_tcw", self->NPC_type))
-		{
-			//use any, regardless of rank, etc.
-		}
-		else if (!Q_stricmp("cultist_saber", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_throw", self->NPC_type))
-		{
-			//fast only
-			self->client->ps.saberAnimLevel = SS_FAST;
-		}
-		else if (!Q_stricmp("cultist_saber_med", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_med_throw", self->NPC_type))
-		{
-			//med only
-			self->client->ps.saberAnimLevel = SS_MEDIUM;
-		}
-		else if (!Q_stricmp("cultist_saber_strong", self->NPC_type)
-			|| !Q_stricmp("cultist_saber_strong_throw", self->NPC_type))
-		{
-			//strong only
-			self->client->ps.saberAnimLevel = SS_STRONG;
-		}
-		else if (npc_is_dual_style(self))
-		{
-			//dual only (and stay: the random style picked below used to replace it)
-			self->client->ps.saberAnimLevel = SS_DUAL;
-			return;
-		}
-		else if (npc_is_staff_style(self))
-		{
-			//staff only (and stay: the random style picked below used to replace it)
-			self->client->ps.saberAnimLevel = SS_STAFF;
-			return;
-		}
-		else
-		{
-			//use any, regardless of rank, etc.
-		}
+		//use any, regardless of rank, etc.
 	}
 	if (new_level < SS_FAST)
 	{
@@ -2940,7 +2948,7 @@ static void Jedi_CombatDistance(const int enemy_dist)
 		ps->weapon == WP_SABER &&
 		enemy->s.weapon == WP_SABER &&
 		!PM_SaberInMassiveBounce(ps->torsoAnim) &&
-		!PM_SaberInBounce(ps->torsoAnim) &&
+		!PM_SaberInBounce(ps->saberMove) && // bug fix 2026-11-10: was ps->torsoAnim (an anim in a saber-move check, never true)
 		!PM_SaberInBashedAnim(ps->torsoAnim) &&
 		!PM_InKnockDown(&NPC->client->ps) &&
 		InFront(enemy->currentOrigin, NPC->currentOrigin, ps->viewangles, 0.7f) &&
@@ -2955,13 +2963,15 @@ static void Jedi_CombatDistance(const int enemy_dist)
 
 		// Allow up to 2 dashes
 		if (NPC->Dash_NPC_Count < 2 && NPC->client->ps.forcePower >= 50 &&
-			(g_SerenityJediEngineMode->integer > 1) && (g_npc_is_smart != nullptr && g_npc_is_smart->integer != 0))
+			(g_SerenityJediEngineMode->integer > 1) && (g_npc_is_smart != nullptr && g_npc_is_smart->integer != 0) &&
+			Jedi_DashGapDone(NPC)) // 2026-11-10: spacing between dashes (mode 2, g_saberAITactics)
 		{
 			NPC->client->ps.forcePower -= 35;
 			JediDirectionalDashDodge(NPC, enemy);
 			NPC->Dash_NPC_Count++;
+			Jedi_DashGapSet(NPC);
 
-			// Start cooldown after second dash
+			// The first dash starts the 10 - 15 s window; 2 dashes in it
 			if (NPC->Dash_NPC_Count == 1)
 			{
 				TIMER_Set(NPC, "DashOutTime", Q_irand(10000, 15000));
@@ -7843,6 +7853,99 @@ static void jedi_debounce_direction_changes()
 	}
 }
 
+// 2026-11-10 (DH: "the npc should stop pressing forward at saberlength distance", videos: the NPC walked into the
+// player's body and the fight turned into a shoving match): once the enemy is inside the NPC's saber reach (the same
+// reach jedi_set_enemy_info uses for "in striking range": longest blade + 1.5 x body radius + 16), any movement
+// toward him is taken out. Strafing, circling and backing off stay. Item 300 made the advance code steer to the
+// enemy again, and the close-range "pressure" walk-in (jedi_combat_timers_update, forwardmove 48 every 1-2 s, held
+// at full speed for 0.5-2 s by jedi_debounce_direction_changes) never looked at the distance, so it pushed into him.
+// Left alone: cultist destroyers (they run in and blow up), stepping into an enemy kick / hilt bash / slap / A6
+// attack (base JKA "run into the kick"), the NPC's own kick or grab, and while in the air.
+static void Jedi_HoldAtSaberReach()
+{
+	if (!NPC || !NPC->client || !NPC->enemy || !NPC->enemy->client || NPC->enemy->health <= 0)
+	{
+		return;
+	}
+
+	playerState_t* ps = &NPC->client->ps;
+	const playerState_t* eps = &NPC->enemy->client->ps;
+
+	if (ps->weapon != WP_SABER || !ps->SaberActive() || ps->saberInFlight
+		|| ps->groundEntityNum == ENTITYNUM_NONE
+		|| jedi_cultist_destroyer(NPC)
+		|| PM_KickingAnim(ps->legsAnim) || ps->torsoAnim == BOTH_KYLE_GRAB
+		|| PM_KickingAnim(eps->legsAnim)
+		|| eps->torsoAnim == BOTH_A7_HILT || eps->torsoAnim == BOTH_SLAP_R || eps->torsoAnim == BOTH_SLAP_L
+		|| eps->torsoAnim == BOTH_A6_FB || eps->torsoAnim == BOTH_A6_LR)
+	{
+		return;
+	}
+
+	vec3_t to_enemy;
+	VectorSubtract(NPC->enemy->currentOrigin, NPC->currentOrigin, to_enemy);
+	to_enemy[2] = 0;
+	const float dist = VectorNormalize(to_enemy);
+	const float reach = ps->SaberLengthMax() + NPC->maxs[0] * 1.5f + 16.0f;
+
+	if (dist > reach)
+	{
+		return;
+	}
+
+	qboolean held = qfalse;
+
+	// nav movement (NPC_MoveToGoal): pmove uses moveDir whenever it is set, whatever the ucmd says
+	if (!VectorCompare(ps->moveDir, vec3_origin))
+	{
+		const float toward = DotProduct(ps->moveDir, to_enemy);
+		if (toward > 0.0f)
+		{
+			VectorMA(ps->moveDir, -toward, to_enemy, ps->moveDir); // keep only the sideways part (slower, not renormalised)
+			if (VectorLengthSquared(ps->moveDir) < 0.01f)
+			{
+				VectorClear(ps->moveDir);
+			}
+			held = qtrue;
+		}
+	}
+
+	// ucmd movement
+	if (ucmd.forwardmove || ucmd.rightmove)
+	{
+		vec3_t yaw_angles, fwd, right, wish;
+		VectorSet(yaw_angles, 0, ps->viewangles[YAW], 0);
+		AngleVectors(yaw_angles, fwd, right, nullptr);
+		VectorScale(fwd, ucmd.forwardmove, wish);
+		VectorMA(wish, ucmd.rightmove, right, wish);
+		wish[2] = 0;
+
+		const float toward = DotProduct(wish, to_enemy);
+		if (toward > 0.0f)
+		{
+			VectorMA(wish, -toward, to_enemy, wish);
+			float fm = DotProduct(wish, fwd);
+			float rm = DotProduct(wish, right);
+			fm = fm > 127.0f ? 127.0f : (fm < -127.0f ? -127.0f : fm);
+			rm = rm > 127.0f ? 127.0f : (rm < -127.0f ? -127.0f : rm);
+			ucmd.forwardmove = static_cast<signed char>(fm);
+			ucmd.rightmove = static_cast<signed char>(rm);
+			held = qtrue;
+		}
+	}
+
+	if (held)
+	{
+		// end the "keep moving forward" hold of jedi_debounce_direction_changes too, or it pushes in again next frame
+		TIMER_Set(NPC, "moveforward", -level.time);
+		if ((d_JediAI->integer || g_DebugSaberCombat->integer) && TIMER_Done(NPC, "holdReachDebug"))
+		{
+			TIMER_Set(NPC, "holdReachDebug", 1000);
+			Com_Printf("Debug: %s holds at saber reach (%.0f of %.0f)\n", NPC->NPC_type, dist, reach);
+		}
+	}
+}
+
 void Jedi_TimersApply()
 {
 	//use careful anim/slower movement if not already moving
@@ -7889,6 +7992,7 @@ void Jedi_TimersApply()
 	}
 
 	jedi_debounce_direction_changes();
+	Jedi_HoldAtSaberReach(); // 2026-11-10: no pushing into the enemy once he is in saber reach
 
 	if (!TIMER_Done(NPC, "gripping"))
 	{
@@ -8050,8 +8154,10 @@ static void jedi_combat_timers_update(const int enemy_dist)
 						}
 					}
 				}
-				else
+				else if (enemy_dist > 0)
 				{//postpone any strafing for a while
+					// 2026-11-10 (DH): only walk in while he is still out of saber reach (enemy_dist <= 0 = in reach);
+					// this walk-in used to run at any distance, even with the NPC already in the enemy's body
 					ucmd.forwardmove = 48;
 				}
 			}
@@ -8171,6 +8277,9 @@ static void jedi_combat_timers_update(const int enemy_dist)
 		// Blocked while attacking
 		if ((NPC->client->ps.saberEventFlags & SEF_BLOCKED) != 0)
 		{
+			// 2026-11-10 (DH): no new swing before the enemy has finished his block (Jedi_WaitForBlockCycle)
+			TIMER_Set(NPC, "blockedWait", 1500);
+
 			if (PM_SaberInBrokenParry(NPC->client->ps.saberMove) == qtrue ||
 				NPC->client->ps.saberBlocked == BLOCKED_PARRY_BROKEN)
 			{
@@ -8423,8 +8532,56 @@ static qboolean Jedi_DefendFirst(const int enemy_dist)
 	return TIMER_Done(NPC, "defendHold") ? qfalse : qtrue;
 }
 
+// 2026-11-10 (mode 2, as SJE; DH: NPCs must not swing spam; a blocked NPC may not swing again before the player has finished his
+// block animation cycle). Jedi_CombatTimersUpdate starts "blockedWait" (at most 1.5 s) when the NPC's swing was
+// blocked (SEF_BLOCKED). While it runs and the enemy is still in his parry, knockaway, reflect or block bounce (or a
+// block is about to start), Jedi_AttackDecide does not attack and NPC_BSJedi_Default takes the attack button away.
+static qboolean Jedi_EnemyInBlockCycle(const gentity_t* enemy)
+{
+	if (!enemy || !enemy->client || enemy->health <= 0)
+	{
+		return qfalse;
+	}
+	const playerState_t* eps = &enemy->client->ps;
+
+	if (eps->saberBlocked != BLOCKED_NONE && eps->saberBlocked != BLOCKED_PARRY_BROKEN)
+	{//his block is about to start
+		return qtrue;
+	}
+	return PM_SaberInParry(eps->saberMove) || PM_SaberInKnockaway(eps->saberMove)
+		|| PM_SaberInReflect(eps->saberMove) || PM_SaberInBounce(eps->saberMove) ? qtrue : qfalse;
+}
+
+static qboolean Jedi_WaitForBlockCycle()
+{
+	if (g_SerenityJediEngineMode->integer != 2 || !NPC || !NPC->client || TIMER_Done(NPC, "blockedWait"))
+	{
+		return qfalse;
+	}
+	return Jedi_EnemyInBlockCycle(NPC->enemy);
+}
+
+static void Jedi_HoldSwingForBlockCycle()
+{
+	if ((ucmd.buttons & BUTTON_ATTACK) && Jedi_WaitForBlockCycle())
+	{
+		ucmd.buttons &= ~BUTTON_ATTACK;
+
+		if ((d_JediAI->integer || g_DebugSaberCombat->integer) && TIMER_Done(NPC, "blockedWaitDebug"))
+		{
+			TIMER_Set(NPC, "blockedWaitDebug", 500);
+			gi.Printf(S_COLOR_GREEN"%s: blocked, waits for the enemy's block to finish\n", NPC->NPC_type);
+		}
+	}
+}
+
 static qboolean Jedi_AttackDecide(const int enemy_dist)
 {
+	if (Jedi_WaitForBlockCycle())
+	{//blocked: wait for the enemy's block to finish (2026-11-10)
+		return qfalse;
+	}
+
 	if (!TIMER_Done(NPC, "allyJediDelay"))
 	{
 		return qfalse;
@@ -9792,12 +9949,14 @@ static void jedi_combat()
 							&& (NPC->s.weapon == WP_SABER))
 						{
 							if (TIMER_Done(NPC, "DashInTime") &&
+								Jedi_DashInAllowed(NPC) &&
 								Distance(NPC->enemy->currentOrigin, NPC->currentOrigin) > 128 &&
 								Distance(NPC->enemy->currentOrigin, NPC->currentOrigin) < 256 &&
 								NPC->client->ps.groundEntityNum != ENTITYNUM_NONE &&
 								PM_InKnockDown(&NPC->client->ps) == qfalse)
 							{//try to dash to TargetPosition
 								JediDirectionalDashAttack(NPC, NPC->enemy);
+								Jedi_DashInUsed(NPC);
 								TIMER_Set(NPC, "DashInTime", Q_irand(20000, 30000));
 								if (d_JediAI->integer || g_DebugSaberCombat->integer)
 								{
@@ -11293,10 +11452,21 @@ static void JediHandleSpacing(gentity_t* self)
 
 	float pSpeed = VectorLength(pvel);
 
+	// bug fix 2026-11-10: the checks below read pvel[0] / pvel[1], the WORLD x / y velocity, as if they were the
+	// enemy's motion toward / across the NPC, so "backing up" (forwardmove 127) fired whenever he walked toward world
+	// -x, even straight into the NPC. Now measured along the NPC -> enemy line and across it.
+	vec3_t to_enemy_dir, side_dir;
+	VectorSubtract(self->enemy->currentOrigin, self->currentOrigin, to_enemy_dir);
+	to_enemy_dir[2] = 0;
+	VectorNormalize(to_enemy_dir);
+	VectorSet(side_dir, to_enemy_dir[1], -to_enemy_dir[0], 0); // the NPC's right when it faces him
+	const float p_away = DotProduct(pvel, to_enemy_dir); // > 0: he moves away from the NPC
+	const float p_side = DotProduct(pvel, side_dir); // > 0: he moves to the NPC's right (his left)
+
 	if (pSpeed > 50.0f)
 	{
 		// Player strafing right
-		if (pvel[1] > 80)
+		if (p_side < -80)
 		{
 			ucmd.rightmove = -64;
 			ucmd.forwardmove = 48;
@@ -11306,7 +11476,7 @@ static void JediHandleSpacing(gentity_t* self)
 		}
 
 		// Player strafing left
-		if (pvel[1] < -80)
+		if (p_side > 80)
 		{
 			ucmd.rightmove = 64;
 			ucmd.forwardmove = 48;
@@ -11316,7 +11486,7 @@ static void JediHandleSpacing(gentity_t* self)
 		}
 
 		// Player backing up
-		if (pvel[0] < -80)
+		if (p_away > 80)
 		{
 			ucmd.forwardmove = 127;
 			Jedi_FaceEnemy(qtrue);
@@ -11325,7 +11495,7 @@ static void JediHandleSpacing(gentity_t* self)
 		}
 
 		// Player rushing forward
-		if (pvel[0] > 80)
+		if (p_away < -80)
 		{
 			ucmd.rightmove = (Q_irand(0, 1) ? 64 : -64);
 			Jedi_FaceEnemy(qtrue);
@@ -12492,6 +12662,9 @@ static void Jedi_Attack(void)
 	// Otherwise: Raven fallback logic continues below
 	// =====================
 
+	// 2026-11-10 (DH): the cinematic spacing above runs after Jedi_TimersApply, so hold at saber reach again here
+	Jedi_HoldAtSaberReach();
+
 	// If NAV is not moving us but ucmds are, set movement speed manually
 	if (VectorCompare(NPC->client->ps.moveDir, vec3_origin) &&
 		(ucmd.forwardmove || ucmd.rightmove))
@@ -13529,6 +13702,8 @@ void NPC_BSJedi_Default()
 		{
 			Jedi_Attack();
 		}
+
+		Jedi_HoldSwingForBlockCycle(); // 2026-11-10: blocked, no swing before his block has finished
 
 		npc_check_speak(NPC);
 

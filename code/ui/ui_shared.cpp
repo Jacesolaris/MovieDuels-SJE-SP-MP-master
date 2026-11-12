@@ -34,7 +34,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define UI_SHARED_CPP
 
 #include "../game/anims.h"
-#include "../cgame/animtable.h"
+#include "cgame/animtable.h"
 
 #include "ui_shared.h"
 #include "menudef.h"
@@ -1742,30 +1742,24 @@ static void Menu_SetItemBackground(const menuDef_t* menu, const char* itemName, 
 // Change the exec command for a button.
 static void Menu_SetItemExec(const menuDef_t* menu, const char* itemName, const char* text)
 {
-	try
+	if (!menu || !itemName || !text) // item 355: plain checks instead of a catch-all
 	{
-		if (!menu) // No menu???
-		{
-			return;
-		}
+		return;
+	}
 
-		const int count = Menu_ItemsMatchingGroup(menu, itemName);
+	const int count = Menu_ItemsMatchingGroup(menu, itemName);
 
-		for (int j = 0; j < count; j++)
+	for (int j = 0; j < count; j++)
+	{
+		itemDef_t* item = Menu_GetMatchingItemByNumber(menu, j, itemName);
+		if (item != nullptr)
 		{
-			itemDef_t* item = Menu_GetMatchingItemByNumber(menu, j, itemName);
-			if (item != nullptr)
+			if (text[0] == 'n' && text[1] == 'p' && text[2] == 'c')
 			{
-				if (text[0] == 'n' && text[1] == 'p' && text[2] == 'c')
-				{
-					item->exec = (char*)text;
-					return;
-				}
+				item->exec = (char*)text;
+				return;
 			}
 		}
-	}
-	catch (...)
-	{
 	}
 }
 
@@ -2060,21 +2054,13 @@ Script_SetItemExec
 */
 static qboolean Script_SetItemExec(itemDef_t* item, const char** args)
 {
-	try
-	{
-		// expecting text
-		const char* itemName = nullptr;
-		const char* text = nullptr;
+	// expecting text
+	const char* itemName = nullptr;
+	const char* text = nullptr;
 
-		// expecting text
-		if (String_Parse(args, &itemName) && String_Parse(args, &text))
-		{
-			Menu_SetItemExec(static_cast<menuDef_t*>(item->parent), itemName, text);
-		}
-	}
-
-	catch (...)
+	if (item && String_Parse(args, &itemName) && String_Parse(args, &text))
 	{
+		Menu_SetItemExec(static_cast<menuDef_t*>(item->parent), itemName, text);
 	}
 	return qtrue;
 }
@@ -4261,14 +4247,7 @@ static qboolean ItemParse_action(itemDef_t* item)
 
 static qboolean ItemParse_exec(itemDef_t* item)
 {
-	try
-	{
-		if (!PC_Script_Parse(&item->exec))
-		{
-			return qfalse;
-		}
-	}
-	catch (...)
+	if (!PC_Script_Parse(&item->exec))
 	{
 		return qfalse;
 	}

@@ -29,7 +29,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "tr_common.h"
 #include "tr_public.h"
 #include "mdx_format.h"
-#include "qgl.h"
+#include "rd-vanilla/qgl.h"
 
 #define GL_INDEX_TYPE		GL_UNSIGNED_INT
 using glIndex_t = unsigned int;
@@ -1417,7 +1417,7 @@ void		R_ShaderList_f();
 //
 // tr_arb.c
 //
-void ARB_InitGlowShaders();
+void ARB_InitGPUShaders();
 
 /*
 ====================================================================

@@ -943,6 +943,8 @@ static void G_InitCvars()
 	g_allowgunnerbash = gi.cvar("g_allowgunnerbash", "1", CVAR_ARCHIVE | CVAR_SAVEGAME | CVAR_NORESTART);
 	// Squad tactics: only g_squadAdvancers gunners per target push in, the others hold position (AI_Stormtrooper.cpp)
 	g_squadTactics = gi.cvar("g_squadTactics", "1", CVAR_ARCHIVE);
+	// NPCs stuck against something on the way climb / jump onto it or go round it (NPC_ObstacleClimb) (DH 2026-11-12)
+	g_obstacleClimb = gi.cvar("g_obstacleClimb", "1", CVAR_ARCHIVE);
 	g_squadAdvancers = gi.cvar("g_squadAdvancers", "2", CVAR_ARCHIVE);
 	g_squadDebug = gi.cvar("g_squadDebug", "0", 0); // 1: print each squad's roles once a second
 	g_squadCommandCooldown = gi.cvar("g_squadCommandCooldown", "60", CVAR_ARCHIVE); // seconds between two orders on the same target
@@ -2466,6 +2468,7 @@ extern void Boba_StopFlameThrower(const gentity_t* self);
 constexpr auto SPRINT_DEFUEL_RATE = 150;
 constexpr auto JETPACK_DEFUEL_RATE = 200; //approx. 20 seconds of idle use from a fully charged fuel amt;
 constexpr auto JETPACK_REFUEL_RATE = 150; //seems fair;
+constexpr auto JETPACK_RECHARGE_RATE = 40; //jetpack refill only: one fuel point every 50 ms server frame, full tank in about 5 s (was 150 = 20 s)
 constexpr auto ENHANCED_REFUEL_RATE = 75; //seems fair;
 constexpr auto SPRINT_SLOW_REFUEL_RATE = 250;
 
@@ -2548,6 +2551,7 @@ static void G_CheckAnimationStyleChange()
 extern void G_LoadAnimFileSet(gentity_t* ent, const char* p_model_name);
 extern qboolean PM_HasAnimation(const gentity_t* ent, int animation);
 extern qboolean ValidAnimFileIndex(int index);
+extern int G_AnimGLAOffset(int file_index, int gla_slot);
 
 // Hold a dead body in the last frame of its death animation (so it does not fall down again).
 static void G_FreezeOnLastFrame(gentity_t* ent, const int anim)
@@ -2564,7 +2568,8 @@ static void G_FreezeOnLastFrame(gentity_t* ent, const int anim)
 	const int last_frame = cur_anim.firstFrame + cur_anim.numFrames - 1;
 	const int time = cg.time ? cg.time : level.time;
 
-	gi.G2API_SetAnimIndex(&ent->ghoul2[ent->playerModel], cur_anim.glaIndex);
+	gi.G2API_SetAnimIndex(&ent->ghoul2[ent->playerModel],
+		G_AnimGLAOffset(ent->client->clientInfo.animFileIndex, cur_anim.glaIndex)); // item 355
 	for (const int bone : { ent->rootBone, ent->lowerLumbarBone, ent->motionBone })
 	{
 		if (bone != -1)
@@ -2888,7 +2893,7 @@ void G_RunFrame(const int level_time)
 		}
 
 		//The player
-		if (i == 0)
+		if (i == 0 && ent->client) // the player (entity 0 always has a client; the check is for code analysis, C6011)
 		{
 			if (ent->client->ps.powerups[PW_CLOAKED])
 			{
@@ -2988,10 +2993,12 @@ void G_RunFrame(const int level_time)
 					if (ent->client->jetPackDebReduce < level.time)
 					{
 						if ((ent->client->usercmd.forwardmove || ent->client->usercmd.upmove || ent->client->usercmd.
-							rightmove) && ent->client->jetPackOn)
+							rightmove) && ent->client->jetPackOn && !ent->client->flamethrowerOn)
 						{
 							//take more if they're thrusting (usercmd: pers.cmd is never filled in SP)
-							ent->client->ps.jetpackFuel -= 10;
+							//2, not 10: since the usercmd fix (item 307) this really applies, and 10 emptied the tank in
+							//about 2.5 s of flight. 2 = about 12.5 s of thrust. Flamethrower in flight keeps its 4 (below).
+							ent->client->ps.jetpackFuel -= 2;
 						}
 						else if (ent->client->flamethrowerOn && ent->client->jetPackOn)
 						{
@@ -3028,7 +3035,7 @@ void G_RunFrame(const int level_time)
 						jetPackOn)
 					{
 						ent->client->ps.jetpackFuel++;
-						ent->client->jetPackDebRecharge = level.time + JETPACK_REFUEL_RATE;
+						ent->client->jetPackDebRecharge = level.time + JETPACK_RECHARGE_RATE;
 					}
 				}
 			}

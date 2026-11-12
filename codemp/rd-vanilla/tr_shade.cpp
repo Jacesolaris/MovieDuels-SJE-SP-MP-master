@@ -25,7 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "tr_local.h"
 #include "q_profile.h"
-#include "tr_quicksprite.h"
+#include "rd-vanilla/tr_quicksprite.h"
 
 /*
 

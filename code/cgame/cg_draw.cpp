@@ -10962,4 +10962,4 @@ void CG_DrawActive(const stereoFrame_t stereoView)
 
 	// draw status bar and other floating elements
 	CG_Draw2D();
-}
+}

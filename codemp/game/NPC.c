@@ -25,7 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 //
 #include "b_local.h"
 #include "anims.h"
-#include "say.h"
+#include "game/say.h"
 #include "icarus/Q3_Interface.h"
 #include "ai.h"
 #include "bg_weapons.h"
@@ -2076,6 +2076,9 @@ static void NPC_ExecuteBState(const gentity_t* self) //, int msec )
 
 	//cliff and wall avoidance
 	NPC_AvoidWallsAndCliffs();
+
+	// stuck against something on the way: climb / jump onto it or go round it (g_obstacleClimb, NPC_move.c)
+	NPC_ObstacleClimb();
 
 	// run the bot through the server like it was a real client
 	//=== Save the ucmd for the second no-think Pmove ============================

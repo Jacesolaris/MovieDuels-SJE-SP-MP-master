@@ -95,7 +95,7 @@ set(MPCGameCgameFiles
 	"${MPDir}/cgame/fx_force.c"
 	"${MPDir}/cgame/fx_heavyrepeater.c"
 	"${MPDir}/cgame/fx_rocketlauncher.c"
-	"${MPDir}/cgame/animtable.h"
+	"${SharedDir}/cgame/animtable.h"
 	"${MPDir}/cgame/cg_camera.h"
 	"${MPDir}/cgame/cg_holster.h"
 	"${MPDir}/cgame/cg_local.h"

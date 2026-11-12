@@ -567,6 +567,779 @@ static void ST_Speech(const gentity_t* self, const int speech_type, const float 
 	self->NPC->blockedSpeechDebounceTime = level.time + 2000;
 }
 
+// ---- MD 9 MP port of SP squad tactics (AI_Stormtrooper.cpp items 270/279/281/282), DH 2026-11-11 ----
+// ---------------------------------------------------------------------------------------------
+// Squad tactics (g_squadTactics, g_squadAdvancers)
+//
+// Without this every gunner decides on its own to push in, so a squad swamps the player in a huddle.
+// With it, at most g_squadAdvancers gunners per target are "advancers" and fight as before; the
+// others are "holders": they move until they can see the target, then hold there (crouch, strafe,
+// shoot, keep apart from squadmates). When an advancer dies the closest holder takes its slot after a
+// short pause, and advancers hand their slot on every 8-15 s so it isn't always the same one.
+//
+// The state is transient (not in savegames): after a load or a map change the slots are handed out
+// again within a frame. Only NPCs that went through NPC_BSST_Default this frame take part, so other
+// AIs that call NPC_BSST_Attack behave as before.
+// ---------------------------------------------------------------------------------------------
+#define SQUAD_HOLD_MIN_DIST 320.0f // a holder closer than this to its target backs off
+#define SQUAD_SPREAD_DIST 128.0f // holders closer than this to a squadmate step apart
+
+static int squad_lastThink[MAX_GENTITIES]; // level.time (+1) the NPC last ran NPC_BSST_Default with an enemy
+static int squad_advanceUntil[MAX_GENTITIES]; // advancer slot held until this time
+static int squad_advanceTarget[MAX_GENTITIES]; // target entity of that slot
+static int squad_restUntil[MAX_GENTITIES]; // after handing a slot on, don't take one again before this
+static int squad_nextPromote[MAX_GENTITIES]; // per target: earliest time the next slot may be filled
+static int squad_members[MAX_GENTITIES]; // per target: gunners on it this frame
+static int squad_spreadUntil[MAX_GENTITIES];
+static vec3_t squad_spreadDir[MAX_GENTITIES];
+static int squad_cacheTime = -1;
+
+// Squad commands (part of g_squadTactics): when more than 2 gunners start fighting the same
+// target, the highest-ranked one (else the AI group's commander, else the one furthest back) gives the attack
+// order like the player's ally command (CommandNPCtoAttack): hand signal + voice line. The squadmates near him
+// answer with a hand signal, then one of them goes in first while the rest hold and shoot (the slots above).
+#define SQUAD_CMD_MIN_MEMBERS 3 // "more than 2"
+#define SQUAD_CMD_QUIET_TIME 8000 // a new order only after the target had no such squad for this long
+#define SQUAD_CMD_RANGE 1024.0f // squadmates further than this from the commander don't answer
+static int squad_lastLarge[MAX_GENTITIES]; // per target: level.time (+1) it last had a big enough squad
+static int squad_ackAt[MAX_GENTITIES]; // squadmate answers the order at this time
+static int squad_ackTarget[MAX_GENTITIES]; // target of that order
+static qboolean squad_cmdFirst[MAX_GENTITIES]; // per target: the next slot is the first one after an order
+static int squad_lastOrder[MAX_GENTITIES]; // per target: level.time (+1) of the last order (g_squadCommandCooldown)
+static int squad_advancers[MAX_GENTITIES]; // per target: advancers right now (for suppressing fire)
+
+// Commander killed: the squad falls back for a moment, then the next-highest rank gives a new order
+// (that one ignores the cooldown). Suppressing fire: while a squadmate advances, holders without a clear
+// shot fire bursts at the spot where they last saw the target, to keep him behind cover.
+#define SQUAD_FALLBACK_DIST 640.0f // while falling back, back off until this far from the target
+static int squad_cmdOwner[MAX_GENTITIES]; // per target: entity number + 1 of the commander who gave the order
+static int squad_fallbackUntil[MAX_GENTITIES]; // per target: the squad falls back until this time
+static int squad_reorderAt[MAX_GENTITIES]; // per target: the new commander gives his order at this time
+// Badly hurt (g_squadWoundedHealth, default 20% health or less): the NPC never pushes in, backs off to a safe
+// distance and fires from there (enemy NPCs only)
+#define SQUAD_WOUNDED_DIST 768.0f
+static qboolean squad_woundedSaid[MAX_GENTITIES]; // the wounded NPC already called for cover
+
+// Minimum time between two orders on the same target, so new waves don't repeat it every few seconds
+static int Squad_CommandCooldown()
+{
+	int secs = g_squadCommandCooldown.integer;
+	if (secs < 0)
+	{
+		secs = 0;
+	}
+	else if (secs > 600)
+	{
+		secs = 600;
+	}
+	return secs * 1000;
+}
+
+static void Squad_Reset()
+{
+	memset(squad_lastThink, 0, sizeof squad_lastThink);
+	memset(squad_advanceUntil, 0, sizeof squad_advanceUntil);
+	memset(squad_advanceTarget, 0, sizeof squad_advanceTarget);
+	memset(squad_restUntil, 0, sizeof squad_restUntil);
+	memset(squad_nextPromote, 0, sizeof squad_nextPromote);
+	memset(squad_members, 0, sizeof squad_members);
+	memset(squad_spreadUntil, 0, sizeof squad_spreadUntil);
+	memset(squad_spreadDir, 0, sizeof squad_spreadDir);
+	memset(squad_lastLarge, 0, sizeof squad_lastLarge);
+	memset(squad_ackAt, 0, sizeof squad_ackAt);
+	memset(squad_ackTarget, 0, sizeof squad_ackTarget);
+	memset(squad_cmdFirst, 0, sizeof squad_cmdFirst);
+	memset(squad_lastOrder, 0, sizeof squad_lastOrder);
+	memset(squad_advancers, 0, sizeof squad_advancers);
+	memset(squad_cmdOwner, 0, sizeof squad_cmdOwner);
+	memset(squad_fallbackUntil, 0, sizeof squad_fallbackUntil);
+	memset(squad_reorderAt, 0, sizeof squad_reorderAt);
+	memset(squad_woundedSaid, 0, sizeof squad_woundedSaid);
+}
+
+static int Squad_MaxAdvancers()
+{
+	int max_adv = g_squadAdvancers.integer;
+	if (max_adv < 1)
+	{
+		max_adv = 1;
+	}
+	else if (max_adv > 8)
+	{
+		max_adv = 8;
+	}
+	return max_adv;
+}
+
+// Called from NPC_BSST_Default for gunners that have an enemy
+static void Squad_Stamp(const gentity_t* self)
+{
+	if (!g_squadTactics.integer || !self || !self->client || !self->enemy)
+	{
+		return;
+	}
+	switch (self->s.weapon)
+	{
+	case WP_NONE:
+	case WP_SABER:
+	case WP_MELEE:
+	case WP_NOGHRI_STICK:
+		return; // melee fighters have to close in
+	default:
+		break;
+	}
+	if (level.time < squad_cacheTime)
+	{
+		// time went backwards: new map or loaded game
+		Squad_Reset();
+		squad_cacheTime = -1;
+	}
+	squad_lastThink[self->s.number] = level.time + 1;
+}
+
+static qboolean Squad_IsMember(const gentity_t* ent, const int now)
+{
+	return ent->inuse && ent->NPC && ent->client && ent->health > 0
+		&& ent->enemy && ent->enemy->inuse && ent->enemy->health > 0
+		&& squad_lastThink[ent->s.number] > 0 && squad_lastThink[ent->s.number] >= now - 500;
+}
+
+// The commander's attack order anim (MD: the player's BOTH_ATTACK_COMMAND, else TORSO_HANDSIGNAL3), -1 = model has none
+static int Squad_CommandAnim(const gentity_t* ent)
+{
+	if (BG_HasAnimation(ent->localAnimIndex, BOTH_ATTACK_COMMAND))
+	{
+		return BOTH_ATTACK_COMMAND;
+	}
+	return BG_HasAnimation(ent->localAnimIndex, TORSO_HANDSIGNAL3) ? TORSO_HANDSIGNAL3 : -1;
+}
+
+// A squadmate's answer, as the player's ally answers in CommandNPCtoAttack: BOTH_ORDER_RECIVED; models without
+// it use the SJE hand signals (target far away -> HANDSIGNAL4, close in front -> HANDSIGNAL1, behind -> HANDSIGNAL2)
+static int Squad_AckAnim(const gentity_t* ent, gentity_t* target)
+{
+	if (BG_HasAnimation(ent->localAnimIndex, BOTH_ORDER_RECIVED))
+	{
+		return BOTH_ORDER_RECIVED;
+	}
+	int anim;
+	if (DistanceSquared(ent->r.currentOrigin, target->r.currentOrigin) >= 512.0f * 512.0f)
+	{
+		anim = TORSO_HANDSIGNAL4;
+	}
+	else
+	{
+		vec3_t from, angles;
+		VectorCopy(ent->r.currentOrigin, from);
+		VectorCopy(ent->r.currentAngles, angles);
+		anim = InFront(target->r.currentOrigin, from, angles, 0.2f) ? TORSO_HANDSIGNAL1 : TORSO_HANDSIGNAL2;
+	}
+	return BG_HasAnimation(ent->localAnimIndex, anim) ? anim : -1;
+}
+
+// Plays a hand signal on the torso (legs keep moving) and holds fire while it lasts
+static void Squad_PlaySignal(gentity_t* ent, const int anim)
+{
+	if (anim < 0 || !ent->client || ent->client->ps.pm_type >= PM_DEAD
+		|| ent->client->ps.groundEntityNum == ENTITYNUM_NONE || PM_InKnockDown(&ent->client->ps))
+	{
+		return;
+	}
+	NPC_SetAnim(ent, SETANIM_TORSO, anim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD);
+	int len = BG_AnimLength(ent->localAnimIndex, (animNumber_t)anim);
+	if (len > 2500)
+	{
+		len = 2500;
+	}
+	if (len > 0 && TIMER_Get(ent, "attackDelay") < level.time + len)
+	{
+		TIMER_Set(ent, "attackDelay", len);
+	}
+	if (g_squadDebug.integer)
+	{
+		Com_Printf("SQUADSIG %d ent=%d anim=%d len=%d\n", level.time, ent->s.number, anim, len);
+	}
+}
+
+// The commander gives the attack order on target t; his squadmates answer shortly after
+static void Squad_IssueCommand(gentity_t* commander, const int t, const int now, const int num)
+{
+	gentity_t* target = &g_entities[t];
+	const int cmd_anim = Squad_CommandAnim(commander);
+	Squad_PlaySignal(commander, cmd_anim);
+
+	// voice as in CommandNPCtoAttack: a "move in" callout when the target is far, "there he is" when close
+	if (DistanceSquared(commander->r.currentOrigin, target->r.currentOrigin) >= 512.0f * 512.0f)
+	{
+		G_AddVoiceEvent(commander, Q_irand(EV_CHASE1, EV_CHASE3), 3000);
+	}
+	else
+	{
+		G_AddVoiceEvent(commander, Q_irand(EV_DETECTED1, EV_DETECTED5), 3000);
+	}
+	// nobody else in the squad talks over the order
+	if (commander->NPC->group)
+	{
+		commander->NPC->group->speechDebounceTime = now + Q_irand(2000, 4000);
+	}
+	groupSpeechDebounceTime[commander->client->playerTeam] = now + Q_irand(2000, 4000);
+
+	int acks = 0;
+	for (int i = 0; i < num; i++)
+	{
+		const gentity_t* ent = &g_entities[i];
+		if (!Squad_IsMember(ent, now) || ent->enemy->s.number != t)
+		{
+			continue;
+		}
+		squad_advanceUntil[i] = 0; // fresh start: nobody keeps an old slot
+		if (ent == commander
+			|| DistanceSquared(ent->r.currentOrigin, commander->r.currentOrigin) > SQUAD_CMD_RANGE * SQUAD_CMD_RANGE)
+		{
+			continue;
+		}
+		squad_ackAt[i] = now + Q_irand(500, 1100);
+		squad_ackTarget[i] = t;
+		acks++;
+	}
+	// the commander stays back and shoots; the first one goes in after the answers
+	squad_restUntil[commander->s.number] = now + Q_irand(8000, 12000);
+	squad_nextPromote[t] = now + 1500;
+	squad_cmdFirst[t] = qtrue;
+	squad_advancers[t] = 0;
+	squad_cmdOwner[t] = commander->s.number + 1;
+	squad_fallbackUntil[t] = 0;
+	squad_reorderAt[t] = 0;
+
+	if (g_squadDebug.integer)
+	{
+		Com_Printf("SQUADCMD %d t=%d commander=%d(%s %s) rank=%d anim=%d acks=%d\n", now, t, commander->s.number,
+			commander->NPC_type ? commander->NPC_type : "", commander->targetname ? commander->targetname : "",
+			(int)(commander->NPC->rank), cmd_anim, acks);
+	}
+}
+
+// The commander of the squad on target t was killed: everyone falls back for a moment, one of them calls
+// "take cover", and the next-highest rank gives a new order when the fallback ends
+static void Squad_CommanderDown(const int t, const int now, const int num)
+{
+	squad_fallbackUntil[t] = now + Q_irand(2500, 3500);
+	squad_reorderAt[t] = squad_fallbackUntil[t];
+	squad_nextPromote[t] = squad_fallbackUntil[t] + 2000; // the new order hands out the slots again
+	squad_advancers[t] = 0;
+
+	gentity_t* caller = NULL;
+	for (int i = 0; i < num; i++)
+	{
+		gentity_t* ent = &g_entities[i];
+		if (!Squad_IsMember(ent, now) || ent->enemy->s.number != t)
+		{
+			continue;
+		}
+		squad_advanceUntil[i] = 0;
+		squad_ackAt[i] = 0;
+		if (!caller && ent->client->playerTeam != NPCTEAM_PLAYER)
+		{
+			caller = ent;
+		}
+	}
+	if (caller && !in_camera)
+	{
+		G_AddVoiceEvent(caller, Q_irand(EV_COVER1, EV_COVER5), 3000);
+		if (caller->NPC->group)
+		{
+			caller->NPC->group->speechDebounceTime = now + Q_irand(2000, 3000);
+		}
+		groupSpeechDebounceTime[caller->client->playerTeam] = now + Q_irand(2000, 3000);
+	}
+	if (g_squadDebug.integer)
+	{
+		Com_Printf("SQUADDOWN %d t=%d fallback until %d caller=%d\n", now, t, squad_fallbackUntil[t],
+			caller ? caller->s.number : -1);
+	}
+}
+
+// qtrue while the squad on self's target falls back after its commander was killed
+static qboolean Squad_FallingBack(const gentity_t* self)
+{
+	if (!g_squadTactics.integer || !self || !self->NPC || !self->enemy)
+	{
+		return qfalse;
+	}
+	const int n = self->s.number;
+	if (squad_lastThink[n] <= 0 || squad_lastThink[n] < level.time - 500)
+	{
+		return qfalse;
+	}
+	return squad_fallbackUntil[self->enemy->s.number] > level.time ? qtrue : qfalse;
+}
+
+// qtrue while self (an enemy NPC taking part in squad tactics) is at or below g_squadWoundedHealth percent health
+static qboolean Squad_Wounded(const gentity_t* self)
+{
+	if (!g_squadTactics.integer || !self || !self->NPC || !self->client || !self->enemy
+		|| self->client->playerTeam == NPCTEAM_PLAYER || self->client->ps.stats[STAT_MAX_HEALTH] <= 0 || self->health <= 0)
+	{
+		return qfalse;
+	}
+	const int n = self->s.number;
+	if (squad_lastThink[n] <= 0 || squad_lastThink[n] < level.time - 500)
+	{
+		return qfalse;
+	}
+	int pct = g_squadWoundedHealth.integer;
+	if (pct <= 0)
+	{
+		return qfalse; // 0 = off
+	}
+	if (pct > 90)
+	{
+		pct = 90;
+	}
+	return self->health * 100 <= self->client->ps.stats[STAT_MAX_HEALTH] * pct ? qtrue : qfalse;
+}
+
+// How far self backs off from its target right now (0 = it doesn't): squad fallback or badly hurt
+static float Squad_FallBackDist(const gentity_t* self)
+{
+	if (Squad_Wounded(self) == qtrue)
+	{
+		return SQUAD_WOUNDED_DIST;
+	}
+	return Squad_FallingBack(self) == qtrue ? SQUAD_FALLBACK_DIST : 0.0f;
+}
+
+// Once per frame: count gunners and advancers per target, release dead/expired slots, fill free ones
+static void Squad_Update()
+{
+	const int now = level.time;
+	if (now == squad_cacheTime)
+	{
+		return;
+	}
+	if (now < squad_cacheTime)
+	{
+		Squad_Reset();
+	}
+	squad_cacheTime = now;
+
+	static int best[MAX_GENTITIES];
+	static float best_dist[MAX_GENTITIES];
+	static int cmd_best[MAX_GENTITIES]; // per target: who gives the attack order
+	static int cmd_score[MAX_GENTITIES];
+	static float cmd_back[MAX_GENTITIES];
+	memset(squad_advancers, 0, sizeof squad_advancers);
+	memset(squad_members, 0, sizeof squad_members);
+	for (int b = 0; b < MAX_GENTITIES; b++)
+	{
+		best[b] = -1;
+		cmd_best[b] = -1;
+	}
+
+	const int num = level.num_entities < MAX_GENTITIES ? level.num_entities : MAX_GENTITIES;
+	for (int i = 0; i < num; i++)
+	{
+		const gentity_t* ent = &g_entities[i];
+		if (!Squad_IsMember(ent, now))
+		{
+			if (squad_advanceUntil[i] > now)
+			{
+				// an advancer died or stopped fighting: the next one goes after a short pause
+				const int t = squad_advanceTarget[i];
+				if (t >= 0 && t < MAX_GENTITIES)
+				{
+					squad_nextPromote[t] = now + Q_irand(1000, 2000);
+				}
+			}
+			squad_advanceUntil[i] = 0;
+			squad_ackAt[i] = 0;
+			squad_woundedSaid[i] = qfalse;
+			continue;
+		}
+
+		const int t = ent->enemy->s.number;
+		squad_members[t]++;
+		const float d = DistanceSquared(ent->r.currentOrigin, ent->enemy->r.currentOrigin);
+
+		if (squad_ackAt[i] && now >= squad_ackAt[i])
+		{
+			// answer the commander's order
+			squad_ackAt[i] = 0;
+			if (squad_ackTarget[i] == t && !in_camera)
+			{
+				Squad_PlaySignal(&g_entities[i], Squad_AckAnim(ent, ent->enemy));
+			}
+		}
+		if (ent->client->playerTeam != NPCTEAM_PLAYER)
+		{
+			// commander: highest rank, then the AI group's commander, then the one furthest back
+			int score = (int)(ent->NPC->rank) * 2;
+			if (ent->NPC->group && ent->NPC->group->commander == ent)
+			{
+				score++;
+			}
+			if (cmd_best[t] == -1 || score > cmd_score[t] || (score == cmd_score[t] && d > cmd_back[t]))
+			{
+				cmd_best[t] = i;
+				cmd_score[t] = score;
+				cmd_back[t] = d;
+			}
+		}
+
+		// badly hurt: calls for cover once, gives up its slot and never takes one
+		if (Squad_Wounded(ent) == qtrue)
+		{
+			if (!squad_woundedSaid[i])
+			{
+				squad_woundedSaid[i] = qtrue;
+				if (!in_camera)
+				{
+					G_AddVoiceEvent(ent, Q_irand(EV_COVER1, EV_COVER5), 3000);
+				}
+				if (g_squadDebug.integer)
+				{
+					Com_Printf("SQUADHURT %d ent=%d health=%d/%d\n", now, i, ent->health, ent->client->ps.stats[STAT_MAX_HEALTH]);
+				}
+			}
+			if (squad_advanceUntil[i] > now)
+			{
+				squad_nextPromote[t] = now + Q_irand(1000, 2000);
+			}
+			squad_advanceUntil[i] = 0;
+			continue;
+		}
+		squad_woundedSaid[i] = qfalse;
+
+		if (squad_advanceUntil[i] > now && squad_advanceTarget[i] == t)
+		{
+			squad_advancers[t]++;
+			continue;
+		}
+		if (squad_advanceUntil[i] != 0)
+		{
+			// slot ran out (or the target changed): rest a while and let another one go
+			squad_advanceUntil[i] = 0;
+			squad_restUntil[i] = now + Q_irand(6000, 10000);
+		}
+		if (squad_restUntil[i] > now)
+		{
+			continue;
+		}
+
+		if (best[t] == -1 || d < best_dist[t])
+		{
+			best[t] = i;
+			best_dist[t] = d;
+		}
+	}
+
+	// a squad of more than 2 starts fighting a target: its commander gives the attack order
+	const qboolean commands = !in_camera; // part of g_squadTactics (Squad_Update only runs with it on)
+	for (int t = 0; t < num; t++)
+	{
+		// the commander who gave the order on this target was killed: fall back, then a new order
+		if (squad_cmdOwner[t])
+		{
+			const gentity_t* cmdr = &g_entities[squad_cmdOwner[t] - 1];
+			if (!cmdr->inuse || !cmdr->NPC || cmdr->health <= 0)
+			{
+				squad_cmdOwner[t] = 0;
+				if (squad_members[t] >= 2)
+				{
+					Squad_CommanderDown(t, now, num);
+				}
+			}
+			else if (squad_members[t] == 0)
+			{
+				squad_cmdOwner[t] = 0; // fight over
+			}
+		}
+		if (squad_reorderAt[t] && now >= squad_reorderAt[t])
+		{
+			squad_reorderAt[t] = 0;
+			if (commands && cmd_best[t] != -1 && squad_members[t] >= 2)
+			{
+				Squad_IssueCommand(&g_entities[cmd_best[t]], t, now, num);
+				squad_lastOrder[t] = now + 1;
+			}
+		}
+
+		if (squad_members[t] < SQUAD_CMD_MIN_MEMBERS)
+		{
+			continue;
+		}
+		if (commands && cmd_best[t] != -1
+			&& (squad_lastLarge[t] == 0 || squad_lastLarge[t] < now - SQUAD_CMD_QUIET_TIME)
+			&& (squad_lastOrder[t] == 0 || now - squad_lastOrder[t] >= Squad_CommandCooldown()))
+		{
+			Squad_IssueCommand(&g_entities[cmd_best[t]], t, now, num);
+			squad_lastOrder[t] = now + 1;
+		}
+		squad_lastLarge[t] = now + 1;
+	}
+
+	const int max_adv = Squad_MaxAdvancers();
+	for (int t = 0; t < num; t++)
+	{
+		if (best[t] == -1 || squad_advancers[t] >= max_adv || now < squad_nextPromote[t])
+		{
+			continue;
+		}
+		if (squad_members[t] <= max_adv)
+		{
+			squad_cmdFirst[t] = qfalse;
+			continue; // small group: everyone may advance anyway
+		}
+		const int i = best[t];
+		squad_advanceUntil[i] = now + Q_irand(8000, 15000);
+		squad_advanceTarget[i] = t;
+		squad_nextPromote[t] = now + Q_irand(1000, 2000);
+		if (squad_cmdFirst[t])
+		{
+			// first one after an order: he goes in alone for a few seconds before the next slot opens
+			squad_cmdFirst[t] = qfalse;
+			squad_nextPromote[t] = now + Q_irand(4000, 6000);
+		}
+		if (squad_advancers[t] > 0)
+		{
+			ST_Speech(&g_entities[i], SPEECH_CHASE, 0.5f); // "move in" while another one is already pushing
+		}
+		squad_advancers[t]++;
+	}
+	// g_squadDebug 1: once a second, each target's gunners (A = advancer, H = holder, R = resting holder, W = wounded) and distance
+	static int next_debug = 0;
+	if (g_squadDebug.integer && now >= next_debug)
+	{
+		next_debug = now + 1000;
+		for (int t = 0; t < num; t++)
+		{
+			if (squad_members[t] <= 0)
+			{
+				continue;
+			}
+			char line[1024];
+			Com_sprintf(line, sizeof line, "SQUAD %d t=%d members=%d adv=%d:", now, t, squad_members[t], squad_advancers[t]);
+			for (int i = 0; i < num; i++)
+			{
+				const gentity_t* ent = &g_entities[i];
+				if (!Squad_IsMember(ent, now) || ent->enemy->s.number != t)
+				{
+					continue;
+				}
+				const char role = Squad_Wounded(ent) == qtrue ? 'W' : squad_members[t] <= max_adv || squad_advanceUntil[i] > now ? 'A' : squad_restUntil[i] > now ? 'R' : 'H';
+				Q_strcat(line, sizeof line, va(" %d%c%d", i, role, (int)(Distance(ent->r.currentOrigin, ent->enemy->r.currentOrigin))));
+			}
+			Com_Printf("%s\n", line);
+		}
+	}
+}
+
+// qtrue = fight as before (push in when the AI wants to); qfalse = hold position
+static qboolean Squad_MayAdvance(const gentity_t* self)
+{
+	if (!g_squadTactics.integer || !self || !self->NPC || !self->client || !self->enemy)
+	{
+		return qtrue;
+	}
+	const int n = self->s.number;
+	if (squad_lastThink[n] <= 0 || squad_lastThink[n] < level.time - 500)
+	{
+		return qtrue; // not taking part (other AI calling into the stormtrooper code)
+	}
+	Squad_Update();
+
+	if (Squad_Wounded(self) == qtrue)
+	{
+		return qfalse; // badly hurt: never pushes in, whatever the squad size
+	}
+	const int t = self->enemy->s.number;
+	if (squad_members[t] <= Squad_MaxAdvancers())
+	{
+		return qtrue;
+	}
+	return squad_advanceUntil[n] > level.time && squad_advanceTarget[n] == t ? qtrue : qfalse;
+}
+
+// Holders step away from a squadmate standing right next to them (uses the NPC/ucmd globals)
+static void Squad_KeepApart()
+{
+	const int n = NPCS.NPC->s.number;
+	if (squad_spreadUntil[n] > level.time)
+	{
+		usercmd_t test = NPCS.ucmd;
+		G_UcmdMoveForDir(NPCS.NPC, &test, squad_spreadDir[n]);
+		if (NPC_MoveDirClear(test.forwardmove, test.rightmove, qfalse) == qtrue)
+		{
+			NPCS.ucmd.forwardmove = test.forwardmove;
+			NPCS.ucmd.rightmove = test.rightmove;
+		}
+		else
+		{
+			squad_spreadUntil[n] = 0;
+		}
+		return;
+	}
+	if (!TIMER_Done(NPCS.NPC, "squadSpreadCheck"))
+	{
+		return;
+	}
+	TIMER_Set(NPCS.NPC, "squadSpreadCheck", Q_irand(400, 700));
+
+	vec3_t mins, maxs;
+	for (int k = 0; k < 3; k++)
+	{
+		mins[k] = NPCS.NPC->r.currentOrigin[k] - SQUAD_SPREAD_DIST;
+		maxs[k] = NPCS.NPC->r.currentOrigin[k] + SQUAD_SPREAD_DIST;
+	}
+	static int list[MAX_GENTITIES]; // entity numbers (MP EntitiesInBox fills ints); static, not on the stack (C6262); the game runs on one thread
+	const int count = trap->EntitiesInBox(mins, maxs, list, MAX_GENTITIES);
+	const gentity_t* closest = NULL;
+	float closest_dist = SQUAD_SPREAD_DIST * SQUAD_SPREAD_DIST;
+	for (int k = 0; k < count; k++)
+	{
+		const gentity_t* other = &g_entities[list[k]];
+		if (other == NPCS.NPC || !other->client || !other->NPC || other->health <= 0
+			|| other->client->playerTeam != NPCS.NPC->client->playerTeam)
+		{
+			continue;
+		}
+		const float d = DistanceHorizontalSquared(other->r.currentOrigin, NPCS.NPC->r.currentOrigin);
+		if (d < closest_dist)
+		{
+			closest_dist = d;
+			closest = other;
+		}
+	}
+	if (!closest)
+	{
+		return;
+	}
+
+	vec3_t away;
+	VectorSubtract(NPCS.NPC->r.currentOrigin, closest->r.currentOrigin, away);
+	away[2] = 0.0f;
+	if (VectorNormalize(away) < 1.0f)
+	{
+		// standing on the same spot: pick a side
+		AngleVectors(NPCS.NPC->r.currentAngles, NULL, away, NULL);
+		away[2] = 0.0f;
+		VectorNormalize(away);
+		if (Q_irand(0, 1))
+		{
+			VectorScale(away, -1.0f, away);
+		}
+	}
+	VectorCopy(away, squad_spreadDir[n]);
+	squad_spreadUntil[n] = level.time + Q_irand(400, 800);
+}
+
+// Falling back (normal AI, uses the NPC/ucmd globals): walk straight away from the target, or sideways if blocked
+static void Squad_FallBackMove()
+{
+	vec3_t away;
+	VectorSubtract(NPCS.NPC->r.currentOrigin, NPCS.NPC->enemy->r.currentOrigin, away);
+	away[2] = 0.0f;
+	if (VectorNormalize(away) < 1.0f)
+	{
+		return;
+	}
+	usercmd_t test = NPCS.ucmd;
+	G_UcmdMoveForDir(NPCS.NPC, &test, away);
+	if (NPC_MoveDirClear(test.forwardmove, test.rightmove, qfalse) == qtrue)
+	{
+		NPCS.ucmd.forwardmove = test.forwardmove;
+		NPCS.ucmd.rightmove = test.rightmove;
+		return;
+	}
+	// blocked behind: at least get out of the line of fire
+	if (NPC_MoveDirClear(0, 127, qfalse) == qtrue)
+	{
+		NPCS.ucmd.rightmove = 127;
+	}
+	else if (NPC_MoveDirClear(0, -127, qfalse) == qtrue)
+	{
+		NPCS.ucmd.rightmove = -127;
+	}
+}
+
+// Suppressing fire: qtrue when self (a holder) should fire a burst at aim_at although it has no clear shot.
+// Only while a squadmate is advancing on the same target, only at the spot where self last saw the target and
+// only while the target is still near that spot (so nobody tracks him through walls), never with explosives.
+static qboolean Squad_ShouldSuppress(const gentity_t* self, vec3_t aim_at)
+{
+	if (!g_squadTactics.integer || !self || !self->NPC || !self->client || !self->enemy
+		|| self->enemy->health <= 0)
+	{
+		return qfalse;
+	}
+	if (Squad_MayAdvance(self) == qtrue || Squad_FallingBack(self) == qtrue)
+	{
+		return qfalse; // advancers fight as before; not taking part; falling back
+	}
+	if (squad_advancers[self->enemy->s.number] <= 0)
+	{
+		return qfalse; // nobody is moving in, nothing to cover
+	}
+	switch (self->s.weapon)
+	{
+	case WP_NONE:
+	case WP_SABER:
+	case WP_MELEE:
+	case WP_ROCKET_LAUNCHER:
+	case WP_THERMAL:
+	case WP_TRIP_MINE:
+	case WP_DET_PACK:
+	case WP_FLECHETTE:
+	case WP_CONCUSSION:
+	case WP_DISRUPTOR:
+		return qfalse;
+	default:
+		break;
+	}
+	const gNPC_t* info = self->NPC;
+	if (info->enemyLastSeenTime <= 0 || level.time - info->enemyLastSeenTime > 6000
+		|| DistanceSquared(self->enemy->r.currentOrigin, info->enemyLastSeenLocation) > 256.0f * 256.0f)
+	{
+		return qfalse;
+	}
+
+	// bursts: fire 0.7-1.4 s, then pause 1.2-2.5 s
+	if (TIMER_Done(self, "squadSuppressBurst"))
+	{
+		if (!TIMER_Done(self, "squadSuppressPause"))
+		{
+			return qfalse;
+		}
+		const int burst = Q_irand(700, 1400);
+		TIMER_Set(self, "squadSuppressBurst", burst);
+		TIMER_Set(self, "squadSuppressPause", burst + Q_irand(1200, 2500));
+		if (g_squadDebug.integer)
+		{
+			Com_Printf("SQUADSUP %d ent=%d burst=%d\n", level.time, self->s.number, burst);
+		}
+	}
+
+	// don't shoot an ally or the wall right in front of us
+	vec3_t muzzle;
+	CalcEntitySpot(self, SPOT_HEAD, muzzle);
+	trace_t tr;
+	trap->Trace(&tr, muzzle, vec3_origin, vec3_origin, info->enemyLastSeenLocation, self->s.number, MASK_SHOT, qfalse, 0, 0);
+	if (tr.entityNum >= 0 && tr.entityNum < ENTITYNUM_WORLD)
+	{
+		const gentity_t* hit = &g_entities[tr.entityNum];
+		if (hit->client && hit->client->playerTeam == self->client->playerTeam)
+		{
+			return qfalse;
+		}
+	}
+	if (DistanceSquared(tr.endpos, muzzle) < 128.0f * 128.0f)
+	{
+		return qfalse;
+	}
+	VectorCopy(info->enemyLastSeenLocation, aim_at);
+	return qtrue;
+}
+
 void ST_MarkToCover(const gentity_t* self)
 {
 	if (!self || !self->NPC)
@@ -2341,6 +3114,24 @@ static void ST_CheckFireState(void)
 		return;
 	}
 
+	// Squad tactics: suppressing fire at the target's cover while a squadmate moves in (SP port, DH 2026-11-11)
+	{
+		vec3_t suppress_at;
+		if (!hitAlly && Squad_ShouldSuppress(NPCS.NPC, suppress_at) == qtrue)
+		{
+			vec3_t muzzle, dir, angles;
+			CalcEntitySpot(NPCS.NPC, SPOT_HEAD, muzzle);
+			VectorSubtract(suppress_at, muzzle, dir);
+			VectorNormalize(dir);
+			vectoangles(dir, angles);
+			NPCS.NPCInfo->desiredYaw = angles[YAW];
+			NPCS.NPCInfo->desiredPitch = angles[PITCH];
+			shoot = qtrue;
+			faceEnemy = qfalse;
+			return;
+		}
+	}
+
 	if (NPCS.NPCInfo->squadState == SQUAD_RETREAT || NPCS.NPCInfo->squadState == SQUAD_TRANSITION || NPCS.NPCInfo->squadState ==
 		SQUAD_SCOUT)
 	{
@@ -2497,7 +3288,7 @@ static void ST_TrackEnemy(const gentity_t* self, vec3_t enemy_pos)
 	}
 }
 
-static int ST_ApproachEnemy(const gentity_t* self)
+static int ST_ApproachEnemy_Base(const gentity_t* self)
 {
 	TIMER_Set(self, "attackDelay", Q_irand(250, 500));
 	//TIMER_Set( self, "duck", -1 );
@@ -2508,6 +3299,17 @@ static int ST_ApproachEnemy(const gentity_t* self)
 	NPC_FreeCombatPoint(self->NPC->combatPoint, qfalse);
 	//return the relevant combat point flags
 	return CP_CLEAR | CP_CLOSEST;
+}
+
+// Squad tactics: holders look for cover with a clear shot instead of the point closest to the enemy
+static int ST_ApproachEnemy(const gentity_t* self)
+{
+	const int cp_flags = ST_ApproachEnemy_Base(self);
+	if (Squad_MayAdvance(self) == qfalse)
+	{
+		return CP_CLEAR | CP_COVER;
+	}
+	return cp_flags;
 }
 
 static void ST_HuntEnemy(const gentity_t* self)
@@ -2578,7 +3380,7 @@ void ST_TransferMoveGoal(const gentity_t* self, const gentity_t* other)
 	TIMER_Set(self, "stand", Q_irand(1000, 3000));
 }
 
-static int ST_GetCPFlags(void)
+static int ST_GetCPFlags_Base(void)
 {
 	int cpFlags = 0;
 
@@ -2702,6 +3504,21 @@ static int ST_GetCPFlags(void)
 	}
 
 	return cpFlags;
+}
+
+// Squad tactics: holders don't pick combat points that approach the enemy; they take cover with a clear shot (SP port)
+static int ST_GetCPFlags(void)
+{
+	int cp_flags = ST_GetCPFlags_Base();
+	if (NPCS.NPC && Squad_MayAdvance(NPCS.NPC) == qfalse)
+	{
+		cp_flags &= ~(CP_APPROACH_ENEMY | CP_CLOSEST);
+		if (!(cp_flags & (CP_FLEE | CP_RETREAT)))
+		{
+			cp_flags |= CP_COVER | CP_CLEAR;
+		}
+	}
+	return cp_flags;
 }
 
 /*
@@ -4035,6 +4852,26 @@ void NPC_BSST_Attack(void)
 		NPCS.NPCInfo->goalEntity = enemyLOS ? NULL : NPCS.NPC->enemy;
 	}
 
+	// Squad tactics (SP port, DH 2026-11-11): a holder that can see the enemy doesn't walk at him; it holds (and ducks) where
+	// it is. After the squad commander was killed everyone backs off for a moment instead; a badly hurt NPC keeps its distance.
+	{
+		const float fall_back_dist = Squad_FallBackDist(NPCS.NPC);
+		if (fall_back_dist > 0.0f && enemyDist < fall_back_dist * fall_back_dist)
+		{
+			doMove = qfalse;
+			Squad_FallBackMove();
+		}
+		else if (doMove && enemyLOS && NPCS.NPCInfo->goalEntity
+			&& enemyDist > SQUAD_HOLD_MIN_DIST * SQUAD_HOLD_MIN_DIST && Squad_MayAdvance(NPCS.NPC) == qfalse
+			&& !(NPCS.NPCInfo->goalEntity == NPCS.NPCInfo->tempGoal && NPCS.NPCInfo->combatPoint >= 0 && NPCS.NPCInfo->combatPoint < MAX_COMBAT_POINTS
+				&& DistanceSquared(level.combatPoints[NPCS.NPCInfo->combatPoint].origin, NPCS.NPC->enemy->r.currentOrigin)
+				>= SQUAD_HOLD_MIN_DIST * SQUAD_HOLD_MIN_DIST))
+		{
+			doMove = qfalse;
+			Squad_KeepApart();
+		}
+	}
+
 	if (NPCS.NPC->client->ps.weaponTime && NPCS.NPC->s.weapon == WP_ROCKET_LAUNCHER)
 	{
 		doMove = qfalse;
@@ -5356,6 +6193,18 @@ static void Gunner_FireIfClearShot(const float enemy_dist)
 	else
 	{
 		NPC_AimAdjust(-1);
+		// Squad tactics: suppressing fire at the target's cover while a squadmate moves in (SP port)
+		{
+			vec3_t suppress_at;
+			if (Squad_ShouldSuppress(NPCS.NPC, suppress_at) == qtrue)
+			{
+				WeaponThink();
+				if (d_combatinfo.integer)
+				{
+					Com_Printf("Gunner suppresses\n");
+				}
+			}
+		}
 	}
 }
 
@@ -5644,7 +6493,46 @@ static void Gunner_CombatDistance(const float enemy_dist)
 	const qboolean retreating = TIMER_Done(NPCS.NPC, "gunnerRetreat") == qfalse;
 	const qboolean holding = TIMER_Done(NPCS.NPC, "gunnerHold") == qfalse;
 
-	if (!advancing && !retreating && !holding)
+	// Squad tactics (SP port): a holder never pushes in. It backs off when the enemy gets close, else holds and strafes.
+	// After the squad commander was killed everyone backs off for a moment; a badly hurt NPC keeps its distance.
+	const float fall_back_dist = Squad_FallBackDist(NPCS.NPC);
+	const qboolean falling_back = fall_back_dist > 0.0f && enemy_dist < fall_back_dist ? qtrue : qfalse;
+	const qboolean squad_holder = falling_back || Squad_MayAdvance(NPCS.NPC) == qfalse ? qtrue : qfalse;
+	if (squad_holder)
+	{
+		if (advancing)
+		{
+			TIMER_Set(NPCS.NPC, "gunnerAdvance", 0);
+		}
+		if (falling_back)
+		{
+			if (holding)
+			{
+				TIMER_Set(NPCS.NPC, "gunnerHold", 0);
+			}
+			if (!retreating)
+			{
+				TIMER_Set(NPCS.NPC, "gunnerRetreat", Q_irand(600, 1000));
+			}
+		}
+		else if (!retreating && !holding)
+		{
+			if (enemy_dist < SQUAD_HOLD_MIN_DIST)
+			{
+				TIMER_Set(NPCS.NPC, "gunnerRetreat", Q_irand(600, 1200));
+			}
+			else
+			{
+				TIMER_Set(NPCS.NPC, "gunnerHold", Q_irand(700, 1500));
+			}
+		}
+		if (TIMER_Done(NPCS.NPC, "gunnerRetreat") == qtrue)
+		{
+			Squad_KeepApart();
+		}
+	}
+
+	if (!squad_holder && !advancing && !retreating && !holding)
 	{
 		// Pick a new move. Aggressive NPCs (smart mode raises aggression during the fight) push in more.
 		const int aggression = NPCS.NPCInfo->stats.aggression;
@@ -5985,6 +6873,7 @@ void NPC_BSST_Default(void)
 	}
 	else
 	{//have an enemy
+		Squad_Stamp(NPCS.NPC); // squad tactics (SP port, DH 2026-11-11)
 		if (NPCS.NPC->enemy->client &&
 			(NPCS.NPC->enemy->client->NPC_class == CLASS_UGNAUGHT || NPCS.NPC->enemy->client->NPC_class == CLASS_JAWA) &&
 			NPCS.NPC->enemy->enemy != NPCS.NPC

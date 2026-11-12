@@ -28,7 +28,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "q_profile.h"
 #include "anims.h"
 #include "g_functions.h"
-#include "say.h"
+#include "game/say.h"
 #include "Q3_Interface.h"
 #include "g_vehicles.h"
 #include "g_pazaak.h"
@@ -971,6 +971,8 @@ static void NPC_HandleAIFlags()
 		}
 	}
 }
+
+extern void NPC_ObstacleClimb();
 
 static void NPC_AvoidWallsAndCliffs()
 {
@@ -2157,6 +2159,9 @@ static void NPC_ExecuteBState(const gentity_t* self) //, int msec )
 
 	//cliff and wall avoidance
 	NPC_AvoidWallsAndCliffs();
+
+	// stuck against something on the way: climb / jump onto it or go round it (g_obstacleClimb, NPC_move.cpp)
+	NPC_ObstacleClimb();
 
 	// run the bot through the server like it was a real client
 	//=== Save the ucmd for the second no-think Pmove ============================

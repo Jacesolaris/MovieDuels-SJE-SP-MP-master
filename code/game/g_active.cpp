@@ -11919,7 +11919,11 @@ extern void G_Shop_PlayerThink(gentity_t* ent);
 
 void ClientEndFrame(gentity_t* ent)
 {
-	if (ent->s.number == 0 && ent->client)
+	if (!ent->client)
+	{
+		return; // only clients come here (C6011)
+	}
+	if (ent->s.number == 0)
 	{
 		G_Shop_PlayerThink(ent); // the shop (2026-11-01, g_pazaak.cpp): credits kept for the next level, the open menu
 	}

@@ -31,7 +31,7 @@ constexpr auto JPEG_IMAGE_QUALITY = 95;
 //	(EF1 behaviour). I should maybe time/date check them though?
 
 #include "server.h"
-#include "../qcommon/stringed_ingame.h"
+#include "qcommon/stringed_ingame.h"
 #include "../game/statindex.h"
 #include "../game/weapons.h"
 #include "../game/g_items.h"

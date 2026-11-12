@@ -46,7 +46,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 static std::recursive_mutex s_weMutex;
 #define WE_LOCK() std::unique_lock<std::recursive_mutex> weLock(s_weMutex, std::defer_lock); if (R_SmpActive()) weLock.lock()
 
-#include "glext.h"
+#include "rd-vanilla/glext.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // Defines

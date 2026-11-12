@@ -26,7 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "q_profile.h"
 #include "q_jobs.h"
 #include "../rd-common/tr_common.h"
-#include "glext.h"
+#include "rd-vanilla/glext.h"
 
 #include <map>
 #include <algorithm>

@@ -91,6 +91,7 @@ extern qboolean PM_SaberInMassiveBounce(int move);
 extern qboolean InFront(vec3_t spot, vec3_t from, vec3_t fromAngles, float threshHold = 0.0f);
 extern void WP_ForcePowerDrain(const gentity_t* self, forcePowers_t force_power, int override_amt);
 extern qboolean ValidAnimFileIndex(int index);
+extern int G_AnimGLAOffset(int file_index, int gla_slot);
 extern qboolean PM_ControlledByPlayer();
 extern qboolean PM_KickingAnim(int anim);
 extern qboolean PM_DroidMelee(int npc_class);
@@ -6066,7 +6067,7 @@ int PM_LegsAnimForFrame(gentity_t* ent, const int legs_frame)
 		return -1;
 
 	const animation_t* animations = level.knownAnimFileSets[ent->client->clientInfo.animFileIndex].animations;
-	const int gla_index = gi.G2API_GetAnimIndex(&ent->ghoul2[0]);
+	const int gla_index = gi.G2API_GetAnimIndex(&ent->ghoul2[0]) ? 1 : 0; // offset -> GLA slot (item 355)
 
 	for (int animation = 0; animation < BOTH_CIN_1; animation++) //first anim after last legs
 	{
@@ -6156,7 +6157,7 @@ int PM_TorsoAnimForFrame(gentity_t* ent, const int torso_frame)
 		return -1;
 
 	const animation_t* animations = level.knownAnimFileSets[ent->client->clientInfo.animFileIndex].animations;
-	const int gla_index = gi.G2API_GetAnimIndex(&ent->ghoul2[0]);
+	const int gla_index = gi.G2API_GetAnimIndex(&ent->ghoul2[0]) ? 1 : 0; // offset -> GLA slot (item 355)
 
 	for (int animation = 0; animation < LEGS_TURN1; animation++) //first legs only anim
 	{
@@ -7150,7 +7151,8 @@ void PM_SetAnimFinal(int* torso_anim, int* legs_anim,
 			animSpeed *= gent->client->ps.forceUpperAnimSpeed;
 		}
 
-		gi.G2API_SetAnimIndex(&gent->ghoul2[gent->playerModel], cur_anim.glaIndex);
+		gi.G2API_SetAnimIndex(&gent->ghoul2[gent->playerModel],
+			G_AnimGLAOffset(gent->client->clientInfo.animFileIndex, cur_anim.glaIndex)); // item 355
 		gi.G2API_SetBoneAnimIndex(&gent->ghoul2[gent->playerModel], tors_bone,
 			anim_start,
 			anim_end,
@@ -7198,7 +7200,8 @@ void PM_SetAnimFinal(int* torso_anim, int* legs_anim,
 			animSpeed *= gent->client->ps.forceLowerAnimSpeed;
 		}
 
-		gi.G2API_SetAnimIndex(&gent->ghoul2[gent->playerModel], cur_anim.glaIndex);
+		gi.G2API_SetAnimIndex(&gent->ghoul2[gent->playerModel],
+			G_AnimGLAOffset(gent->client->clientInfo.animFileIndex, cur_anim.glaIndex)); // item 355
 		gi.G2API_SetBoneAnimIndex(&gent->ghoul2[gent->playerModel], body_bone,
 			anim_start,
 			anim_end,
@@ -11635,24 +11638,24 @@ void PM_TorsoAnimation()
 									{
 										if (flags.isJango == qtrue)
 										{
-											PM_SetAnim(pm, SETANIM_TORSO, TORSO_WEAPONREST2_JANGO, SETANIM_FLAG_NORMAL);
+											PM_SetAnim(pm, SETANIM_TORSO, TORSO_WEAPONREADY2_JANGO, SETANIM_FLAG_NORMAL);
 										}
 										else if (flags.isCloneTrooper == qtrue)
 										{
-											PM_SetAnim(pm, SETANIM_TORSO, TORSO_WEAPONREST2_CLO, SETANIM_FLAG_NORMAL);
+											PM_SetAnim(pm, SETANIM_TORSO, TORSO_WEAPONREADY2_CLO, SETANIM_FLAG_NORMAL);
 										}
 										else if (flags.isRebels == qtrue)
 										{
-											PM_SetAnim(pm, SETANIM_TORSO, TORSO_WEAPONREST2_REB, SETANIM_FLAG_NORMAL);
+											PM_SetAnim(pm, SETANIM_TORSO, TORSO_WEAPONREADY2_REB, SETANIM_FLAG_NORMAL);
 										}
 										else
 										{
-											PM_SetAnim(pm, SETANIM_TORSO, TORSO_WEAPONREST2, SETANIM_FLAG_NORMAL);
+											PM_SetAnim(pm, SETANIM_TORSO, TORSO_WEAPONREADY2, SETANIM_FLAG_NORMAL);
 										}
 									}
 									else
 									{
-										PM_SetAnim(pm, SETANIM_TORSO, TORSO_WEAPONREST2, SETANIM_FLAG_NORMAL);
+										PM_SetAnim(pm, SETANIM_TORSO, TORSO_WEAPONREADY2, SETANIM_FLAG_NORMAL);
 									}
 
 									PM_HandleGunnerAim(is_walking_and_blocking);

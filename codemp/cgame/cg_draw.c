@@ -7647,8 +7647,11 @@ static qboolean ForcePower_Valid(const int i)
 ===================
 CG_DrawForceSelect
 ===================
-*/static void CG_DrawForceSelect(void)
+*/extern void CG_ForceBind_Frame(void); // cg_consolecmds.c: SP's direct force power binds
+static void CG_DrawForceSelect(void)
 {
+	CG_ForceBind_Frame();
+
 	// Don't display if dead
 	if (cg.snap->ps.stats[STAT_HEALTH] <= 0)
 	{

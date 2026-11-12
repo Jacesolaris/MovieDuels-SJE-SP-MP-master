@@ -3354,6 +3354,8 @@ Touch_Item
 ===============
 */
 
+extern qboolean PM_RunningAnim(int anim);
+
 void Touch_Item(gentity_t* ent, gentity_t* other, trace_t* trace)
 {
 	int respawn = 0;
@@ -3417,6 +3419,21 @@ void Touch_Item(gentity_t* ent, gentity_t* other, trace_t* trace)
 	if (!BG_CanItemBeGrabbed(level.gametype, &ent->s, &other->client->ps))
 	{
 		return;
+	}
+
+	// SP g_AdvancedWeaponPickup: a gunner player (no saber) picks a weapon up only while holding Use and not running.
+	// MP: gunners only, never saber / Force users (DH 2026-11-11). The cgame skips predicting these pickups.
+	if (g_AdvancedWeaponPickup.integer &&
+		ent->item->giType == IT_WEAPON &&
+		ent->item->giTag != WP_SABER && ent->item->giTag != WP_BRYAR_PISTOL &&
+		!(other->r.svFlags & SVF_BOT) && !other->NPC &&
+		!BG_HasWeapon(other->client->ps.stats, WP_SABER))
+	{
+		if (!(other->client->pers.cmd.buttons & BUTTON_USE) || PM_RunningAnim(other->client->ps.legsAnim))
+		{
+			return;
+		}
+		G_SetAnim(other, NULL, SETANIM_TORSO, BOTH_BUTTON2, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 0);
 	}
 
 	if (other->client->NPC_class == CLASS_ATST ||

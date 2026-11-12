@@ -32,7 +32,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "tr_stl.h"
 
 #include <map>
-#include "../qcommon/sstring.h"	// #include <string>
+#include "qcommon/sstring.h"	// #include <string>
 
 using ShaderEntryPtrs_t = std::map<sstring_t, const char*>;
 using ShaderEntryPtr_size = ShaderEntryPtrs_t::size_type;

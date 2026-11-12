@@ -704,6 +704,13 @@ static void CG_TouchItem(centity_t* cent)
 
 	const gitem_t* item = &bg_itemlist[cent->currentState.modelIndex];
 
+	if (g_AdvancedWeaponPickup.integer && item->giType == IT_WEAPON &&
+		item->giTag != WP_SABER && item->giTag != WP_BRYAR_PISTOL &&
+		!BG_HasWeapon(cg.predictedPlayerState.stats, WP_SABER))
+	{// SP g_AdvancedWeaponPickup (gunners pick weapons up with Use, g_items.c Touch_Item): leave it to the server
+		return;
+	}
+
 	//Currently there is no reliable way of knowing if the client has touched a certain item before another if they are next to each other, or rather
 	//if the server has touched them in the same order. This results often in grabbing an item in the prediction and the server giving you the other
 	//item. So for now prediction of armor, health, and ammo is disabled.

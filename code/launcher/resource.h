@@ -36,3 +36,6 @@
 
 // the pk3 files every install has in MD (Assets/Text/GameFiles.txt): SETTINGS > Check installation, the warning on PLAY
 #define IDR_TEXT_GAMEFILES          504
+
+// outdated pk3 files that must not be in MD any more (Assets/Text/OldGameFiles.txt): the same check and warning
+#define IDR_TEXT_OLDGAMEFILES       505

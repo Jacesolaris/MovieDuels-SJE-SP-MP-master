@@ -1387,7 +1387,8 @@ static void ClientTimerActions(gentity_t* ent, const int msec)
 			ps->fd.forceRageRecoveryTime < level.time &&
 			!(ps->fd.forcePowersActive & (1 << FP_RAGE)))
 		{
-			if (ps->fd.forcePowerLevel[FP_HEAL] > FORCE_LEVEL_2 &&
+			if (g_autoHealthRegen.integer && // SP's Auto Health Regen setting (DH 2026-11-11)
+				ps->fd.forcePowerLevel[FP_HEAL] > FORCE_LEVEL_2 &&
 				ent->health < ps->stats[STAT_MAX_HEALTH])
 			{
 				ent->health++;
@@ -4629,6 +4630,8 @@ static void ClientThink_real(gentity_t* ent)
 			}
 		}
 
+		G_MissionDownThink(ent, ucmd); // (Missions: a downed player lies there; a player next to one revives him, g_target.c)
+
 		if (player_locked && !G_MissionInCutscene()) // (not kept while a mission's cutscene plays out unseen)
 		{
 			//players' controls are locked, a scripting thingy
@@ -5261,7 +5264,7 @@ static void ClientThink_real(gentity_t* ent)
 				}
 				else
 				{
-					client->ps.gravity = g_gravity.value;
+					client->ps.gravity = level.missionGravitySet ? level.missionGravity : g_gravity.value; // (Missions: target_gravity_change)
 				}
 			}
 		}

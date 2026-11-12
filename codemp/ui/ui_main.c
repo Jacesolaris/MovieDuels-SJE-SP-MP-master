@@ -37,7 +37,7 @@ USER INTERFACE MAIN
 
 #include "ghoul2/G2.h"
 #include "ui_local.h"
-#include "ui_pazaak.h"
+#include "ui/ui_pazaak.h"
 #include "qcommon/qfiles.h"
 #include "qcommon/game_version.h"
 #include "ui_force.h"
@@ -2369,8 +2369,8 @@ void UI_LoadMenus(const char* menuFile, const qboolean reset)
 	Com_Printf("----------------------- MovieDuels-SJE-MP -----------------------\n");
 	Com_Printf("-----------------------------------------------------------------\n");
 	Com_Printf("-------------------------- Update 9.0 ---------------------------\n");
-	Com_Printf("--------------------- Build Date 10/11/2026 ---------------------\n");// build date
-	Com_Printf("--------------------------- Build 08 ----------------------------\n");
+	Com_Printf("--------------------- Build Date 11/11/2026 ---------------------\n");// build date
+	Com_Printf("--------------------------- Build 09 ----------------------------\n");
 	Com_Printf("-----------------------------------------------------------------\n");
 	Com_Printf("-------------------------- Lightsaber ---------------------------\n");
 	Com_Printf("---------- An elegant weapon for a more civilized age -----------\n");

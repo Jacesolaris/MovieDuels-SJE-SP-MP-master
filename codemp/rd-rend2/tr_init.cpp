@@ -36,8 +36,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 static size_t STATIC_UNIFORM_BUFFER_SIZE = 1 * 1024 * 1024;
 static size_t FRAME_UNIFORM_BUFFER_SIZE = 8 * 1024 * 1024;
 static size_t FRAME_SCENE_UNIFORM_BUFFER_SIZE = 1 * 1024 * 1024;
-static size_t FRAME_VERTEX_BUFFER_SIZE = 12 * 1024 * 1024;
-static size_t FRAME_INDEX_BUFFER_SIZE = 4 * 1024 * 1024;
+static size_t FRAME_VERTEX_BUFFER_SIZE = 32 * 1024 * 1024; // was 12 MB (changelog 351)
+static size_t FRAME_INDEX_BUFFER_SIZE = 8 * 1024 * 1024; // was 4 MB (changelog 351)
 
 #if defined(_WIN32)
 extern "C" {
@@ -1620,7 +1620,7 @@ static void R_Register(void)
 	r_specularMapping = ri.Cvar_Get("r_specularMapping", "1", CVAR_ARCHIVE | CVAR_LATCH, "Disable/enable specular mapping");
 	r_deluxeMapping = ri.Cvar_Get("r_deluxeMapping", "1", CVAR_ARCHIVE | CVAR_LATCH, "Disable/enable reading deluxemaps when compiled with q3map2");
 	r_deluxeSpecular = ri.Cvar_Get("r_deluxeSpecular", "1", CVAR_ARCHIVE | CVAR_LATCH, "Disable/enable/scale the specular response from deluxemaps");
-	r_parallaxMapping = ri.Cvar_Get("r_parallaxMapping", "1", CVAR_ARCHIVE | CVAR_LATCH, "Disable/enable parallax mapping");
+	r_parallaxMapping = ri.Cvar_Get("r_parallaxMapping", "0", CVAR_ARCHIVE | CVAR_LATCH, "Disable/enable parallax mapping");
 	r_cubeMapping = ri.Cvar_Get("r_cubeMapping", "1", CVAR_ARCHIVE | CVAR_LATCH, "Disable/enable cubemapping");
 	r_cubeMappingBounces = ri.Cvar_Get("r_cubeMappingBounces", "2", CVAR_ARCHIVE | CVAR_LATCH, "Renders cubemaps multiple times to get reflections in reflections");
 	ri.Cvar_CheckRange(r_cubeMappingBounces, 0, 2, qfalse);
@@ -1723,7 +1723,7 @@ static void R_Register(void)
 
 	r_nocurves = ri.Cvar_Get("r_nocurves", "0", CVAR_CHEAT, "");
 	r_drawworld = ri.Cvar_Get("r_drawworld", "1", CVAR_CHEAT, "");
-	r_drawfog = ri.Cvar_Get("r_drawfog", "3", CVAR_NONE, "");
+	r_drawfog = ri.Cvar_Get("r_drawfog", "2", CVAR_NONE, "");
 	r_lightmap = ri.Cvar_Get("r_lightmap", "0", 0, "");
 	r_portalOnly = ri.Cvar_Get("r_portalOnly", "0", CVAR_CHEAT, "");
 
@@ -1755,7 +1755,7 @@ static void R_Register(void)
 	r_drawBuffer = ri.Cvar_Get("r_drawBuffer", "GL_BACK", CVAR_CHEAT, "");
 	r_lockpvs = ri.Cvar_Get("r_lockpvs", "0", CVAR_CHEAT, "");
 	r_noportals = ri.Cvar_Get("r_noportals", "0", CVAR_CHEAT, "");
-	r_shadows = ri.Cvar_Get("cg_shadows", "2", 0, "");
+	r_shadows = ri.Cvar_Get("cg_shadows", "1", 0, "");
 
 	r_marksOnTriangleMeshes = ri.Cvar_Get("r_marksOnTriangleMeshes", "0", CVAR_ARCHIVE, "");
 

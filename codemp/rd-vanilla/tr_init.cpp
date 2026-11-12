@@ -39,7 +39,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include <algorithm>
 #include "../rd-common/tr_common.h"
 #include "tr_WorldEffects.h"
-#include "tr_meshcloth.h"
+#include "rd-vanilla/tr_meshcloth.h"
 #include "qcommon/MiniHeap.h"
 #include "ghoul2/g2_local.h"
 
@@ -1742,7 +1742,7 @@ static void R_Register()
 	r_windPointY = ri.Cvar_Get("r_windPointY", "0", CVAR_NONE, "");
 	r_nocurves = ri.Cvar_Get("r_nocurves", "0", CVAR_CHEAT, "");
 	r_drawworld = ri.Cvar_Get("r_drawworld", "1", CVAR_CHEAT, "");
-	r_drawfog = ri.Cvar_Get("r_drawfog", "3", CVAR_NONE, "");
+	r_drawfog = ri.Cvar_Get("r_drawfog", "1", CVAR_NONE, "");
 	r_lightmap = ri.Cvar_Get("r_lightmap", "0", CVAR_CHEAT, "");
 	r_portalOnly = ri.Cvar_Get("r_portalOnly", "0", CVAR_CHEAT, "");
 	r_skipBackEnd = ri.Cvar_Get("r_skipBackEnd", "0", CVAR_CHEAT, "");
@@ -1767,7 +1767,7 @@ static void R_Register()
 	r_offsetUnits = ri.Cvar_Get("r_offsetunits", "-2", CVAR_CHEAT, "");
 	r_lockpvs = ri.Cvar_Get("r_lockpvs", "0", CVAR_CHEAT, "");
 	r_noportals = ri.Cvar_Get("r_noportals", "0", CVAR_CHEAT, "");
-	r_shadows = ri.Cvar_Get("cg_shadows", "3", CVAR_NONE, "");
+	r_shadows = ri.Cvar_Get("cg_shadows", "1", CVAR_NONE, "");
 	r_meshCloth = ri.Cvar_Get("r_meshCloth", "1", CVAR_ARCHIVE, "");
 	r_meshClothGravity = ri.Cvar_Get("r_meshClothGravity", "700", CVAR_ARCHIVE, "");
 	r_meshClothDrag = ri.Cvar_Get("r_meshClothDrag", "1.4", CVAR_ARCHIVE, "");

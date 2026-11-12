@@ -28,7 +28,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../client/vmachine.h"
 #include "g_local.h"
 
-#include "../qcommon/sstring.h"
+#include "qcommon/sstring.h"
 #include "qcommon/ojk_saved_game_helper.h"
 #include "../game/wp_saber.h"
 #include <map>

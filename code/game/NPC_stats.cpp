@@ -32,7 +32,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #endif
 #include "../Ratl/string_vs.h"
 #include "../Rufl/hstring.h"
-#include "../Ratl/vector_vs.h"
+#include "Ratl/vector_vs.h"
 #include "g_local.h"
 #include "bg_public.h"
 #include <qcommon/q_platform.h>
@@ -1170,6 +1170,73 @@ static qboolean G_ParseAnimationFile(const int gla_index, const char* skeletonNa
 // the animation event file.
 //
 ////////////////////////////////////////////////////////////////////////
+// The map's cutscene animations (models/players/_humanoid_<map>/_humanoid_<map>.gla, e.g. academy1) play on a
+// character by giving its ghoul2 model a GLA handle offset (G2API_SetAnimIndex): its own GLA handle + offset = the
+// cutscene GLA. animation_t / animevent_t glaIndex only say which GLA an anim is in (0 = the set's own, 1 = the
+// map's cutscene GLA); G_AnimGLAOffset turns that into the real offset from the GLA handles of this map load.
+// (Item 355, DH 2026-11-12: the code assumed the cutscene GLA always got the handle right after the set's own GLA,
+// offset 1. It rarely does now - other models load in between, and every humanoid set shares one cutscene GLA - so
+// the offset pointed at an unrelated model: "Ghoul2 model was reloaded and has changed" loading academy1.)
+static qboolean G_CinematicGLAHandles(const char* skeletonName, int& normal_gla, int& cine_gla, char* skeleton_map_name)
+{
+	normal_gla = 0;
+	cine_gla = 0;
+	skeleton_map_name[0] = '\0';
+
+	if (!skeletonName || !skeletonName[0] || !G_StandardHumanoid(skeletonName))
+	{
+		return qfalse;
+	}
+
+	const char* map_name = strrchr(level.mapname, '/');
+	map_name = map_name ? map_name + 1 : level.mapname;
+	Com_sprintf(skeleton_map_name, MAX_QPATH, "_humanoid_%s", map_name);
+
+	char normal_path[MAX_QPATH];
+	Com_sprintf(normal_path, sizeof normal_path, "models/players/%s/_humanoid.gla", skeletonName);
+	normal_gla = gi.G2API_PrecacheGhoul2Model(normal_path);
+	if (normal_gla <= 0)
+	{
+		normal_gla = 0;
+		return qfalse; // no GLA of its own to measure the offset from
+	}
+
+	// The cutscene GLA is optional. Its path can only be a file if it fits in MAX_QPATH, so for long map names
+	// (duel_tradefed: 66 chars) skip the probe instead of the renderer warning on every map load.
+	char cine_path[MAX_QPATH * 3];
+	Com_sprintf(cine_path, sizeof cine_path, "models/players/%s/%s.gla", skeleton_map_name, skeleton_map_name);
+	if (strlen(cine_path) >= MAX_QPATH)
+	{
+		return qfalse;
+	}
+	const int cine = gi.G2API_PrecacheGhoul2Model(cine_path);
+	if (cine <= 0 || cine == normal_gla)
+	{
+		return qfalse;
+	}
+	cine_gla = cine;
+	return qtrue;
+}
+
+// Real G2API_SetAnimIndex offset for an anim of animation set file_index in GLA slot gla_slot (0 or 1, see above).
+// Worked out from the handles every time (two name lookups), so it is right after a map change or a loaded save;
+// only cutscene anims (slot 1) get here, so it costs nothing in normal play. 0 if the set has no cutscene GLA.
+int G_AnimGLAOffset(const int file_index, const int gla_slot)
+{
+	if (gla_slot == 0 || file_index < 0 || file_index >= level.numKnownAnimFileSets)
+	{
+		return 0;
+	}
+	int normal_gla = 0;
+	int cine_gla = 0;
+	char skeleton_map_name[MAX_QPATH];
+	if (!G_CinematicGLAHandles(level.knownAnimFileSets[file_index].filename, normal_gla, cine_gla, skeleton_map_name))
+	{
+		return 0;
+	}
+	return cine_gla - normal_gla;
+}
+
 int G_ParseAnimFileSet(const char* skeletonName, const char* model_name = nullptr)
 {
 	int file_index = 0;
@@ -1249,60 +1316,21 @@ int G_ParseAnimFileSet(const char* skeletonName, const char* model_name = nullpt
 		//--------------------------------------------
 		if (G_StandardHumanoid(skeletonName))
 		{
-			const char* map_name = strrchr(level.mapname, '/');
-			if (map_name)
-			{
-				map_name++;
-			}
-			else
-			{
-				map_name = level.mapname;
-			}
-
+			// This set's own GLA and the map's cutscene GLA (optional), with their real handles (item 355)
+			int normalGLAIndex = 0;
+			int cineGLAIndex = 0;
 			char skeletonMapName[MAX_QPATH];
-			Com_sprintf(skeletonMapName, MAX_QPATH, "_humanoid_%s", map_name);
-			// Precache the normal humanoid GLA
-			const int normalGLAIndex = gi.G2API_PrecacheGhoul2Model(va("models/players/%s/_humanoid.gla", skeletonName));
+			G_CinematicGLAHandles(skeletonName, normalGLAIndex, cineGLAIndex, skeletonMapName);
 
-			//double check this always comes first!
-
-			// Make Sure To Precache The GLAs (both regular and cinematic), And Remember Their Indicies
-			//------------------------------------------------------------------------------------------
 			G_ParseAnimationFile(0, skeletonName, file_index);
-			G_ParseAnimationEvtFile(0, skeletonName, file_index, normalGLAIndex, qfalse);
-
-			// Precache the map‑specific cinematic GLA (optional)
-			// Its path can only be a file if it fits in MAX_QPATH, so for long map names (duel_tradefed: 66 chars)
-			// skip the probe instead of the renderer warning on every map load.
-			const char* cine_gla_path = va("models/players/%s/%s.gla", skeletonMapName, skeletonMapName);
-			const int cineGLAIndex = strlen(cine_gla_path) < MAX_QPATH ? gi.G2API_PrecacheGhoul2Model(cine_gla_path) : 0;
+			G_ParseAnimationEvtFile(0, skeletonName, file_index, normalGLAIndex, false);
 
 			if (cineGLAIndex)
 			{
-#ifdef _DEBUG
-				if (cineGLAIndex != normalGLAIndex + 1)
-				{
-					Com_Printf("Warning: cineGLAIndex (%d) != normalGLAIndex+1 (%d)\n", cineGLAIndex, normalGLAIndex + 1);
-				}
-#endif
-
+				// slot 1 = the cutscene GLA; G_AnimGLAOffset gives the handle offset when an anim is played
 				G_ParseAnimationFile(1, skeletonMapName, file_index);
-				G_ParseAnimationEvtFile(1, skeletonMapName, file_index, cineGLAIndex, qfalse);
+				G_ParseAnimationEvtFile(1, skeletonMapName, file_index, cineGLAIndex, false);
 			}
-
-			//if (g_ActivateAnimationStyle && g_ActivateAnimationStyle->integer == 1) // permission for the new anims
-			//{	// ------------------------------------------------------------------
-			//	// EXTRA: Always load _humanoid_cutscenes/_humanoid.gla
-			//	// ------------------------------------------------------------------
-			//	const int cutsceneGLAIndex = gi.G2API_PrecacheGhoul2Model("models/players/_humanoid_cutscenes/_humanoid.gla");
-
-			//	if (cutsceneGLAIndex)
-			//	{
-			//		// Slot 2 is safe: 0 = base, 1 = map‑cine, 2 = cutscene‑cine
-			//		G_ParseAnimationFile(2, "_humanoid_cutscenes", file_index);
-			//		G_ParseAnimationEvtFile(2, "_humanoid_cutscenes", file_index, cutsceneGLAIndex, qfalse);
-			//	}
-			//}
 		}
 		else
 		{

@@ -692,7 +692,6 @@ void WP_DeactivateSaber(gentity_t* self)
 	const qboolean is_holding_block_button_and_attack = ((self->client->ps.ManualBlockingFlags & 1 << MBF_HOLDINGBLOCKANDATTACK) != 0) ? qtrue : qfalse;
 	//Active Blocking
 
-
 	if (blocking || is_holding_block_button_and_attack)
 	{
 		return;
@@ -5047,7 +5046,6 @@ qboolean G_DoDodge(gentity_t* self, gentity_t* shooter, vec3_t dmg_origin, int h
 		return qfalse;
 	}
 
-
 	if (self->client->ps.stats[STAT_DODGE] < 30)
 	{
 		//Not enough dodge
@@ -5706,7 +5704,6 @@ static qboolean G_DoSaberDodge(gentity_t* dodger, gentity_t* attacker, vec3_t dm
 		//can't dodge this.
 		return qfalse;
 	}
-
 
 	//check for private duel conditions
 	if (attacker && attacker->client)
@@ -9986,6 +9983,7 @@ void WP_saberBackToOwner(gentity_t* saberent)
 }
 
 void thrownSaberBallistics(gentity_t* saberEnt, const gentity_t* saber_own, qboolean stuck);
+static void WP_SaberThrowComeBack(gentity_t* saberent, gentity_t* saber_own);
 
 void WP_thrownSaberTouch(gentity_t* saberent, gentity_t* other, const trace_t* trace)
 {
@@ -9997,6 +9995,8 @@ void WP_thrownSaberTouch(gentity_t* saberent, gentity_t* other, const trace_t* t
 		return;
 	}
 	if (other &&
+		g_saberscanstickinwall.integer && // SP's on/off for the wall stick
+		!g_sabermustreturn.integer && // SP: no wall stick when the saber must return
 		!(saber_own->r.svFlags & SVF_BOT) && // players' sabers only (this tested the world entity)
 		other->s.number == ENTITYNUM_WORLD &&
 		saber_own->client->ps.fd.forcePowerLevel[FP_SABERTHROW] >= FORCE_LEVEL_3)
@@ -10056,6 +10056,11 @@ void WP_thrownSaberTouch(gentity_t* saberent, gentity_t* other, const trace_t* t
 
 		saberent->r.contents = CONTENTS_LIGHTSABER;
 	}
+	else if (g_sabermustreturn.integer && !(saber_own->r.svFlags & SVF_BOT))
+	{
+		// SP g_sabermustreturn 1: a player's saber that hits a wall or another saber comes back instead of dropping
+		WP_SaberThrowComeBack(saberent, saber_own);
+	}
 	else
 	{
 		WP_saberKnockDown(saberent, saber_own, saber_own);
@@ -10076,6 +10081,10 @@ static vec3_t s_saberThrowOrigin[MAX_GENTITIES]; // where each thrown saber left
 
 static qboolean WP_SaberThrowShouldDrop(const gentity_t* saberent, const gentity_t* saber_own)
 {
+	if (g_sabermustreturn.integer)
+	{// SP g_sabermustreturn 1: letting go always brings it back
+		return qfalse;
+	}
 	if (saber_own->client->ps.fd.forcePowerLevel[FP_SABERTHROW] <= FORCE_LEVEL_1)
 	{
 		return qfalse;

@@ -5430,6 +5430,15 @@ static const char* g_bindCommands[] = {
 	"+force_drain",
 	"+force_grip",
 	"+force_lightning",
+	// SP's direct force power binds (cg_consolecmds.c CG_ForceBind_*, DH 2026-11-12)
+	"+force_stasis",
+	"+force_destruction",
+	"+force_grasp",
+	"+force_repulse",
+	"+force_fear",
+	"+force_deadlysight",
+	"+force_blast",
+	"+force_strike",
 	"+forward",
 	"+left",
 	"+lookdown",
@@ -5450,6 +5459,7 @@ static const char* g_bindCommands[] = {
 	"bow",
 	"centerview",
 	"cg_thirdperson !",
+	"cl_run !", // SP's Walk / Run toggle bind (DH 2026-11-12)
 	"engage_duel",
 	"flourish",
 	"force_absorb",

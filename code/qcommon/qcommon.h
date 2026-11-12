@@ -27,7 +27,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define __QCOMMON_H__
 
 #include "q_shared.h"
-#include "stringed_ingame.h"
+#include "qcommon/stringed_ingame.h"
 #include "strippublic.h"
 #include "cm_public.h"
 #include "sys/sys_public.h"
@@ -441,7 +441,7 @@ constexpr auto MAX_FILE_HANDLES = 64;
 
 qboolean FS_Initialized();
 
-void FS_InitFilesystem();
+void FS_InitFilesystem();
 void FS_Shutdown();
 void FS_LookupCacheBegin();	// files.cpp: missing-file lookups during a map load
 void FS_LookupCacheEnd();

@@ -34,7 +34,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #if !defined(TR_LOCAL_H)
 #include "tr_local.h"
-#include "tr_meshcloth.h"
+#include "rd-vanilla/tr_meshcloth.h"
 #include <unordered_map>
 #endif
 
@@ -58,7 +58,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define	LF(x) x=LittleFloat(x)
 
 #ifdef G2_PERFORMANCE_ANALYSIS
-#include "../qcommon/timing.h"
+#include "qcommon/timing.h"
 timing_c G2PerformanceTimer_RB_SurfaceGhoul;
 
 int G2PerformanceCounter_G2_TransformGhoulBones = 0;
@@ -2532,7 +2532,7 @@ void G2API_SetSurfaceOnOffFromSkin(CGhoul2Info* ghlInfo, const qhandle_t render_
 }
 
 // set up each surface ready for rendering in the back end
-#include "tr_saberslice.h" // saber slice: R_SliceMetal, R_SliceResolvePlanes
+#include "rd-vanilla/tr_saberslice.h" // saber slice: R_SliceMetal, R_SliceResolvePlanes
 
 constexpr float R_SLICE_SEAM_WIDTH = 1.6f;
 constexpr int R_SLICE_MAX_CAP_SEGS = 2048;
@@ -3643,7 +3643,7 @@ static void MC_FloorUnder(const trRefEntity_t* ent, const int timeMs, mcParams_t
 			start[2] += 30.0f;
 			const float a = k * (M_PI / 4.0f);
 			VectorSet(end, start[0] + cosf(a) * 48.0f, start[1] + sinf(a) * 48.0f, start[2]);
-				ri.SV_Trace(&tr, start, nullptr, nullptr, end, ENTITYNUM_NONE, CONTENTS_SOLID, G2_NOCOLLIDE, 0);
+			ri.SV_Trace(&tr, start, nullptr, nullptr, end, ENTITYNUM_NONE, CONTENTS_SOLID, G2_NOCOLLIDE, 0);
 			if (tr.fraction >= 1.0f || tr.startsolid || tr.allsolid || fabsf(tr.plane.normal[2]) > 0.7f)
 			{
 				continue;
@@ -4396,7 +4396,7 @@ every triangle of the surface that crosses a cut plane is clipped against it,
 triangles on the cut away side are dropped. The game draws the glowing cut caps.
 ==============
 */
-#include "tr_saberslice.h"
+#include "rd-vanilla/tr_saberslice.h"
 
 static int G2_SliceDominantBone(const mdxmVertex_t* v, const int* piBoneReferences)
 {

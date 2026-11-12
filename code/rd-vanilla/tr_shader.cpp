@@ -3845,7 +3845,7 @@ static void CreateInternalShaders() {
 	tr.distortionShader = FinishShader();
 	shader.defaultShader = true;
 
-	ARB_InitGlowShaders();
+	ARB_InitGPUShaders();
 }
 
 static void CreateExternalShaders() {

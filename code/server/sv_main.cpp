@@ -589,14 +589,9 @@ void SV_Frame(int msec, const float fraction_msec)
 		sv.time += frame_msec;
 		re.G2API_SetTime(sv.time, G2T_SV_TIME);
 
-		try
-		{// let everything in the world think and move
-			ge->RunFrame(sv.time);
-		}
-		catch (...)
-		{
-			Com_Printf(S_COLOR_RED "ERROR: You just tried to crash the game! Shame on you!\n");
-		}
+		// let everything in the world think and move. No catch here (item 355): Com_Error leaves by a C++ throw that
+		// Com_Frame must catch to drop back to the menu; a catch-all here swallowed it and the next error hard-quit.
+		ge->RunFrame(sv.time);
 	}
 
 	if (com_speeds->integer)

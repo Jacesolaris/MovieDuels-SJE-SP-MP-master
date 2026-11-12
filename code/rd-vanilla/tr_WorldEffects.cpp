@@ -42,9 +42,9 @@ extern	cvar_t* g_Weather;
 ////////////////////////////////////////////////////////////////////////////////////////
 #include "tr_local.h"
 #include "tr_WorldEffects.h"
-#include "../Ravl/CVec.h"
-#include "../Ratl/vector_vs.h"
-#include "../Ratl/bits_vs.h"
+#include "Ravl/CVec.h"
+#include "Ratl/vector_vs.h"
+#include "Ratl/bits_vs.h"
 #include <mutex>
 
 // r_smp: the render thread simulates and draws the weather (RB_RenderWorldEffects) while the game

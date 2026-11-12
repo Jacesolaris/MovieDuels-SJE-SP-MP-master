@@ -25,7 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../server/exe_headers.h"
 #include "q_profile.h"
 
-#include "tr_quicksprite.h"
+#include "rd-vanilla/tr_quicksprite.h"
 #include "tr_WorldEffects.h"
 #if !defined(G2_H_INC)
 #include "../ghoul2/G2.h"

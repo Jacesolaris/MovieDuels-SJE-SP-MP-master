@@ -481,6 +481,21 @@ void CG_TransitionPlayerState(const playerState_t* ps, playerState_t* ops)
 		CG_CheckLocalSounds(ps, ops);
 	}
 
+	// SP cg_gunAutoFirst (bg_pmove.cpp PM_SetWeaponModel): switching to a gun goes to first person, to the saber back to
+	// third person. Only for my own player, not on a vehicle (DH 2026-11-11)
+	if (cg_gunAutoFirst.integer && ps->weapon != ops->weapon && ps->clientNum == cg.clientNum &&
+		!ps->m_iVehicleNum && ps->persistant[PERS_TEAM] != TEAM_SPECTATOR && ps->pm_type != PM_INTERMISSION)
+	{
+		if (ps->weapon == WP_SABER)
+		{
+			trap->Cvar_Set("cg_thirdPerson", "1");
+		}
+		else if (ps->weapon != WP_NONE)
+		{
+			trap->Cvar_Set("cg_thirdPerson", "0");
+		}
+	}
+
 	// check for going low on ammo
 	CG_CheckAmmo();
 

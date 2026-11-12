@@ -1937,11 +1937,14 @@ static int PM_SaberLockResultAnim(playerState_t* duelist, const qboolean super_b
 	return base_anim;
 }
 
+extern vmCvar_t g_allowSuperSaberLockBreaks; // g_xcvar.h / cg_xcvar.h (SP g_allowSuperSaberLockBreaks, DH 2026-11-11)
+
 static void PM_SaberLockBreak(playerState_t* genemy, const saberLockResult_t result, const int strength)
 {
 	// SP PM_SaberLockBreak (g_allowSuperSaberLockBreaks 1): a win with strength above 3 may be a super break. Was
 	// "strength + pm->cmd.buttons & BUTTON_ATTACK", which is (strength + buttons) & BUTTON_ATTACK
-	const qboolean super_break = result == LOCK_VICTORY && strength > 3 && PM_irand_timesync(0, 10) < strength ? qtrue : qfalse;
+	const qboolean super_break = g_allowSuperSaberLockBreaks.integer && result == LOCK_VICTORY && strength > 3
+		&& PM_irand_timesync(0, 10) < strength ? qtrue : qfalse;
 
 	pm->ps->userInt3 &= ~(1 << FLAG_SABERLOCK_ATTACKER);
 	genemy->userInt3 &= ~(1 << FLAG_SABERLOCK_ATTACKER);

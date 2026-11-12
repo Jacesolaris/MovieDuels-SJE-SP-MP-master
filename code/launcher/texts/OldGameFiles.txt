@@ -1,0 +1,4 @@
+# Outdated pk3 files that must not be in the MD folder any more: they clash with the current game files.
+# SETTINGS > Check installation and the warning on PLAY tell players to remove them. One per line, ".pk3" may be left out.
+
+z_Update7_Patch.pk3

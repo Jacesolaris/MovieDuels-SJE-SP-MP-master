@@ -36,7 +36,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "g_vehicles.h"
 #include "g_functions.h"
 #if !defined(RATL_VECTOR_VS_INC)
-#include "../Ratl/vector_vs.h"
+#include "Ratl/vector_vs.h"
 #endif
 #include <cmath>
 #include "bg_public.h"
@@ -45,7 +45,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "g_shared.h"
 #include "weapons.h"
 #include <qcommon/q_shared.h>
-#include <Ravl/CVec.h>
+#include "Ravl/CVec.h"
 #include <qcommon/q_math.h>
 #include <qcommon/q_platform.h>
 

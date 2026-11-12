@@ -198,7 +198,7 @@ if(BuildMPEngine OR BuildMPDed)
 
 	set(MPEngineAndDedClientFiles
 		"${MPDir}/client/client.h"
-		"${MPDir}/client/keys.h"
+		"${SharedDir}/client/keys.h"
 		"${MPDir}/client/snd_public.h"
 		)
 	source_group("client" FILES ${MPEngineAndDedClientFiles})
@@ -221,9 +221,9 @@ if(BuildMPEngine OR BuildMPDed)
 		"${MPDir}/qcommon/cm_load.cpp"
 		"${MPDir}/qcommon/cm_local.h"
 		"${MPDir}/qcommon/cm_patch.cpp"
-		"${MPDir}/qcommon/cm_patch.h"
-		"${MPDir}/qcommon/cm_polylib.cpp"
-		"${MPDir}/qcommon/cm_polylib.h"
+		"${SharedDir}/qcommon/cm_patch.h"
+		"${SharedDir}/qcommon/cm_polylib.cpp"
+		"${SharedDir}/qcommon/cm_polylib.h"
 		"${MPDir}/qcommon/cm_public.h"
 		"${MPDir}/qcommon/cm_test.cpp"
 		"${MPDir}/qcommon/cm_trace.cpp"
@@ -236,28 +236,28 @@ if(BuildMPEngine OR BuildMPDed)
 		"${MPDir}/qcommon/GenericParser2.cpp"
 		"${MPDir}/qcommon/GenericParser2.h"
 		"${MPDir}/qcommon/huffman.cpp"
-		"${MPDir}/qcommon/md4.cpp"
+		"${SharedDir}/qcommon/md4.cpp"
 		"${MPDir}/qcommon/md5.cpp"
 		"${MPDir}/qcommon/md5.h"
 		"${MPDir}/qcommon/MiniHeap.h"
 		"${MPDir}/qcommon/msg.cpp"
-		"${MPDir}/qcommon/matcomp.h"
+		"${SharedDir}/qcommon/matcomp.h"
 		"${MPDir}/qcommon/matcomp.cpp"
 		"${MPDir}/qcommon/net_chan.cpp"
 		"${MPDir}/qcommon/net_ip.cpp"
-		"${MPDir}/qcommon/persistence.cpp"
+		"${SharedDir}/qcommon/persistence.cpp"
 		"${MPDir}/qcommon/q_shared.cpp"
 		"${MPDir}/qcommon/qcommon.h"
 		"${MPDir}/qcommon/qfiles.h"
 		"${MPDir}/qcommon/RoffSystem.cpp"
 		"${MPDir}/qcommon/RoffSystem.h"
-		"${MPDir}/qcommon/sstring.h"
+		"${SharedDir}/qcommon/sstring.h"
 		"${MPDir}/qcommon/stringed_ingame.cpp"
-		"${MPDir}/qcommon/stringed_ingame.h"
-		"${MPDir}/qcommon/stringed_interface.cpp"
-		"${MPDir}/qcommon/stringed_interface.h"
+		"${SharedDir}/qcommon/stringed_ingame.h"
+		"${SharedDir}/qcommon/stringed_interface.cpp"
+		"${SharedDir}/qcommon/stringed_interface.h"
 		"${MPDir}/qcommon/tags.h"
-		"${MPDir}/qcommon/timing.h"
+		"${SharedDir}/qcommon/timing.h"
 		"${MPDir}/qcommon/vm.cpp"
 		"${MPDir}/qcommon/z_memman_pc.cpp"
 
@@ -414,8 +414,8 @@ if(BuildMPEngine)
 	# EAX is Windows-Only (right?)
 	if(MSVC)
 		set(MPEngineEAXFiles
-			"${MPDir}/client/eax/eax.h"
-			"${MPDir}/client/eax/EaxMan.h"
+			"${SharedDir}/client/eax/eax.h"
+			"${SharedDir}/client/eax/EaxMan.h"
 			)
 		source_group("eax" FILES ${MPEngineEAXFiles})
 		set(MPEngineFiles ${MPEngineFiles} ${MPEngineEAXFiles})
@@ -461,56 +461,56 @@ if(BuildMPEngine)
 		"${MPDir}/client/snd_mp3.cpp"
 		"${MPDir}/client/snd_mp3.h"
 		"${MPDir}/client/snd_music.cpp"
-		"${MPDir}/client/snd_music.h"
+		"${SharedDir}/client/snd_music.h"
 		)
 	source_group("client" FILES ${MPEngineClientFiles})
 	set(MPEngineFiles ${MPEngineFiles} ${MPEngineClientFiles})
 
 	set(MPEngineRatlFiles
-		"${MPDir}/Ratl/bits_vs.h"
+		"${SharedDir}/Ratl/bits_vs.h"
 		"${MPDir}/Ratl/ratl_common.h"
-		"${MPDir}/Ratl/vector_vs.h"
+		"${SharedDir}/Ratl/vector_vs.h"
 		)
 	source_group("ratl" FILES ${MPEngineRatlFiles})
 	set(MPEngineFiles ${MPEngineFiles} ${MPEngineRatlFiles})
 
 	set(MPEngineRavlFiles
-		"${MPDir}/Ravl/CVec.h"
+		"${SharedDir}/Ravl/CVec.h"
 		)
 	source_group("ravl" FILES ${MPEngineRavlFiles})
 	set(MPEngineFiles ${MPEngineFiles} ${MPEngineRavlFiles})
 
 	set(MPEngineMp3Files
-		"${MPDir}/mp3code/cdct.c"
-		"${MPDir}/mp3code/config.h"
-		"${MPDir}/mp3code/csbt.c"
-		"${MPDir}/mp3code/csbtb.c"
-		"${MPDir}/mp3code/csbtl3.c"
-		"${MPDir}/mp3code/cup.c"
-		"${MPDir}/mp3code/cupini.c"
-		"${MPDir}/mp3code/cupl1.c"
-		"${MPDir}/mp3code/cupl3.c"
-		"${MPDir}/mp3code/cwin.c"
-		"${MPDir}/mp3code/cwinb.c"
-		"${MPDir}/mp3code/cwinm.c"
-		"${MPDir}/mp3code/htable.h"
-		"${MPDir}/mp3code/hwin.c"
-		"${MPDir}/mp3code/jdw.h"
-		"${MPDir}/mp3code/l3.h"
-		"${MPDir}/mp3code/l3dq.c"
-		"${MPDir}/mp3code/l3init.c"
-		"${MPDir}/mp3code/mdct.c"
-		"${MPDir}/mp3code/mhead.c"
-		"${MPDir}/mp3code/mhead.h"
-		"${MPDir}/mp3code/mp3struct.h"
-		"${MPDir}/mp3code/msis.c"
-		"${MPDir}/mp3code/port.h"
-		"${MPDir}/mp3code/small_header.h"
-		"${MPDir}/mp3code/tableawd.h"
-		"${MPDir}/mp3code/towave.c"
-		"${MPDir}/mp3code/uph.c"
-		"${MPDir}/mp3code/upsf.c"
-		"${MPDir}/mp3code/wavep.c"
+		"${SharedDir}/mp3code/cdct.c"
+		"${SharedDir}/mp3code/config.h"
+		"${SharedDir}/mp3code/csbt.c"
+		"${SharedDir}/mp3code/csbtb.c"
+		"${SharedDir}/mp3code/csbtl3.c"
+		"${SharedDir}/mp3code/cup.c"
+		"${SharedDir}/mp3code/cupini.c"
+		"${SharedDir}/mp3code/cupl1.c"
+		"${SharedDir}/mp3code/cupl3.c"
+		"${SharedDir}/mp3code/cwin.c"
+		"${SharedDir}/mp3code/cwinb.c"
+		"${SharedDir}/mp3code/cwinm.c"
+		"${SharedDir}/mp3code/htable.h"
+		"${SharedDir}/mp3code/hwin.c"
+		"${SharedDir}/mp3code/jdw.h"
+		"${SharedDir}/mp3code/l3.h"
+		"${SharedDir}/mp3code/l3dq.c"
+		"${SharedDir}/mp3code/l3init.c"
+		"${SharedDir}/mp3code/mdct.c"
+		"${SharedDir}/mp3code/mhead.c"
+		"${SharedDir}/mp3code/mhead.h"
+		"${SharedDir}/mp3code/mp3struct.h"
+		"${SharedDir}/mp3code/msis.c"
+		"${SharedDir}/mp3code/port.h"
+		"${SharedDir}/mp3code/small_header.h"
+		"${SharedDir}/mp3code/tableawd.h"
+		"${SharedDir}/mp3code/towave.c"
+		"${SharedDir}/mp3code/uph.c"
+		"${SharedDir}/mp3code/upsf.c"
+		"${SharedDir}/mp3code/wavep.c"
 		)
 	source_group("mp3code" FILES ${MPEngineMp3Files})
 	set(MPEngineFiles ${MPEngineFiles} ${MPEngineMp3Files})
@@ -532,7 +532,7 @@ if(BuildMPEngine)
 	if(WIN32)
 		set(MPEngineWin32Files
 			"${MPDir}/win32/MovieDuels-MP.ico"
-			"${MPDir}/win32/resource.h"
+			"${SharedDir}/win32/resource.h"
 			"${MPDir}/win32/MovieDuels-MP.rc"
 			)
 

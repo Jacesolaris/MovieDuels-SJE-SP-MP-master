@@ -41,13 +41,13 @@ USER INTERFACE MAIN
 #include "menudef.h"
 
 #include "ui_shared.h"
-#include "ui_pazaak.h"
+#include "ui/ui_pazaak.h"
 
 #include "../game/bg_public.h"
 #include "../game/anims.h"
 extern stringID_table_t animTable[MAX_ANIMATIONS + 1];
 
-#include "../qcommon/stringed_ingame.h"
+#include "qcommon/stringed_ingame.h"
 #include "../qcommon/stv_version.h"
 #include "../qcommon/q_shared.h"
 #if defined(_WIN32)
@@ -5923,8 +5923,8 @@ void UI_LoadMenus(const char* menuFile, const qboolean reset)
 	Com_Printf("----------------------- MovieDuels-SJE-SP -----------------------\n");
 	Com_Printf("-----------------------------------------------------------------\n");
 	Com_Printf("-------------------------- Update 9.0 ---------------------------\n");
-	Com_Printf("--------------------- Build Date 10/11/2026 ---------------------\n");// build date
-	Com_Printf("--------------------------- Build 08 ----------------------------\n");
+	Com_Printf("--------------------- Build Date 12/11/2026 ---------------------\n");// build date
+	Com_Printf("--------------------------- Build 10 ----------------------------\n");
 	Com_Printf("-----------------------------------------------------------------\n");
 	Com_Printf("-------------------------- Lightsaber ---------------------------\n");
 	Com_Printf("---------- An elegant weapon for a more civilized age -----------\n");

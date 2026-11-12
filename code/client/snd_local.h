@@ -29,7 +29,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../qcommon/q_shared.h"
 #include "../qcommon/qcommon.h"
 #include "snd_public.h"
-#include "../mp3code/mp3struct.h"
+#include "mp3code/mp3struct.h"
 
 #if defined(_MSC_VER) && !defined(WIN64)
 #define USE_OPENAL
@@ -37,10 +37,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 // Open AL Specific
 #ifdef USE_OPENAL
-#include "OpenAL/al.h"
-#include "OpenAL/alc.h"
-#include "eax/eax.h"
-#include "eax/EaxMan.h"
+#include "client/OpenAL/al.h"
+#include "client/OpenAL/alc.h"
+#include "client/eax/eax.h"
+#include "client/eax/EaxMan.h"
 /*#elif defined MACOS_X
 #include <OpenAL/al.h>
 #include <OpenAL/alc.h>

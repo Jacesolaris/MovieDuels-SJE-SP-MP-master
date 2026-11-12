@@ -838,6 +838,30 @@ extern void CG_BodyQueueCopy(centity_t* cent, int clientNum, int knownWeapon);
 extern qboolean BG_GetRootSurfNameWithVariant(void* ghoul2, const char* rootSurfName, char* returnSurfName,
 	int returnSize);
 
+// SP g_Bloodmist 1: cut humanoid limbs give off the saber blood mist (saber/limb_bolton) instead of smoke; droids and
+// machines keep the smoke (SP g_combat.cpp G_Dismember / cg_ents.cpp class list) (DH 2026-11-11)
+static fxHandle_t CG_LimbCutEffect(const centity_t* owner)
+{
+	if (g_Bloodmist.integer == 1 && owner)
+	{
+		if (owner->currentState.number >= MAX_CLIENTS)
+		{
+			switch (owner->currentState.NPC_class)
+			{
+			case CLASS_ATST: case CLASS_GONK: case CLASS_INTERROGATOR: case CLASS_MARK1: case CLASS_MARK2:
+			case CLASS_MOUSE: case CLASS_PROBE: case CLASS_PROTOCOL: case CLASS_R2D2: case CLASS_R5D2:
+			case CLASS_SEEKER: case CLASS_SENTRY: case CLASS_SBD: case CLASS_BATTLEDROID: case CLASS_DROIDEKA:
+			case CLASS_ASSASSIN_DROID: case CLASS_SABER_DROID:
+				return cgs.effects.mBlasterSmoke;
+			default:
+				break;
+			}
+		}
+		return cgs.effects.mSaberlimb_Bolton;
+	}
+	return cgs.effects.mBlasterSmoke;
+}
+
 static void CG_General(centity_t* cent)
 {
 	refEntity_t ent;
@@ -1315,7 +1339,7 @@ static void CG_General(centity_t* cent)
 				BG_GiveMeVectorFromMatrix(&matrix, ORIGIN, bolt_org);
 				BG_GiveMeVectorFromMatrix(&matrix, NEGATIVE_Y, bolt_ang);
 
-				trap->FX_PlayEffectID(cgs.effects.mBlasterSmoke, bolt_org, bolt_ang, -1, -1, qfalse);
+				trap->FX_PlayEffectID(CG_LimbCutEffect(cl_ent), bolt_org, bolt_ang, -1, -1, qfalse);
 			}
 
 			cent->bolt4 = new_bolt;
@@ -1340,7 +1364,7 @@ static void CG_General(centity_t* cent)
 				BG_GiveMeVectorFromMatrix(&matrix, ORIGIN, bolt_org);
 				BG_GiveMeVectorFromMatrix(&matrix, NEGATIVE_Y, bolt_ang);
 
-				trap->FX_PlayEffectID(cgs.effects.mBlasterSmoke, bolt_org, bolt_ang, -1, -1, qfalse);
+				trap->FX_PlayEffectID(CG_LimbCutEffect(cl_ent), bolt_org, bolt_ang, -1, -1, qfalse);
 			}
 
 			if (cent->currentState.modelGhoul2 == G2_MODELPART_RARM || cent->currentState.modelGhoul2 ==
@@ -1390,7 +1414,7 @@ static void CG_General(centity_t* cent)
 				{
 					bolt_ang[1] = 1;
 				}
-				trap->FX_PlayEffectID(cgs.effects.mBlasterSmoke, bolt_org, bolt_ang, -1, -1, qfalse);
+				trap->FX_PlayEffectID(CG_LimbCutEffect(cl_ent), bolt_org, bolt_ang, -1, -1, qfalse);
 
 				cent->trailTime = cg.time + 400;
 			}

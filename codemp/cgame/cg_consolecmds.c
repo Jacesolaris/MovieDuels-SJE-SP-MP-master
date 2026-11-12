@@ -351,9 +351,90 @@ static int cmdcmp(const void* a, const void* b)
 
 extern void CG_MissionObjectives_f(void); // (cg_servercmds.c: Missions, the objective list)
 
+// SP's direct force power binds (SP force_stasis etc., DH 2026-11-12). MP has these powers but only through the force
+// selection: holding the key selects the power and holds Use Force; letting go releases it and puts the old selection
+// back (CG_ForceBind_Frame). The press waits a frame so the new selection is already in the usercmd with the button.
+static int cg_forceBindPower = -1; // power held through a bind, -1 = none
+static int cg_forceBindPrev = -1; // the force selection before it
+static int cg_forceBindRestoreTime = 0; // put cg_forceBindPrev back at this time
+
+static void CG_ForceBind_Down(const int power)
+{
+	if (!cg.snap || cg.snap->ps.stats[STAT_HEALTH] <= 0 || !(cg.snap->ps.fd.forcePowersKnown & 1 << power))
+	{
+		return;
+	}
+	if (cg_forceBindPower == -1 && !cg_forceBindRestoreTime)
+	{
+		cg_forceBindPrev = cg.forceSelect;
+	}
+	cg_forceBindRestoreTime = 0;
+	cg_forceBindPower = power;
+	cg.forceSelect = power;
+	cg.forceSelectTime = cg.time;
+	trap->SendConsoleCommand("wait\n+useforce\n");
+}
+
+static void CG_ForceBind_Up(void)
+{
+	if (cg_forceBindPower == -1)
+	{
+		return;
+	}
+	cg_forceBindPower = -1;
+	trap->SendConsoleCommand("wait\n-useforce\n");
+	cg_forceBindRestoreTime = cg.time + 250; // after the release has reached the server
+}
+
+// called every frame from CG_DrawForceSelect: put the player's own force selection back after a bind
+void CG_ForceBind_Frame(void)
+{
+	if (cg_forceBindPower != -1)
+	{
+		cg.forceSelect = cg_forceBindPower;
+		cg.forceSelectTime = cg.time;
+		return;
+	}
+	if (cg_forceBindRestoreTime && cg.time >= cg_forceBindRestoreTime)
+	{
+		cg_forceBindRestoreTime = 0;
+		if (cg_forceBindPrev >= 0 && cg.snap && cg.snap->ps.fd.forcePowersKnown & 1 << cg_forceBindPrev)
+		{
+			cg.forceSelect = cg_forceBindPrev;
+			cg.forceSelectTime = cg.time;
+		}
+		cg_forceBindPrev = -1;
+	}
+}
+
+static void CG_ForceStasisDown_f(void) { CG_ForceBind_Down(FP_STASIS); }
+static void CG_ForceDestructionDown_f(void) { CG_ForceBind_Down(FP_DESTRUCTION); }
+static void CG_ForceGraspDown_f(void) { CG_ForceBind_Down(FP_GRASP); }
+static void CG_ForceRepulseDown_f(void) { CG_ForceBind_Down(FP_REPULSE); }
+static void CG_ForceFearDown_f(void) { CG_ForceBind_Down(FP_FEAR); }
+static void CG_ForceDeadlySightDown_f(void) { CG_ForceBind_Down(FP_DEADLYSIGHT); }
+static void CG_ForceBlastDown_f(void) { CG_ForceBind_Down(FP_BLAST); }
+static void CG_ForceStrikeDown_f(void) { CG_ForceBind_Down(FP_LIGHTNING_STRIKE); }
+
 static consoleCommand_t commands[] = {
 	{ "missionobjectives", CG_MissionObjectives_f },
 	{ "+md_forcewheel", CG_MDWheel_ForceDown_f }, // the same wheel on the force ring (the "Force Wheel" bind)
+	{ "+force_stasis", CG_ForceStasisDown_f }, // SP's direct force power binds (DH 2026-11-12)
+	{ "+force_destruction", CG_ForceDestructionDown_f },
+	{ "+force_grasp", CG_ForceGraspDown_f },
+	{ "+force_repulse", CG_ForceRepulseDown_f },
+	{ "+force_fear", CG_ForceFearDown_f },
+	{ "+force_deadlysight", CG_ForceDeadlySightDown_f },
+	{ "+force_blast", CG_ForceBlastDown_f },
+	{ "+force_strike", CG_ForceStrikeDown_f },
+	{ "-force_stasis", CG_ForceBind_Up },
+	{ "-force_destruction", CG_ForceBind_Up },
+	{ "-force_grasp", CG_ForceBind_Up },
+	{ "-force_repulse", CG_ForceBind_Up },
+	{ "-force_fear", CG_ForceBind_Up },
+	{ "-force_deadlysight", CG_ForceBind_Up },
+	{ "-force_blast", CG_ForceBind_Up },
+	{ "-force_strike", CG_ForceBind_Up },
 	{ "+md_wheel", CG_MDWheel_Down_f }, // the radial weapon / force wheel (cg_weapons.c), held
 	{ "+scores", CG_ScoresDown_f },
 	{ "-md_forcewheel", CG_MDWheel_Up_f },

@@ -23,13 +23,15 @@ of the emblem. The top bars hold the pages:
   searchable).
 - SETTINGS: Renderer, Display, Resolution, Controller (read from the config the game wrote last and written to the
   game's own configs); the launcher's Music and Check for updates (MovieDuels-Launcher.ini in Documents\My Games\
-  MovieDuels-UD9); the installation (Jedi Academy, every game file of texts/GameFiles.txt, the MD folder's pk3s can be
-  read), the add-ons, Open folder and Open config folder.
-- The emblem: amber when a game file of texts/GameFiles.txt is missing (looked at each time the launcher opens; click:
-  SETTINGS, which lists them), red when a newer update is out (latest.json of MovieDuels-Launcher-News; click: what's
-  new), else a click looks for an update. When a newer update than last time is installed, its files
-  are checked once: the bars either side of the emblem fill up. The launcher downloads nothing.
-- Which update the game's assets are is read from them the way the game does it (ui/main.menu "uiScript mdUpdate N").
+  MovieDuels-UD9); the installation (Jedi Academy, every game file of texts/GameFiles.txt, no outdated file of
+  texts/OldGameFiles.txt, installed in Jedi Academy's GameData and not in base or Jedi Outcast, the MD folder's pk3s
+  can be read), the add-ons, Open folder and Open config folder. The right column scrolls when it is long.
+- The emblem: amber when the installation is wrong (the wrong folder, an outdated file, a missing game file; looked at
+  each time the launcher opens; click: SETTINGS, which says what to do), red when a newer update is out (latest.json of
+  MovieDuels-Launcher-News; click: what's new), else a click looks for an update. When a newer update than last time
+  is installed, its files are checked once: the bars either side of the emblem fill up. The launcher downloads nothing.
+- Which update the game's assets are: md_version.txt in a pk3 of MD ("9.1" for a re-upload with fixes), else the way
+  the game does it (ui/main.menu "uiScript mdUpdate N"). Update numbers compare part by part (9 < 9.1 < 9.10 < 10).
 
 The window is a layered window with per-pixel alpha: its shape (the rounded corners) is the art's own alpha. It is
 DPI aware: everything is laid out in the WPF launcher's units (1/96 inch) and drawn at the screen's scale.
@@ -125,6 +127,60 @@ namespace
 	// the MovieDuels update of assets without "uiScript mdUpdate" in their main menu
 	constexpr int kDefaultUpdate = 9;
 
+	// A MovieDuels update number: "9", or "9.1", "9.2" for a re-upload with fixes. Compared part by part, so 9.10 comes
+	// after 9.9. The game itself only uses the whole number; the launcher reads the decimal one from md_version.txt
+	// (DetectUpdate) and from latest.json.
+	struct UpdateNumber
+	{
+		int major = 0;
+		int minor = 0;
+		std::wstring text = L"0"; // as written ("9.10" stays "9.10")
+
+		static UpdateNumber Of(const int whole)
+		{
+			UpdateNumber n;
+			n.major = whole;
+			n.text = std::to_wstring(whole);
+			return n;
+		}
+
+		// "9", "9.1" (a comma is taken as a point too); false when it is not a number like that
+		static bool Parse(std::wstring s, UpdateNumber& out)
+		{
+			const size_t first = s.find_first_not_of(L" \t\r\n");
+			const size_t last = s.find_last_not_of(L" \t\r\n");
+			if (first == std::wstring::npos)
+			{
+				return false;
+			}
+			s = s.substr(first, last - first + 1);
+			std::replace(s.begin(), s.end(), L',', L'.');
+			const size_t dot = s.find(L'.');
+			const std::wstring major_part = s.substr(0, dot);
+			const std::wstring minor_part = dot == std::wstring::npos ? L"" : s.substr(dot + 1);
+			const auto digits = [](const std::wstring& part)
+				{
+					return !part.empty() && part.size() <= 6 && std::all_of(part.begin(), part.end(), [](const wchar_t c) { return c >= L'0' && c <= L'9'; });
+				};
+			if (!digits(major_part) || (dot != std::wstring::npos && !digits(minor_part)))
+			{
+				return false;
+			}
+			out.major = std::stoi(major_part);
+			out.minor = minor_part.empty() ? 0 : std::stoi(minor_part);
+			out.text = out.minor > 0 ? std::to_wstring(out.major) + L"." + minor_part : std::to_wstring(out.major);
+			return true;
+		}
+
+		// what the launcher shows: only the whole number ("Update 9" for 9.1 too; DH 2026-11-11)
+		std::wstring Shown() const { return std::to_wstring(major); }
+
+		bool operator<(const UpdateNumber& o) const { return major != o.major ? major < o.major : minor < o.minor; }
+		bool operator>(const UpdateNumber& o) const { return o < *this; }
+		bool operator==(const UpdateNumber& o) const { return major == o.major && minor == o.minor; }
+		bool operator!=(const UpdateNumber& o) const { return !(*this == o); }
+	};
+
 	// colours from the art (the WPF launcher's brushes)
 	const Color kWhiteText(255, 249, 249, 249);
 	const Color kGoldText(255, 255, 204, 102);
@@ -185,7 +241,7 @@ namespace
 		bool music = true;       // launcher background music (speaker button)
 		Resolution resolution = { 0, 0 }; // { 0, 0 } = desktop
 		bool check_updates = true; // look for a new update (latest.json) when the launcher opens
-		int last_update = 0;       // the update the launcher last saw installed (0 = never ran): a higher one gets checked
+		UpdateNumber last_update;  // the update the launcher last saw installed (0 = never ran): a higher one gets checked
 		std::wstring seen_news;    // ids of the news articles already shown, comma separated
 	};
 
@@ -198,16 +254,16 @@ namespace
 	};
 	const Addon kAddons[] = {
 		{ L"Jedi Outcast", L"https://www.moddb.com/mods/movie-duels/downloads/movie-duels-jedi-outcast-addon",
-			// the add-on, and the player's own Jedi Outcast files copied into base under new names
-			{ L"MD\\r_outcastaddon.pk3", L"base\\0-assets0.pk3", L"base\\0-assets1.pk3", L"base\\0-assets2.pk3", L"base\\0-assets5.pk3" } },
-		{ L"TOTG S1: Dark Forces 2", L"https://www.moddb.com/mods/movie-duels/downloads/tales-of-the-galaxy-dark-forces-ii-duels",
-			{ L"MD\\TOTG_DF2.pk3" } },
+		// the add-on, and the player's own Jedi Outcast files copied into base under new names
+		{ L"MD\\r_outcastaddon.pk3", L"base\\0-assets0.pk3", L"base\\0-assets1.pk3", L"base\\0-assets2.pk3", L"base\\0-assets5.pk3" } },
+	{ L"TOTG S1: Dark Forces 2", L"https://www.moddb.com/mods/movie-duels/downloads/tales-of-the-galaxy-dark-forces-ii-duels",
+		{ L"MD\\TOTG_DF2.pk3" } },
 	};
 
 	// what latest.json says
 	struct Latest
 	{
-		int update = 0;
+		UpdateNumber update; // "update": 9, or "9.1" for a fix release (a string keeps "9.10" as written)
 		std::wstring title;
 		std::vector<std::wstring> whats_new;
 		std::wstring moddb = L"https://www.moddb.com/mods/movie-duels/downloads";
@@ -222,10 +278,22 @@ namespace
 	};
 
 	// the installation check
+	// where Movie Duels was installed: the launcher sits next to the game exes and the MD folder, which belong in Jedi
+	// Academy's GameData folder
+	enum class Place
+	{
+		Ok,
+		InsideBase,   // extracted into GameData\base instead of GameData
+		JediOutcast,  // installed into Jedi Outcast's GameData
+		NoJediAcademy // no Jedi Academy next to it (base\assets0-3.pk3 missing)
+	};
+
 	struct CheckResult
 	{
 		bool jedi_academy = false;
 		int pk3_count = 0;
+		Place place = Place::Ok;
+		std::vector<std::wstring> old;     // outdated files (texts/OldGameFiles.txt) that are still there
 		std::vector<std::wstring> missing; // game files (texts/GameFiles.txt) that are not there
 		std::vector<std::wstring> broken;  // pk3s that can't be read
 	};
@@ -357,7 +425,7 @@ namespace
 		HWND hwnd = nullptr;
 		std::wstring folder; // where the launcher (and the game exes) are
 		Settings settings;
-		int md_update = kDefaultUpdate;
+		UpdateNumber md_update = UpdateNumber::Of(kDefaultUpdate); // the MovieDuels update of the game's assets (9, 9.1, ...)
 		ULONGLONG start_tick = 0;
 
 		std::wstring music_file; // the music written to %TEMP% for MCI
@@ -430,6 +498,9 @@ namespace
 		CheckResult last_check;
 		std::vector<std::wstring> game_files;    // the pk3s a complete install has in MD (texts/GameFiles.txt)
 		std::vector<std::wstring> missing_files; // game files not in MD: the emblem warns on PLAY
+		std::vector<std::wstring> old_game_files; // outdated pk3s that must not be in MD (texts/OldGameFiles.txt)
+		std::vector<std::wstring> old_files;     // outdated files still in MD: the emblem warns too
+		Place place = Place::Ok;                 // installed in the wrong folder: the emblem warns too
 		bool bars_done = false;
 		Color blade = Color(255, 12, 145, 128);
 		Color blade_glow = Color(166, 40, 230, 200);
@@ -480,6 +551,8 @@ namespace
 		ULONGLONG credits_typed = 0;
 		bool search_focus = false;
 		Scroller mod_scroll, faq_scroll, team_scroll, credits_scroll, credits_nav_scroll;
+		Scroller settings_scroll;            // the right column of SETTINGS, when the installation has a lot to report
+		float settings_right_height = 0.0f;  // its content, as the last frame drew it
 
 		// the delayed things (WPF's DispatcherTimers)
 		std::vector<std::pair<ULONGLONG, std::function<void()>>> later;
@@ -690,7 +763,12 @@ namespace
 		g_launcher.settings.controller = GetPrivateProfileIntW(L"Options", L"Controller", 0, ini.c_str()) != 0;
 		g_launcher.settings.music = GetPrivateProfileIntW(L"Options", L"Music", 1, ini.c_str()) != 0;
 		g_launcher.settings.check_updates = GetPrivateProfileIntW(L"Options", L"CheckUpdates", 1, ini.c_str()) != 0;
-		g_launcher.settings.last_update = static_cast<int>(GetPrivateProfileIntW(L"Options", L"LastUpdate", 0, ini.c_str()));
+		wchar_t last[32] = {};
+		GetPrivateProfileStringW(L"Options", L"LastUpdate", L"0", last, 32, ini.c_str());
+		if (!UpdateNumber::Parse(last, g_launcher.settings.last_update))
+		{
+			g_launcher.settings.last_update = UpdateNumber();
+		}
 		std::vector<wchar_t> seen(8192);
 		GetPrivateProfileStringW(L"Options", L"SeenNews", L"", seen.data(), static_cast<DWORD>(seen.size()), ini.c_str());
 		g_launcher.settings.seen_news = seen.data();
@@ -705,7 +783,7 @@ namespace
 		WritePrivateProfileStringW(L"Options", L"Controller", g_launcher.settings.controller ? L"1" : L"0", ini.c_str());
 		WritePrivateProfileStringW(L"Options", L"Music", g_launcher.settings.music ? L"1" : L"0", ini.c_str());
 		WritePrivateProfileStringW(L"Options", L"CheckUpdates", g_launcher.settings.check_updates ? L"1" : L"0", ini.c_str());
-		WritePrivateProfileStringW(L"Options", L"LastUpdate", std::to_wstring(g_launcher.settings.last_update).c_str(), ini.c_str());
+		WritePrivateProfileStringW(L"Options", L"LastUpdate", g_launcher.settings.last_update.text.c_str(), ini.c_str());
 		WritePrivateProfileStringW(L"Options", L"SeenNews", g_launcher.settings.seen_news.c_str(), ini.c_str());
 	}
 
@@ -1031,10 +1109,17 @@ namespace
 	}
 
 	// ------------------------------------------------------------------------------------------
-	// Which MovieDuels update the installed assets are, found the way the game finds it: the singleplayer main menu
-	// (ui/main.menu) says it with "uiScript mdUpdate 9", which sets the game's read-only md_update cvar. A main menu
-	// without that line is Update 9 (the game's default). The menu the game loads is the one in the last pk3 (in name
-	// order) of the MD folder that has it.
+	// Which MovieDuels version the installed assets are:
+	//
+	// 1. md_version.txt in a pk3 of the MD folder (in MD_Assets.pk3; a later patch pk3 can bring a newer one; one below 9
+	//    is the MD 8 assets' and is skipped, like the game skips "mdUpdate 8"): the
+	//    version as text, for example "9.1" for a re-upload of Update 9 with fixes. The first number in the file counts,
+	//    so "Update 9.1" works too, and lines starting with "#" or "//" are notes.
+	// 2. Without that file, the way the game finds it: the singleplayer main menu (ui/main.menu) says it with
+	//    "uiScript mdUpdate 9", which sets the game's read-only md_update cvar. A main menu without that line is
+	//    Update 9 (the game's default).
+	//
+	// Like the game, the file in the last pk3 (in name order) of the MD folder that has it is the one that counts.
 	// ------------------------------------------------------------------------------------------
 
 	// minizip opens files with fopen (the ANSI code page): a path with other characters goes as its short 8.3 name
@@ -1071,8 +1156,8 @@ namespace
 		return "";
 	}
 
-	// The main menu text of a pk3, or false if it has none (or can't be read: not a zip, locked, ...).
-	bool ReadMainMenu(const std::wstring& pk3, std::string& text)
+	// A file's text from a pk3 (name with '/'), or false if it has none (or can't be read: not a zip, locked, ...).
+	bool ReadEntry(const std::wstring& pk3, const char* name, std::string& text)
 	{
 		const std::string path = ZipPath(pk3);
 		if (path.empty())
@@ -1086,7 +1171,9 @@ namespace
 		}
 		bool ok = false;
 		// 2: case-insensitive; pk3s made on Windows can have backslashes in their names
-		if (unzLocateFile(zip, "ui/main.menu", 2) == UNZ_OK || unzLocateFile(zip, "ui\\main.menu", 2) == UNZ_OK)
+		std::string backslashed = name;
+		std::replace(backslashed.begin(), backslashed.end(), '/', '\\');
+		if (unzLocateFile(zip, name, 2) == UNZ_OK || (backslashed != name && unzLocateFile(zip, backslashed.c_str(), 2) == UNZ_OK))
 		{
 			unz_file_info info = {};
 			if (unzGetCurrentFileInfo(zip, &info, nullptr, 0, nullptr, 0, nullptr, 0) == UNZ_OK
@@ -1103,7 +1190,44 @@ namespace
 		return ok;
 	}
 
-	int ParseUpdate(const std::string& menu)
+	// md_version.txt: the first number that isn't on a note line; false when there is none
+	bool ParseVersionFile(const std::string& text, UpdateNumber& version)
+	{
+		static const std::regex number("\\d+(?:\\.\\d+)?");
+		size_t start = 0;
+		while (start < text.size())
+		{
+			size_t end = text.find('\n', start);
+			if (end == std::string::npos)
+			{
+				end = text.size();
+			}
+			std::string line = text.substr(start, end - start);
+			start = end + 1;
+			const size_t first = line.find_first_not_of(" \t\r");
+			if (first == std::string::npos)
+			{
+				continue;
+			}
+			line = line.substr(first);
+			if (line[0] == '#' || line.compare(0, 2, "//") == 0)
+			{
+				continue;
+			}
+			std::smatch m;
+			if (std::regex_search(line, m, number))
+			{
+				const std::string found = m.str();
+				if (UpdateNumber::Parse(std::wstring(found.begin(), found.end()), version))
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	UpdateNumber ParseUpdate(const std::string& menu)
 	{
 		static const std::regex md_update_line("uiScript\\s+\"?mdUpdate\"?\\s+\"?(\\d+)", std::regex::icase);
 		size_t start = 0;
@@ -1126,15 +1250,15 @@ namespace
 				const int update = atoi(m[1].str().c_str());
 				if (update >= kDefaultUpdate)
 				{
-					return update;
+					return UpdateNumber::Of(update);
 				}
 			}
 			start = end + 1;
 		}
-		return kDefaultUpdate;
+		return UpdateNumber::Of(kDefaultUpdate);
 	}
 
-	int DetectUpdate()
+	UpdateNumber DetectUpdate()
 	{
 		const std::wstring dir = g_launcher.folder + L"\\" + kModFolder;
 		std::vector<std::wstring> pk3s;
@@ -1142,7 +1266,7 @@ namespace
 		const HANDLE find = FindFirstFileW((dir + L"\\*.pk3").c_str(), &fd);
 		if (find == INVALID_HANDLE_VALUE)
 		{
-			return kDefaultUpdate;
+			return UpdateNumber::Of(kDefaultUpdate);
 		}
 		do
 		{
@@ -1161,15 +1285,26 @@ namespace
 			});
 		for (const std::wstring& name : pk3s)
 		{
+			std::string text;
+			UpdateNumber version;
+			// below 9 it is the MD 8 assets' file (MD 9 ships MD_Assets.pk3 with "8.1"): ignored, as the game ignores
+			// "uiScript mdUpdate 8"
+			if (ReadEntry(dir + L"\\" + name, "md_version.txt", text) && ParseVersionFile(text, version)
+				&& version.major >= kDefaultUpdate)
+			{
+				return version;
+			}
+		}
+		for (const std::wstring& name : pk3s)
+		{
 			std::string menu;
-			if (ReadMainMenu(dir + L"\\" + name, menu))
+			if (ReadEntry(dir + L"\\" + name, "ui/main.menu", menu))
 			{
 				return ParseUpdate(menu);
 			}
 		}
-		return kDefaultUpdate;
+		return UpdateNumber::Of(kDefaultUpdate);
 	}
-
 
 	// ------------------------------------------------------------------------------------------
 	// Text helpers
@@ -1584,17 +1719,17 @@ namespace
 		{
 			return false;
 		}
-		const std::wstring update = o.Str(L"update");
-		if (update.empty() || !iswdigit(update[0]))
+		UpdateNumber update;
+		if (!UpdateNumber::Parse(o.Str(L"update"), update))
 		{
 			return false;
 		}
 		latest = Latest();
-		latest.update = _wtoi(update.c_str());
+		latest.update = update;
 		latest.title = o.Str(L"title");
 		if (latest.title.empty())
 		{
-			latest.title = L"Update " + std::to_wstring(latest.update);
+			latest.title = L"Update " + latest.update.Shown();
 		}
 		latest.article = o.Str(L"article");
 		if (!o.Str(L"moddb").empty())
@@ -1928,12 +2063,44 @@ namespace
 		return missing;
 	}
 
+	// the outdated files (texts/OldGameFiles.txt) that are still in the MD folder
+	std::vector<std::wstring> FoundOldGameFiles(const std::wstring& folder, const std::vector<std::wstring>& old_game_files)
+	{
+		std::vector<std::wstring> found;
+		for (const std::wstring& file : old_game_files)
+		{
+			if (PathFileExistsW((folder + L"\\" + kModFolder + L"\\" + file).c_str()))
+			{
+				found.push_back(file);
+			}
+		}
+		return found;
+	}
+
+	// where Movie Duels was installed (folder: the launcher's, next to the game exes and the MD folder)
+	Place CheckPlace(const std::wstring& folder)
+	{
+		const auto has = [&folder](const wchar_t* file) { return PathFileExistsW((folder + L"\\" + file).c_str()) != FALSE; };
+		if (!_wcsicmp(PathFindFileNameW(folder.c_str()), L"base") || has(L"assets0.pk3"))
+		{
+			return Place::InsideBase;
+		}
+		if (has(L"jk2sp.exe") || has(L"jk2mp.exe") || (has(L"base\\assets5.pk3") && !has(L"base\\assets3.pk3")))
+		{
+			return Place::JediOutcast;
+		}
+		return HasJediAcademy() ? Place::Ok : Place::NoJediAcademy;
+	}
+
 	// progress posted as kMsgCheckProgress (wparam done, lparam total; the name in a heap string), the result as
 	// kMsgCheckDone
-	void RunFilesCheck(const HWND hwnd, const std::wstring folder, const std::vector<std::wstring> game_files)
+	void RunFilesCheck(const HWND hwnd, const std::wstring folder, const std::vector<std::wstring> game_files,
+		const std::vector<std::wstring> old_game_files)
 	{
 		auto* result = new CheckResult;
 		result->jedi_academy = HasJediAcademy();
+		result->place = CheckPlace(folder);
+		result->old = FoundOldGameFiles(folder, old_game_files);
 		result->missing = MissingGameFiles(folder, game_files);
 		const std::vector<std::wstring> files = Pk3Files();
 		result->pk3_count = static_cast<int>(files.size());
@@ -2362,6 +2529,11 @@ namespace
 		{
 			return nullptr;
 		}
+		if (!data.Scan0)
+		{
+			shape.UnlockBits(&data);
+			return nullptr;
+		}
 		for (int y = 0; y < h; y++)
 		{
 			const BYTE* row = static_cast<const BYTE*>(data.Scan0) + static_cast<ptrdiff_t>(y) * data.Stride;
@@ -2383,6 +2555,11 @@ namespace
 		std::unique_ptr<Gdiplus::Bitmap> glow = NewSurface(w, h);
 		if (glow->LockBits(&rect, Gdiplus::ImageLockModeWrite, PixelFormat32bppPARGB, &data) != Gdiplus::Ok)
 		{
+			return nullptr;
+		}
+		if (!data.Scan0)
+		{
+			glow->UnlockBits(&data);
 			return nullptr;
 		}
 		for (int y = 0; y < h; y++)
@@ -2418,7 +2595,7 @@ namespace
 		int x0 = g_launcher.width, y0 = g_launcher.height, x1 = -1, y1 = -1;
 		if (full->LockBits(&rect, Gdiplus::ImageLockModeRead, PixelFormat32bppPARGB, &data) == Gdiplus::Ok)
 		{
-			for (int y = 0; y < g_launcher.height; y++)
+			for (int y = 0; data.Scan0 && y < g_launcher.height; y++)
 			{
 				const BYTE* row = static_cast<const BYTE*>(data.Scan0) + static_cast<ptrdiff_t>(y) * data.Stride;
 				for (int x = 0; x < g_launcher.width; x++)
@@ -2494,7 +2671,7 @@ namespace
 			Gdiplus::BitmapData data = {};
 			if (panel->LockBits(&rect, Gdiplus::ImageLockModeRead, PixelFormat32bppPARGB, &data) == Gdiplus::Ok)
 			{
-				for (int y = 0; y < l.bar_rect.Height; y++)
+				for (int y = 0; data.Scan0 && y < l.bar_rect.Height; y++)
 				{
 					const int py = l.bar_rect.Y + y - l.play_panel.y;
 					for (int x = 0; x < l.bar_rect.Width; x++)
@@ -3125,24 +3302,30 @@ namespace
 		pen.SetLineJoin(Gdiplus::LineJoinRound);
 		const float ox = x + g_dx, oy = y + g_dy;
 		g.DrawLine(&pen, ox, oy + 6.0f, ox + 6.0f, oy);
-		const PointF head[] = { { ox + 2.0f, oy }, { ox + 6.0f, oy }, { ox + 6.0f, oy + 4.0f } };
+		const PointF head[] = { { ox + 2.0f, oy },{ ox + 6.0f, oy },{ ox + 6.0f, oy + 4.0f } };
 		g.DrawLines(&pen, head, 3);
 	}
 
-	// a small framed link button ("Get it", a credit's site) with the outside-link arrow
-	bool LinkChip(Gdiplus::Graphics& g, const RectF& r, const std::wstring& text, const std::wstring& key, const std::wstring& url)
+	// a small framed link button ("Get it", a credit's site) with the outside-link arrow; with click it does that
+	// instead of opening url (the tooltip), and has no arrow
+	bool LinkChip(Gdiplus::Graphics& g, const RectF& r, const std::wstring& text, const std::wstring& key, const std::wstring& url,
+		std::function<void()> click = nullptr)
 	{
-		const bool hover = Hot(r, key, [url]() { OpenUrl(url); }, url);
+		const bool arrow = !click;
+		const bool hover = Hot(r, key, click ? std::move(click) : std::function<void()>([url]() { OpenUrl(url); }), url);
 		FillRound(g, r, 5.0f, hover ? Color(31, 255, 204, 102) : Color(89, 0, 0, 0));
 		StrokeRound(g, r, 5.0f, hover ? kGoldText : kLine2);
-		DrawLine(g, text, kFontUISemi, 11.0f, kGoldBright, RectF(r.X + 8.0f, r.Y, r.Width - 16.0f - 10.0f, r.Height));
-		DrawOutArrow(g, r.X + r.Width - 8.0f - 7.0f, r.Y + r.Height / 2.0f - 3.5f, kGoldBright);
+		DrawLine(g, text, kFontUISemi, 11.0f, kGoldBright, RectF(r.X + 8.0f, r.Y, r.Width - 16.0f - (arrow ? 10.0f : 0.0f), r.Height));
+		if (arrow)
+		{
+			DrawOutArrow(g, r.X + r.Width - 8.0f - 7.0f, r.Y + r.Height / 2.0f - 3.5f, kGoldBright);
+		}
 		return hover;
 	}
 
-	float LinkChipWidth(const std::wstring& text)
+	float LinkChipWidth(const std::wstring& text, const bool arrow = true)
 	{
-		return TextWidth(kFontUISemi, 11.0f, text) + 16.0f + 2.0f + 10.0f;
+		return TextWidth(kFontUISemi, 11.0f, text) + 16.0f + 2.0f + (arrow ? 10.0f : 0.0f);
 	}
 
 	// a two-way switch of SETTINGS: the chosen half is gold
@@ -3209,7 +3392,7 @@ namespace
 	{
 		bool moving = false;
 		for (Scroller* s : { &g_launcher.article_scroll, &g_launcher.mod_scroll, &g_launcher.faq_scroll, &g_launcher.team_scroll,
-			&g_launcher.credits_scroll, &g_launcher.credits_nav_scroll })
+			&g_launcher.credits_scroll, &g_launcher.credits_nav_scroll, &g_launcher.settings_scroll })
 		{
 			if (s->offset != s->target)
 			{
@@ -3275,7 +3458,7 @@ namespace
 	// multiplayer is played with Update 9 and later
 	bool HasMultiplayer()
 	{
-		return g_launcher.md_update >= 9;
+		return g_launcher.md_update.major >= 9;
 	}
 
 	// ------------------------------------------------------------------------------------------
@@ -3341,22 +3524,52 @@ namespace
 		StartTimer();
 	}
 
-	// game files are missing (not while the bars check the new files)
-	bool FilesMissing()
-	{
-		return !g_launcher.missing_files.empty() && !g_launcher.checking_files;
-	}
-
 	std::wstring MissingText()
 	{
 		const size_t n = g_launcher.missing_files.size();
 		return std::to_wstring(n) + (n == 1 ? L" game file is missing" : L" game files are missing");
 	}
 
-	// looks at the game files again (each time the launcher opens, on SETTINGS, after a check)
+	std::wstring OldText()
+	{
+		const size_t n = g_launcher.old_files.size();
+		return std::to_wstring(n) + (n == 1 ? L" old file needs to be removed" : L" old files need to be removed");
+	}
+
+	// the most important problem with the installation, or "": the wrong folder, then outdated files, then missing ones
+	std::wstring ProblemText()
+	{
+		const Launcher& l = g_launcher;
+		switch (l.place)
+		{
+		case Place::InsideBase: return L"Movie Duels is inside the base folder";
+		case Place::JediOutcast: return L"Movie Duels is installed in Jedi Outcast";
+		case Place::NoJediAcademy: return L"Jedi Academy wasn't found next to Movie Duels";
+		case Place::Ok: break;
+		}
+		return !l.old_files.empty() ? OldText() : !l.missing_files.empty() ? MissingText() : L"";
+	}
+
+	// something is wrong with the installation (not while the bars check the new files): the emblem warns
+	bool FilesMissing()
+	{
+		return !g_launcher.checking_files && !ProblemText().empty();
+	}
+
+	// what the reminder and the tooltip add after the problem
+	std::wstring ProblemClick()
+	{
+		return g_launcher.place != Place::Ok ? L". Click for details." : L". Click to see which.";
+	}
+
+	// looks at the installation again without reading the pk3s (milliseconds: each time the launcher opens, on
+	// SETTINGS, after a check): the folder it is in, outdated files and missing game files
 	void FindMissingFiles()
 	{
-		g_launcher.missing_files = MissingGameFiles(g_launcher.folder, g_launcher.game_files);
+		Launcher& l = g_launcher;
+		l.place = CheckPlace(l.folder);
+		l.old_files = FoundOldGameFiles(l.folder, l.old_game_files);
+		l.missing_files = MissingGameFiles(l.folder, l.game_files);
 	}
 
 	std::wstring EmblemTip()
@@ -3368,9 +3581,9 @@ namespace
 		case Emblem::Available: return L""; // the reminder says it
 		case Emblem::Verify: return L"Checking the new files...";
 		case Emblem::Ready: return L"Ready!";
-		case Emblem::Warning: return MissingText() + L". Click to see which.";
+		case Emblem::Warning: return ProblemText() + L". Click for details.";
 		default:
-			return l.settings.check_updates ? L"Update " + std::to_wstring(l.md_update) + L": you're up to date. Click to check again."
+			return l.settings.check_updates ? L"Update " + l.md_update.Shown() + L": you're up to date. Click to check again."
 				: L"Click to check for updates";
 		}
 	}
@@ -3446,7 +3659,7 @@ namespace
 				else if (m.update_asked)
 				{
 					ShowToast(!ok ? L"Failed to check for updates."
-						: L"Update " + std::to_wstring(m.md_update) + L" is the latest. You're up to date.");
+						: L"Update " + m.md_update.Shown() + L" is the latest. You're up to date.");
 				}
 				Render();
 			};
@@ -3480,7 +3693,7 @@ namespace
 		Launcher& l = g_launcher;
 		if (l.emblem == Emblem::Warning)
 		{
-			SetPage(Page::Settings); // the list of what is missing
+			SetPage(Page::Settings); // what is wrong and what to do
 		}
 		else if (l.emblem == Emblem::Available)
 		{
@@ -3515,7 +3728,8 @@ namespace
 		const HWND hwnd = l.hwnd;
 		const std::wstring folder = l.folder;
 		const std::vector<std::wstring> game_files = l.game_files;
-		std::thread([hwnd, folder, game_files]() { RunFilesCheck(hwnd, folder, game_files); }).detach();
+		const std::vector<std::wstring> old_game_files = l.old_game_files;
+		std::thread([hwnd, folder, game_files, old_game_files]() { RunFilesCheck(hwnd, folder, game_files, old_game_files); }).detach();
 	}
 
 	// a newer update than last time is installed: check its files once, with the bars
@@ -3541,15 +3755,18 @@ namespace
 	{
 		Launcher& l = g_launcher;
 		l.bars_done = true;
-		const bool unlocked = HasMultiplayer() && l.settings.last_update < 9;
+		const bool unlocked = HasMultiplayer() && l.settings.last_update.major < 9;
 		l.settings.last_update = l.md_update;
 		SaveSettings();
 		l.missing_files = l.last_check.missing;
-		const bool missing = !l.missing_files.empty();
-		const size_t broken = l.last_check.broken.size() + l.missing_files.size();
-		l.status_left = broken == 0 ? L"UPDATE " + std::to_wstring(l.md_update) + L" IS READY"
+		l.old_files = l.last_check.old;
+		l.place = l.last_check.place;
+		const std::wstring problem = ProblemText();
+		const bool missing = !problem.empty();
+		const size_t broken = l.last_check.broken.size() + l.missing_files.size() + l.old_files.size() + (l.place != Place::Ok ? 1 : 0);
+		l.status_left = broken == 0 ? L"UPDATE " + l.md_update.Shown() + L" IS READY"
 			: std::to_wstring(broken) + (broken == 1 ? L" FILE" : L" FILES") + L" TO LOOK AT";
-		l.status_right = broken == 0 ? L"All files checked" : missing ? MissingText() + L". See Settings" : L"See Settings";
+		l.status_right = broken == 0 ? L"All files checked" : missing ? problem + L". See Settings" : L"See Settings";
 		if (broken > 0)
 		{
 			l.blade = Color(255, 85, 85, 90);
@@ -3582,8 +3799,8 @@ namespace
 				ShowUpdate();
 				m.modes_fade.Snap(0.0f);
 				m.modes_fade.Set(1.0f, 550.0f);
-				const std::wstring n = std::to_wstring(m.md_update);
-				ShowToast(missing ? MissingText() + L". Settings shows which."
+				const std::wstring n = m.md_update.Shown();
+				ShowToast(missing ? ProblemText() + L". Settings shows what to do."
 					: broken > 0 ? std::to_wstring(broken) + L" of the new files could not be read. Settings shows which."
 					: unlocked ? L"Update " + n + L" is ready. Multiplayer is now available!" : L"Update " + n + L" is ready. Have fun!");
 			});
@@ -3651,12 +3868,26 @@ namespace
 				{
 					list += (list.empty() ? L"" : L", ") + file;
 				}
-				m.settings_check_text = !m.last_check.jedi_academy ? L"Jedi Academy was not found next to the MD folder."
+				std::wstring old;
+				for (const std::wstring& file : m.last_check.old)
+				{
+					old += (old.empty() ? L"" : L", ") + file;
+				}
+				const size_t olds = m.last_check.old.size();
+				m.settings_check_text = m.last_check.place == Place::InsideBase
+					? L"Movie Duels is inside the base folder. Move the launcher, the game exes and the MD folder into GameData."
+					: m.last_check.place == Place::JediOutcast
+					? L"Movie Duels is installed in Jedi Outcast. Install it into Jedi Academy's GameData folder."
+					: !m.last_check.jedi_academy ? L"Jedi Academy was not found next to the MD folder."
+					: olds > 0 ? L"Remove " + std::wstring(olds == 1 ? L"this old file" : L"these old files") + L" from the MD folder: " + old
+					+ L". They clash with the current version."
 					: missing > 0 ? std::to_wstring(missing) + (missing == 1 ? L" game file is" : L" game files are") + L" missing: " + list
-						+ L". Install the update again from ModDB."
+					+ L". Install the update again from ModDB."
 					: broken > 0 ? std::to_wstring(broken) + (broken == 1 ? L" file" : L" files") + L" can't be read. Get them again from ModDB."
 					: L"Everything is installed: all " + std::to_wstring(m.game_files.size()) + L" game files found and readable.";
 				m.missing_files = m.last_check.missing;
+				m.old_files = m.last_check.old;
+				m.place = m.last_check.place;
 				PlaySfx(IDR_SND_CLICK);
 				ShowUpdate();
 				Render();
@@ -4450,7 +4681,7 @@ namespace
 	void StartUp()
 	{
 		Launcher& l = g_launcher;
-		if (l.settings.last_update > 0 && l.md_update > l.settings.last_update)
+		if (l.settings.last_update > UpdateNumber() && l.md_update > l.settings.last_update)
 		{
 			CheckNewFiles();
 		}
@@ -4524,6 +4755,11 @@ namespace
 		Gdiplus::BitmapData data = {};
 		if (blades.LockBits(&rect, Gdiplus::ImageLockModeWrite, PixelFormat32bppPARGB, &data) != Gdiplus::Ok)
 		{
+			return;
+		}
+		if (!data.Scan0)
+		{
+			blades.UnlockBits(&data);
 			return;
 		}
 		const float s = l.scale;
@@ -4694,7 +4930,7 @@ namespace
 			const bool missing = FilesMissing();
 			if ((missing || (UpdateAvailable() && !l.chip_dismissed)) && !l.sheet_open)
 			{
-				const std::wstring text = missing ? MissingText() + L". Click to see which." : l.latest.title + L" is out! Click to see what's new.";
+				const std::wstring text = missing ? ProblemText() + ProblemClick() : l.latest.title + L" is out! Click to see what's new.";
 				const float w = TextWidth(kFontUISemi, 13.0f, text) + 28.0f;
 				const RectF r(544.0f - w / 2.0f, 484.0f, w, 28.0f);
 				Hot(r, L"chip", EmblemClick);
@@ -4727,8 +4963,8 @@ namespace
 			float x, w;
 			Page page;
 		};
-		const Nav navs[] = { { L"PLAY", 62.0f, 100.0f, Page::Play }, { L"NEWS", 178.0f, 100.0f, Page::News },
-			{ L"ABOUT", 790.0f, 100.0f, Page::About }, { L"SETTINGS", 905.0f, 120.0f, Page::Settings } };
+		const Nav navs[] = { { L"PLAY", 62.0f, 100.0f, Page::Play },{ L"NEWS", 178.0f, 100.0f, Page::News },
+			{ L"ABOUT", 790.0f, 100.0f, Page::About },{ L"SETTINGS", 905.0f, 120.0f, Page::Settings } };
 		const int unread = UnreadNews();
 		for (const Nav& n : navs)
 		{
@@ -4830,8 +5066,8 @@ namespace
 			if (i == 0)
 			{
 				// a speaker: waves when the music is on, a cross when it is off
-				const PointF speaker[] = { { r.X + 5.5f, r.Y + 9.0f }, { r.X + 8.5f, r.Y + 9.0f }, { r.X + 12.0f, r.Y + 6.0f },
-					{ r.X + 12.0f, r.Y + 16.0f }, { r.X + 8.5f, r.Y + 13.0f }, { r.X + 5.5f, r.Y + 13.0f } };
+				const PointF speaker[] = { { r.X + 5.5f, r.Y + 9.0f },{ r.X + 8.5f, r.Y + 9.0f },{ r.X + 12.0f, r.Y + 6.0f },
+					{ r.X + 12.0f, r.Y + 16.0f },{ r.X + 8.5f, r.Y + 13.0f },{ r.X + 5.5f, r.Y + 13.0f } };
 				g.DrawPolygon(&mark, speaker, 6);
 				if (l.settings.music)
 				{
@@ -4985,7 +5221,7 @@ namespace
 			pen.SetEndCap(Gdiplus::LineCapRound);
 			pen.SetLineJoin(Gdiplus::LineJoinRound);
 			const RectF m = Moved(r);
-			const PointF arrow[] = { { m.X + 24.0f, m.Y + 13.5f }, { m.X + 18.0f, m.Y + 20.0f }, { m.X + 24.0f, m.Y + 26.5f } };
+			const PointF arrow[] = { { m.X + 24.0f, m.Y + 13.5f },{ m.X + 18.0f, m.Y + 20.0f },{ m.X + 24.0f, m.Y + 26.5f } };
 			g.DrawLines(&pen, arrow, 3);
 		}
 		if (l.news_scroll.offset < l.news_scroll.max - 8.0f)
@@ -4997,7 +5233,7 @@ namespace
 			pen.SetEndCap(Gdiplus::LineCapRound);
 			pen.SetLineJoin(Gdiplus::LineJoinRound);
 			const RectF m = Moved(r);
-			const PointF arrow[] = { { m.X + 18.0f, m.Y + 13.5f }, { m.X + 24.0f, m.Y + 20.0f }, { m.X + 18.0f, m.Y + 26.5f } };
+			const PointF arrow[] = { { m.X + 18.0f, m.Y + 13.5f },{ m.X + 24.0f, m.Y + 20.0f },{ m.X + 18.0f, m.Y + 26.5f } };
 			g.DrawLines(&pen, arrow, 3);
 		}
 	}
@@ -5027,7 +5263,7 @@ namespace
 		{
 			const Gdiplus::SolidBrush white(Alpha(Color(255, 255, 255, 255), g_alpha));
 			const float px = play.X + g_dx + (68.0f - 18.0f) / 2.0f + 2.0f, py = play.Y + g_dy + (48.0f - 22.0f) / 2.0f;
-			const PointF triangle[] = { { px, py }, { px + 18.0f, py + 11.0f }, { px, py + 22.0f } };
+			const PointF triangle[] = { { px, py },{ px + 18.0f, py + 11.0f },{ px, py + 22.0f } };
 			g.FillPolygon(&white, triangle, 3);
 		}
 		DrawLine(g, L"Watch on YouTube \x2197", kFontUISemi, 13.0f, Color(255, 255, 255, 255),
@@ -5153,8 +5389,8 @@ namespace
 			const wchar_t* url;
 			int icon;
 		};
-		const Link links[] = { { L"ModDB", L"Download", kUrlModDB, 0 }, { L"Nexus Mods", L"Download", kUrlNexus, 1 },
-			{ L"Discord", L"Community and help", kUrlDiscord, 2 }, { L"YouTube", L"Trailers and guides", kUrlYouTube, 3 },
+		const Link links[] = { { L"ModDB", L"Download", kUrlModDB, 0 },{ L"Nexus Mods", L"Download", kUrlNexus, 1 },
+			{ L"Discord", L"Community and help", kUrlDiscord, 2 },{ L"YouTube", L"Trailers and guides", kUrlYouTube, 3 },
 			{ L"JKHub", L"Files and forum", kUrlJKHub, 4 } };
 		float y = 161.0f;
 		for (const Link& link : links)
@@ -5185,7 +5421,7 @@ namespace
 		{
 			const wchar_t* text;
 			Tab tab;
-		} tabs[] = { { L"ABOUT", Tab::Mod }, { L"FAQ", Tab::Faq }, { L"TEAM", Tab::Team }, { L"CREDITS", Tab::Credits } };
+		} tabs[] = { { L"ABOUT", Tab::Mod },{ L"FAQ", Tab::Faq },{ L"TEAM", Tab::Team },{ L"CREDITS", Tab::Credits } };
 		for (const auto& t : tabs)
 		{
 			const float w = TextWidth(kFontLabel, 18.0f, t.text) + 2.0f;
@@ -5895,9 +6131,10 @@ namespace
 		}
 	}
 
-	// a row with a mark, a name and what was found; link: a "Get it" button that opens the page
+	// a row with a mark, a name and what was found; link: a "Get it" button that opens the page, or with
+	// "folder:MD" a button (link_text) that opens that folder of the game
 	void InstallRow(Gdiplus::Graphics& g, const float x, const float y, const float w, const wchar_t* state, const std::wstring& name,
-		const std::wstring& text, const float name_w, const std::wstring& link = L"")
+		const std::wstring& text, const float name_w, const std::wstring& link = L"", const std::wstring& link_text = L"Get it")
 	{
 		const std::wstring s = state;
 		const Color c = s == L"ok" ? Color(255, 47, 214, 191) : s == L"warn" ? kGoldText : s == L"skip" ? kDimText : Color(255, 255, 143, 122);
@@ -5912,7 +6149,7 @@ namespace
 			const float mx = mark.X + 9.0f + g_dx, my = mark.Y + 9.0f + g_dy;
 			if (s == L"ok")
 			{
-				const PointF tick[] = { { mx - 3.5f, my + 0.2f }, { mx - 1.0f, my + 2.8f }, { mx + 3.8f, my - 2.6f } };
+				const PointF tick[] = { { mx - 3.5f, my + 0.2f },{ mx - 1.0f, my + 2.8f },{ mx + 3.8f, my - 2.6f } };
 				g.DrawLines(&pen, tick, 3);
 			}
 			else if (s == L"warn")
@@ -5934,8 +6171,21 @@ namespace
 		float right = x + w;
 		if (!link.empty())
 		{
-			const float cw = LinkChipWidth(L"Get it");
-			LinkChip(g, RectF(right - cw, y + 4.5f, cw, 21.0f), L"Get it", L"get" + name, link);
+			const bool folder = link.compare(0, 7, L"folder:") == 0;
+			const float cw = LinkChipWidth(link_text, !folder);
+			if (folder)
+			{
+				const std::wstring target = g_launcher.folder + L"\\" + link.substr(7);
+				LinkChip(g, RectF(right - cw, y + 4.5f, cw, 21.0f), link_text, L"get" + name, target, [target]()
+					{
+						PlaySfx(IDR_SND_CLICK);
+						OpenFolder(target);
+					});
+			}
+			else
+			{
+				LinkChip(g, RectF(right - cw, y + 4.5f, cw, 21.0f), link_text, L"get" + name, link);
+			}
 			right -= cw + 8.0f;
 		}
 		const RectF detail(x + 27.0f + name_w, y, right - x - 27.0f - name_w, 30.0f);
@@ -5997,9 +6247,13 @@ namespace
 				}
 			});
 
-		// LAUNCHER
-		DrawHeading(g, L"LAUNCHER", rx, 142.0f);
-		y = 167.0f;
+		// LAUNCHER, INSTALLATION and ADDONS: the right column scrolls when the installation has a lot to report
+		const RectF right_view(rx, 134.0f, cw + 14.0f, 422.0f);
+		RectF saved_clip;
+		const float right_top = BeginScroll(g, l.settings_scroll, right_view, l.settings_right_height, saved_clip);
+		const float right_dy = right_top - right_view.Y;
+		DrawHeading(g, L"LAUNCHER", rx, 142.0f + right_dy);
+		y = 167.0f + right_dy;
 		SettingRow(g, rx, y, cw, 53.0f, L"Music", L"Play background music", true);
 		Switch(g, rx + cw, y + 26.5f, L"Off", L"On", s.music, L"music", [](const bool b)
 			{
@@ -6031,10 +6285,22 @@ namespace
 		DrawHeading(g, L"INSTALLATION", rx, y);
 		y += 19.0f;
 		const bool ja = HasJediAcademy();
-		InstallRow(g, rx, y, cw, ja ? L"ok" : L"bad", L"Jedi Academy", ja ? L"Found: base\\assets0-3.pk3" : L"Not found next to the MD folder", 94.0f);
+		switch (l.place)
+		{
+		case Place::InsideBase:
+			InstallRow(g, rx, y, cw, L"bad", L"Jedi Academy", L"Movie Duels is inside base. Move the launcher, the game exes and the MD folder into GameData.", 94.0f);
+			break;
+		case Place::JediOutcast:
+			InstallRow(g, rx, y, cw, L"bad", L"Jedi Academy", L"This is Jedi Outcast's folder. Install Movie Duels into Jedi Academy's GameData folder.", 94.0f);
+			break;
+		default:
+			InstallRow(g, rx, y, cw, ja ? L"ok" : L"bad", L"Jedi Academy", ja ? L"Found: base\\assets0-3.pk3"
+				: L"Not found. Install Movie Duels into Jedi Academy's GameData folder.", 94.0f);
+			break;
+		}
 		y += 30.0f;
 		const size_t pk3 = Pk3Files().size();
-		const std::wstring update = L"Update " + std::to_wstring(l.md_update);
+		const std::wstring update = L"Update " + l.md_update.Shown();
 		if (pk3 == 0)
 		{
 			InstallRow(g, rx, y, cw, L"bad", L"Movie Duels", L"No pk3 files in the MD folder", 94.0f);
@@ -6063,6 +6329,16 @@ namespace
 				+ (l.have_check ? L" and readable" : L""), 94.0f);
 		}
 		y += 30.0f;
+		if (!l.old_files.empty())
+		{
+			std::wstring list;
+			for (const std::wstring& file : l.old_files)
+			{
+				list += (list.empty() ? L"" : L", ") + file;
+			}
+			InstallRow(g, rx, y, cw, L"bad", L"Old files", L"Remove from MD: " + list, 94.0f, std::wstring(L"folder:") + kModFolder, L"Open MD folder");
+			y += 30.0f;
+		}
 		if (l.settings_check_shown)
 		{
 			y += 8.0f;
@@ -6101,7 +6377,7 @@ namespace
 				const wchar_t* text;
 				const wchar_t* key;
 				const wchar_t* tip;
-			} buttons[] = { { L"Check installation", L"checkinst", L"" }, { L"Open folder", L"openfolder", L"The game folder" },
+			} buttons[] = { { L"Check installation", L"checkinst", L"" },{ L"Open folder", L"openfolder", L"The game folder" },
 				{ L"Open config folder", L"openconfig", L"Documents\\My Games\\MovieDuels-UD9\\MD: the game's configs and saves" } };
 			for (int i = 0; i < 3; i++)
 			{
@@ -6161,6 +6437,13 @@ namespace
 				InstallRow(g, rx, y, cw, L"warn", addon.name, L"Missing " + list, 150.0f, addon.page);
 			}
 			y += 30.0f;
+		}
+		const float right_height = y - right_top + 8.0f;
+		EndScroll(g, l.settings_scroll, saved_clip, L"settings");
+		if (std::fabs(right_height - l.settings_right_height) > 0.5f)
+		{
+			l.settings_right_height = right_height; // the next frame scrolls with it
+			StartTimer();
 		}
 	}
 
@@ -6295,11 +6578,11 @@ namespace
 	{
 		const Launcher& l = g_launcher;
 		TextBox version;
-		version.runs.push_back(Run(L"Update " + std::to_wstring(l.md_update), kFontUI, 11.0f, kVersionGrey));
+		version.runs.push_back(Run(L"Update " + l.md_update.Shown(), kFontUI, 11.0f, kVersionGrey));
 		if (FilesMissing())
 		{
 			version.runs.push_back(Run(L"  \x00B7  ", kFontUI, 11.0f, kVersionGrey));
-			version.runs.push_back(Run(MissingText(), kFontUISemi, 11.0f, Alpha(Color(255, 255, 170, 40), 0.3f)));
+			version.runs.push_back(Run(ProblemText(), kFontUISemi, 11.0f, Alpha(Color(255, 255, 170, 40), 0.3f)));
 		}
 		else if (UpdateAvailable())
 		{
@@ -6433,8 +6716,9 @@ namespace
 		{
 			const wchar_t* key;
 			Scroller* s;
-		} thumbs[] = { { L"articlethumb", &l.article_scroll }, { L"modthumb", &l.mod_scroll }, { L"faqthumb", &l.faq_scroll },
-			{ L"teamthumb", &l.team_scroll }, { L"creditsthumb", &l.credits_scroll }, { L"cnavthumb", &l.credits_nav_scroll } };
+		} thumbs[] = { { L"articlethumb", &l.article_scroll },{ L"modthumb", &l.mod_scroll },{ L"faqthumb", &l.faq_scroll },
+			{ L"teamthumb", &l.team_scroll },{ L"creditsthumb", &l.credits_scroll },{ L"cnavthumb", &l.credits_nav_scroll },
+			{ L"settingsthumb", &l.settings_scroll } };
 		for (const auto& t : thumbs)
 		{
 			if (key == t.key)
@@ -7007,7 +7291,8 @@ int WINAPI wWinMain(_In_ const HINSTANCE instance, _In_opt_ HINSTANCE, _In_ PWST
 	ParseFaq(ResourceText(IDR_TEXT_FAQ));
 	ParseTeam(ResourceText(IDR_TEXT_TEAM));
 	l.game_files = ParseGameFiles(ResourceText(IDR_TEXT_GAMEFILES));
-	FindMissingFiles(); // each time the launcher opens: the warning on PLAY (amber emblem) when a game file is missing
+	l.old_game_files = ParseGameFiles(ResourceText(IDR_TEXT_OLDGAMEFILES));
+	FindMissingFiles(); // each time the launcher opens: the warning on PLAY (amber emblem) when the installation is wrong
 
 	// the PLAY page at once
 	l.art_fade.Snap(1.0f);

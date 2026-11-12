@@ -88,7 +88,7 @@ XCVAR_DEF(g_debugServerSkel, "0", NULL, CVAR_CHEAT, qfalse)
 #ifdef _DEBUG
 XCVAR_DEF(g_disableServerG2, "0", NULL, CVAR_NONE, qtrue)
 #endif
-XCVAR_DEF(g_dismember, "80", NULL, CVAR_ARCHIVE, qtrue)
+XCVAR_DEF(g_dismember, "100", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_gundismemberment, "1", NULL, CVAR_ARCHIVE, qtrue) // every gun dismemberment (head and body shots, gun cuts); 0 = off
 XCVAR_DEF(g_saberSlice, "1", NULL, CVAR_ARCHIVE, qtrue) // saber kills cut at the blade's contact point (Jedi Survivor style); 0 = old limb dismemberment
 XCVAR_DEF(g_saberThrowGripAim, "1", NULL, CVAR_ARCHIVE, qfalse) // holding an enemy with grip / grasp: the thrown saber flies into him (DH 2026-11-01); 0 = where the crosshair is
@@ -199,7 +199,7 @@ XCVAR_DEF(g_dodgeRegenTime, "1000", NULL, CVAR_SERVERINFO | CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_mishapRegenTime, "3000", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_debugviewlock, "0", NULL, CVAR_NONE, qfalse)
 XCVAR_DEF(g_saberAnimSpeed, "1.0", NULL, CVAR_ARCHIVE, qtrue)
-XCVAR_DEF(g_RealisticBlockingMode, "1", NULL, CVAR_ARCHIVE | CVAR_LATCH, qtrue) // as SP: the player's menu choice (used when hosting a local game)
+XCVAR_DEF(g_RealisticBlockingMode, "0", NULL, CVAR_ARCHIVE | CVAR_LATCH, qtrue) // as SP: the player's menu choice (used when hosting a local game)
 // Animation style (SP g_ActivateAnimationStyle, g_main.c G_LatchAnimationStyle). The host's setting: 0 = Classic (every
 // model its own dedicated animation set), 1 = Master (the master _humanoid set; each player's own style from his
 // userinfo md_animstyle). Used in every game, solo or online (DH 2026-11-02); Update 9 clients only with Master.
@@ -268,14 +268,14 @@ XCVAR_DEF(g_DebugSaberCombat, "0", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_WeaponRemovalTime, "10", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_remove_unused_weapons, "1", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(com_outcast, "0", NULL, CVAR_ARCHIVE, qtrue)
-XCVAR_DEF(g_AllowLedgeGrab, "1", NULL, CVAR_ARCHIVE, qtrue)
+XCVAR_DEF(g_AllowLedgeGrab, "0", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_ledgeGrabMinAir, "16", NULL, CVAR_ARCHIVE, qtrue) // a ledge is grabbed only with the feet this high off the floor (DH 2026-10-26; 0 = old)
 // internal move locks (no menu entries): 1 = allowed, 0 = turned off. The pmove ones go to clients (SYSTEMINFO) for prediction.
-XCVAR_DEF(g_saberscanstickinenemy, "1", NULL, CVAR_ARCHIVE, qtrue)
+XCVAR_DEF(g_saberscanstickinenemy, "0", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_candojumpdash, "1", NULL, CVAR_ARCHIVE | CVAR_SYSTEMINFO, qtrue)
 XCVAR_DEF(g_candodoublejump, "1", NULL, CVAR_ARCHIVE | CVAR_SYSTEMINFO, qtrue)
 XCVAR_DEF(g_attackskill, "3", NULL, CVAR_ARCHIVE, qtrue)
-XCVAR_DEF(g_saberLockCinematicCamera, "1", NULL, CVAR_ARCHIVE, qtrue)
+XCVAR_DEF(g_saberLockCinematicCamera, "0", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_saberdebug, "0", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_cheatoverride, "0", NULL, CVAR_NONE, qfalse)
 XCVAR_DEF(g_noPadawanNames, "1", NULL, CVAR_ARCHIVE, qfalse)
@@ -294,7 +294,17 @@ XCVAR_DEF(g_holocronCooldown, "60", NULL, CVAR_LATCH, qtrue)
 XCVAR_DEF(g_maxHolocronGift, "1", NULL, CVAR_LATCH, qtrue)
 XCVAR_DEF(g_debugHolocron, "0", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_overpoweredsaberthrow, "0", NULL, CVAR_ARCHIVE, qtrue)
-XCVAR_DEF(g_sabermustreturn, "1", NULL, CVAR_ARCHIVE, qtrue)
+XCVAR_DEF(g_sabermustreturn, "0", NULL, CVAR_ARCHIVE, qtrue) // SP g_sabermustreturn: 1 = a player's thrown saber always comes back (no wall stick / drop); 0 = SP's default drop rules (DH 2026-11-11)
+// SP squad tactics (NPC_AI_Stormtrooper.c Squad_*), for SP levels in GT_SINGLE_PLAYER (DH 2026-11-11)
+XCVAR_DEF(g_squadTactics, "1", NULL, CVAR_ARCHIVE, qfalse)
+XCVAR_DEF(g_squadAdvancers, "2", NULL, CVAR_ARCHIVE, qfalse)
+XCVAR_DEF(g_squadCommandCooldown, "60", NULL, CVAR_ARCHIVE, qfalse)
+XCVAR_DEF(g_squadWoundedHealth, "20", NULL, CVAR_ARCHIVE, qfalse)
+XCVAR_DEF(g_squadDebug, "0", NULL, CVAR_NONE, qfalse)
+XCVAR_DEF(g_autoHealthRegen, "1", NULL, CVAR_ARCHIVE, qtrue) // SP: Heal level 3 regenerates 1 health a second (g_active.c ClientTimerActions) (DH 2026-11-11)
+XCVAR_DEF(g_AdvancedWeaponPickup, "0", NULL, CVAR_ARCHIVE, qtrue) // SP: gunners pick up weapons only while holding Use (g_items.c Touch_Item) (DH 2026-11-11)
+XCVAR_DEF(g_allowSuperSaberLockBreaks, "1", NULL, CVAR_ARCHIVE, qtrue) // SP: a strong saber lock win may be a super break (bg_saber.c PM_SaberLockBreak) (DH 2026-11-11)
+XCVAR_DEF(g_saberscanstickinwall, "0", NULL, CVAR_ARCHIVE, qtrue) // SP: a player's level 3 throw can stick in a wall (w_saber.c WP_thrownSaberTouch); SP default 0 (DH 2026-11-11)
 XCVAR_DEF(g_SaberBounceOnWalls, "0", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_saberPerfectParry, "1", NULL, CVAR_ARCHIVE, qtrue) // perfect parry: heavy swing cost, guard break, riposte (SJE SP item 287, 2026-11-09)
 XCVAR_DEF(g_saberHitConfirm, "0", NULL, CVAR_ARCHIVE, qtrue) // hit-confirm chain boost + wind-up armour bypass, off by default (2026-11-09)
@@ -303,7 +313,7 @@ XCVAR_DEF(g_saberAIRecover, "1", NULL, CVAR_ARCHIVE, qtrue) // saber NPCs back o
 XCVAR_DEF(g_saberAITactics, "1", NULL, CVAR_ARCHIVE, qtrue) // saber NPCs kick/slap at the right moments, feint and taunt now and then (2026-11-09)
 XCVAR_DEF(g_saberNPCBlockBox, "1", NULL, CVAR_ARCHIVE, qtrue) // NPCs / bots block a swing only when they can show a parry (2026-11-09)
 XCVAR_DEF(g_saberAIDefend, "1", NULL, CVAR_ARCHIVE, qtrue) // saber NPCs defend first: quick parry re-think, no attack into a swing (2026-11-09)
-XCVAR_DEF(g_noIgniteTwirl, "0", NULL, CVAR_ARCHIVE, qtrue)
+XCVAR_DEF(g_noIgniteTwirl, "1", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(g_HitTracking, "0", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(r_cubeMapping, "1", NULL, CVAR_ARCHIVE, qtrue)
 XCVAR_DEF(r_cubeMappingBounces, "2", NULL, CVAR_ARCHIVE, qtrue)
@@ -330,7 +340,8 @@ XCVAR_DEF(g_tuskenWeapons, "1", NULL, CVAR_ARCHIVE, qfalse) // tusken raiders ge
 XCVAR_DEF(g_awardStreaks, "1", NULL, CVAR_ARCHIVE, qfalse) // award sounds for kill / death / saber-3 kill streaks of 4 (0: the old awards) (DH 2026-10-25)
 XCVAR_DEF(g_duelWinSound, "1", NULL, CVAR_ARCHIVE, qfalse) // play sound/player/Quin.mp3 to the winner of a private duel (DH 2026-10-25)
 XCVAR_DEF(g_Advancedaitalk, "1", NULL, CVAR_ARCHIVE, qfalse) // NPCs taunt/talk in combat (SP g_Advancedaitalk) (DH 2026-10-24 SP NPC port)
-XCVAR_DEF(g_SaberAttackSpeedMD, "1", NULL, CVAR_ARCHIVE, qtrue)
+XCVAR_DEF(g_SaberAttackSpeedMD, "0", NULL, CVAR_ARCHIVE, qtrue)
 
 XCVAR_DEF(g_lightningDrainRate, "25", NULL, CVAR_ARCHIVE, qtrue) // force points a second while force lightning is held (DH 2026-11-02); 0 = the old cost (2 / 5 / 8 points every 50 ms)
+XCVAR_DEF(g_obstacleClimb, "1", NULL, CVAR_ARCHIVE, qfalse) // NPCs and bots stuck against something on their way climb / jump onto it or go round it (DH 2026-11-12); 0 = off
 #undef XCVAR_DEF

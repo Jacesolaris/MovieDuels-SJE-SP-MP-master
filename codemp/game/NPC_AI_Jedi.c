@@ -11582,7 +11582,7 @@ static void JediExecuteCombo(gentity_t* self, const saberCombo_t* combo)
 	}
 
 	// Apply cooldown so we don't spam combos
-	JediSetAttackCooldown(self, Q_irand(40000, 90000));
+	JediSetAttackCooldown(self, Q_irand(40, 90) * 1000); // 2026-11-14: was Q_irand(40000, 90000), over the irand range limit (QRAND_MAX)
 }
 
 // =====================

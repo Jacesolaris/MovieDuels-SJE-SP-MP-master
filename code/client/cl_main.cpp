@@ -487,6 +487,24 @@ void CL_Snd_Restart_f()
 
 /*
 ==================
+CL_StartMP_f
+
+startmp: start the MovieDuels MP exe from this folder and quit SP (the SP main menu's MULTIPLAYER button)
+==================
+*/
+#if defined(_WIN32) && !defined(JK2_MODE)
+extern qboolean Sys_StartOtherGame(qboolean multiplayer);
+static void CL_StartMP_f()
+{
+	if (Sys_StartOtherGame(qtrue))
+	{
+		Cbuf_ExecuteText(EXEC_APPEND, "quit\n");
+	}
+}
+#endif
+
+/*
+==================
 CL_Configstrings_f
 ==================
 */
@@ -1444,6 +1462,9 @@ void CL_Init()
 	// register our commands
 	//
 	Cmd_AddCommand("cmd", CL_ForwardToServer_f);
+#if defined(_WIN32) && !defined(JK2_MODE)
+	Cmd_AddCommand("startmp", CL_StartMP_f);
+#endif
 	Cmd_AddCommand("configstrings", CL_Configstrings_f);
 	Cmd_AddCommand("clientinfo", CL_Clientinfo_f);
 	Cmd_AddCommand("snd_restart", CL_Snd_Restart_f);
@@ -1503,6 +1524,9 @@ void CL_Shutdown()
 	CL_ShutdownRef(qfalse);
 
 	Cmd_RemoveCommand("cmd");
+#if defined(_WIN32) && !defined(JK2_MODE)
+	Cmd_RemoveCommand("startmp");
+#endif
 	Cmd_RemoveCommand("configstrings");
 	Cmd_RemoveCommand("clientinfo");
 	Cmd_RemoveCommand("snd_restart");

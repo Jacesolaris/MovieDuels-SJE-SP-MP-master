@@ -189,5 +189,6 @@ XCVAR_DEF(md_charsel, "0", NULL, CVAR_USERINFO) // MovieDuels character menu: co
 XCVAR_DEF(com_rend2, "0", NULL, CVAR_ARCHIVE)
 XCVAR_DEF(g_cursor, "10", NULL, CVAR_ARCHIVE) // same default as SP (Vader cursor)
 XCVAR_DEF(ui_selectedHolocron, "", NULL, CVAR_ARCHIVE | CVAR_INTERNAL)
+XCVAR_DEF(g_update9firststartup, "1", NULL, CVAR_ARCHIVE) // same as SP: 1 until the first-startup welcome/credits pages are done (main.menu, welcome.menu, credits.menu)
 
 #undef XCVAR_DEF

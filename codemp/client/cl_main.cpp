@@ -1379,6 +1379,24 @@ static void CL_ReferencedPK3List_f(void)
 
 /*
 ==================
+CL_StartSP_f
+
+startsp: start the MovieDuels SP exe from this folder and quit MP (the MP main menu's SINGLEPLAYER button)
+==================
+*/
+#if defined(_WIN32) && !defined(DEDICATED)
+extern qboolean Sys_StartOtherGame(qboolean multiplayer);
+static void CL_StartSP_f(void)
+{
+	if (Sys_StartOtherGame(qfalse))
+	{
+		Cbuf_ExecuteText(EXEC_APPEND, "quit\n");
+	}
+}
+#endif
+
+/*
+==================
 CL_Configstrings_f
 ==================
 */
@@ -2973,6 +2991,9 @@ void CL_Init(void)
 	// register our commands
 	//
 	Cmd_AddCommand("cmd", CL_ForwardToServer_f, "Forward command to server");
+#if defined(_WIN32) && !defined(DEDICATED)
+	Cmd_AddCommand("startsp", CL_StartSP_f, "Start MovieDuels single player and quit multiplayer");
+#endif
 	Cmd_AddCommand("globalservers", CL_GlobalServers_f, "Query the masterserver for serverlist");
 	Cmd_AddCommand("addFavorite", CL_AddFavorite_f, "Add server to favorites");
 	Cmd_AddCommand("recorddemo", CL_Record_f, "Record a demo");
@@ -3050,6 +3071,9 @@ void CL_Shutdown(void)
 	//CL_ShutdownUI();
 
 	Cmd_RemoveCommand("cmd");
+#if defined(_WIN32) && !defined(DEDICATED)
+	Cmd_RemoveCommand("startsp");
+#endif
 	Cmd_RemoveCommand("configstrings");
 	Cmd_RemoveCommand("clientinfo");
 	Cmd_RemoveCommand("snd_restart");

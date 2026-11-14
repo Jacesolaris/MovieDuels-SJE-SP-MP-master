@@ -31,3 +31,7 @@ IDR_TEXT_FAQ                RCDATA  "texts/FAQ.txt"
 IDR_TEXT_TEAM               RCDATA  "texts/Team.txt"
 IDR_TEXT_GAMEFILES          RCDATA  "texts/GameFiles.txt"
 IDR_TEXT_OLDGAMEFILES       RCDATA  "texts/OldGameFiles.txt"
+
+// the dedicated server batch file: built in so players do not see or edit it (its Launcher-Server.cfg is in
+// MD/Update9.pk3)
+IDR_SERVER_BAT              RCDATA  "texts/Launcher-Server.bat"

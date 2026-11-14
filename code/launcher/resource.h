@@ -39,3 +39,6 @@
 
 // outdated pk3 files that must not be in MD any more (Assets/Text/OldGameFiles.txt): the same check and warning
 #define IDR_TEXT_OLDGAMEFILES       505
+
+// the dedicated server batch file (Start server writes it to %TEMP% and runs it; it is not in the MD folder)
+#define IDR_SERVER_BAT              601

@@ -15727,7 +15727,7 @@ void standard_bot_ai(bot_state_t* bs)
 				}
 
 				// Set cooldown AFTER buying
-				bs->nextBuyTime = level.time + Q_irand(120000, 180000);
+				bs->nextBuyTime = level.time + Q_irand(120, 180) * 1000; // 2026-11-14: was Q_irand(120000, 180000), over the irand range limit (QRAND_MAX)
 			}
 		}
 	}
@@ -15785,7 +15785,7 @@ void standard_bot_ai(bot_state_t* bs)
 			}
 
 			// Set cooldown AFTER buying
-			bs->nextBuyTime = level.time + Q_irand(120000, 180000);
+			bs->nextBuyTime = level.time + Q_irand(120, 180) * 1000; // 2026-11-14: was Q_irand(120000, 180000), over the irand range limit (QRAND_MAX)
 		}
 		else
 		{
@@ -17955,7 +17955,7 @@ void Enhanced_bot_ai(bot_state_t* bs)
 				}
 
 				// Set cooldown AFTER buying
-				bs->nextBuyTime = level.time + Q_irand(120000, 180000);
+				bs->nextBuyTime = level.time + Q_irand(120, 180) * 1000; // 2026-11-14: was Q_irand(120000, 180000), over the irand range limit (QRAND_MAX)
 			}
 		}
 	}
@@ -18013,7 +18013,7 @@ void Enhanced_bot_ai(bot_state_t* bs)
 			}
 
 			// Set cooldown AFTER buying
-			bs->nextBuyTime = level.time + Q_irand(120000, 180000);
+			bs->nextBuyTime = level.time + Q_irand(120, 180) * 1000; // 2026-11-14: was Q_irand(120000, 180000), over the irand range limit (QRAND_MAX)
 		}
 		else
 		{

@@ -15,7 +15,9 @@ of the emblem. The top bars hold the pages:
 - PLAY: the art, SINGLEPLAYER and MULTIPLAYER either side of the emblem. Hovering a mode fades in its glow layer.
   SINGLEPLAYER starts MovieDuels-SP.x86_64.exe from the launcher's folder, passing the options as "+set" values, and
   closes the launcher. MULTIPLAYER opens the multiplayer card: Start multiplayer starts MovieDuels-MP.x86_64.exe the
-  same way, Start server runs "Start MovieDuels-MP-FFA-Server.bat" from the MD folder in its own console (the launcher
+  same way, Start server runs "Launcher-Server.bat" in its own console. The bat is built into the launcher
+  (texts/Launcher-Server.bat, written to %TEMP% and run from the game folder) and execs Launcher-Server.cfg from
+  MD/Update9.pk3, so players do not see either file (the launcher
   stays open, so the game can be started next to join it). Multiplayer needs Update 9 or later.
 - NEWS: the team's articles from MovieDuels-Launcher-News (news.json), side by side: drag them, use the mouse wheel or
   the arrows; a click opens one. What was read is kept in a cache folder, so the news also show offline.
@@ -90,11 +92,13 @@ namespace
 
 	const wchar_t* const kSPExe = L"MovieDuels-SP.x86_64.exe";
 	const wchar_t* const kMPExe = L"MovieDuels-MP.x86_64.exe";
+	const wchar_t* const kDedExe = L"MovieDuels-DED.x86_64.exe";
 
-	// the mod folder (fs_game) next to the exes, and the dedicated server batch file in it (it does "cd .." itself,
-	// so it runs from the mod folder)
+	// the mod folder (fs_game) next to the exes
 	const wchar_t* const kModFolder = L"MD";
-	const wchar_t* const kServerBat = L"Start MovieDuels-MP-FFA-Server.bat";
+	// the dedicated server batch file: built into the launcher (IDR_SERVER_BAT), written to %TEMP% under this name and
+	// run from the game folder
+	const wchar_t* const kServerBat = L"Launcher-Server.bat";
 
 	// Release builds of the game only start when this is set on their process (shared/sys/sys_main.cpp
 	// Sys_RequireLauncher: MD_LAUNCHER_ENV / MD_LAUNCHER_TOKEN); keep the two the same.
@@ -4601,16 +4605,49 @@ namespace
 		return true;
 	}
 
-	// Runs the FFA dedicated server batch file from the MD folder in a console window of its own. The batch file
-	// restarts the server when it crashes; closing its window stops it.
+	// Writes the dedicated server batch file (IDR_SERVER_BAT) to %TEMP%\<kServerBat>. Empty string on failure.
+	std::wstring WriteServerBatToTemp()
+	{
+		const void* bytes;
+		DWORD size;
+		wchar_t temp[MAX_PATH] = {};
+		if (!GetResourceBytes(IDR_SERVER_BAT, &bytes, &size) || !GetTempPathW(MAX_PATH, temp))
+		{
+			return {};
+		}
+		const std::wstring file = std::wstring(temp) + kServerBat;
+		const HANDLE h = CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, nullptr);
+		if (h == INVALID_HANDLE_VALUE)
+		{
+			return {};
+		}
+		DWORD written = 0;
+		const bool ok = WriteFile(h, bytes, size, &written, nullptr) && written == size;
+		CloseHandle(h);
+		if (!ok)
+		{
+			DeleteFileW(file.c_str());
+			return {};
+		}
+		return file;
+	}
+
+	// Runs the dedicated server batch file in a console window of its own. The batch file is built into the launcher
+	// (IDR_SERVER_BAT, texts/Launcher-Server.bat) so players do not see or edit it: it is written to %TEMP% and run with
+	// the game folder as the current folder. It restarts the server when it crashes; closing its window stops it.
 	bool StartServer(const HWND hwnd)
 	{
-		const std::wstring mod = g_launcher.folder + L"\\" + kModFolder;
-		const std::wstring bat = mod + L"\\" + kServerBat;
-		if (!PathFileExistsW(bat.c_str()))
+		const std::wstring dedExe = g_launcher.folder + L"\\" + kDedExe;
+		if (!PathFileExistsW(dedExe.c_str()))
 		{
-			const std::wstring msg = L"Could not find " + bat + L"\n\nThe launcher must be in the MovieDuels game folder.";
+			const std::wstring msg = L"Could not find " + dedExe + L"\n\nThe launcher must be in the MovieDuels game folder.";
 			MessageBoxW(hwnd, msg.c_str(), L"MovieDuels", MB_OK | MB_ICONERROR);
+			return false;
+		}
+		const std::wstring bat = WriteServerBatToTemp();
+		if (bat.empty())
+		{
+			MessageBoxW(hwnd, L"Could not write the server batch file to the temp folder.", L"MovieDuels", MB_OK | MB_ICONERROR);
 			return false;
 		}
 		wchar_t comspec[MAX_PATH] = {};
@@ -4629,9 +4666,9 @@ namespace
 		SetEnvironmentVariableW(kLauncherEnv, kLauncherToken); // the server inherits it, as the game does
 		STARTUPINFOW si = { sizeof(si) };
 		PROCESS_INFORMATION pi = {};
-		if (!CreateProcessW(comspec, &cmd[0], nullptr, nullptr, FALSE, CREATE_NEW_CONSOLE, nullptr, mod.c_str(), &si, &pi))
+		if (!CreateProcessW(comspec, &cmd[0], nullptr, nullptr, FALSE, CREATE_NEW_CONSOLE, nullptr, g_launcher.folder.c_str(), &si, &pi))
 		{
-			MessageBoxW(hwnd, (L"Could not start " + bat).c_str(), L"MovieDuels", MB_OK | MB_ICONERROR);
+			MessageBoxW(hwnd, (L"Could not start the server (" + bat + L")").c_str(), L"MovieDuels", MB_OK | MB_ICONERROR);
 			return false;
 		}
 		CloseHandle(pi.hThread);

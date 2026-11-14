@@ -1216,6 +1216,38 @@ static void R_PlaneForSurface(surfaceType_t* surfType, cplane_t* plane)
 	}
 }
 
+// MD 9 (item 358): several misc_portal_surface entities can sit near the same plane (e.g. mirror floors
+// at the same height). Pick the one closest to the viewer instead of the first one in the entity list.
+// Switched-off portal surfaces are never sent to the client, so they are never picked.
+static int R_FindPortalEntity(const cplane_t* plane)
+{
+	int best = -1;
+	float best_dist = 0.0f;
+
+	for (int i = 0; i < tr.refdef.num_entities; i++)
+	{
+		const trRefEntity_t* e = &tr.refdef.entities[i];
+		if (e->e.reType != RT_PORTALSURFACE)
+		{
+			continue;
+		}
+
+		const float d = DotProduct(e->e.origin, plane->normal) - plane->dist;
+		if (d > 64 || d < -64)
+		{
+			continue;
+		}
+
+		const float dist = DistanceSquared(e->e.origin, tr.viewParms.ori.origin);
+		if (best < 0 || dist < best_dist)
+		{
+			best = i;
+			best_dist = dist;
+		}
+	}
+	return best;
+}
+
 /*
 =================
 R_GetPortalOrientation
@@ -1228,9 +1260,7 @@ Returns qtrue if it should be mirrored
 */
 static qboolean R_GetPortalOrientations(const msurface_t* surf, const int entityNum, orientation_t* surface, orientation_t* camera, vec3_t pvsOrigin, qboolean* mirror)
 {
-	int			i = 0;
 	cplane_t	originalPlane, plane{};
-	trRefEntity_t* e = nullptr;
 	float		d = 0.0f;
 	vec3_t		transformed;
 
@@ -1263,16 +1293,9 @@ static qboolean R_GetPortalOrientations(const msurface_t* surf, const int entity
 	// locate the portal entity closest to this plane.
 	// origin will be the origin of the portal, origin2 will be
 	// the origin of the camera
-	for (i = 0; i < tr.refdef.num_entities; i++) {
-		e = &tr.refdef.entities[i];
-		if (e->e.reType != RT_PORTALSURFACE) {
-			continue;
-		}
-
-		d = DotProduct(e->e.origin, originalPlane.normal) - originalPlane.dist;
-		if (d > 64 || d < -64) {
-			continue;
-		}
+	const int portal_ent = R_FindPortalEntity(&originalPlane);
+	if (portal_ent >= 0) {
+		trRefEntity_t* e = &tr.refdef.entities[portal_ent];
 
 		// get the pvsOrigin from the entity
 		VectorCopy(e->e.oldorigin, pvsOrigin);
@@ -1347,10 +1370,7 @@ static qboolean R_GetPortalOrientations(const msurface_t* surf, const int entity
 
 static qboolean IsMirror(const msurface_t* surface, const int entityNum)
 {
-	int			i = 0;
 	cplane_t	originalPlane, plane{};
-	trRefEntity_t* e = nullptr;
-	float		d = 0.0f;
 
 	// create plane axis for the portal we are seeing
 	R_PlaneForSurface(surface->data, &originalPlane);
@@ -1375,17 +1395,10 @@ static qboolean IsMirror(const msurface_t* surface, const int entityNum)
 	// locate the portal entity closest to this plane.
 	// origin will be the origin of the portal, origin2 will be
 	// the origin of the camera
-	for (i = 0; i < tr.refdef.num_entities; i++)
+	const int portal_ent = R_FindPortalEntity(&originalPlane);
+	if (portal_ent >= 0)
 	{
-		e = &tr.refdef.entities[i];
-		if (e->e.reType != RT_PORTALSURFACE) {
-			continue;
-		}
-
-		d = DotProduct(e->e.origin, originalPlane.normal) - originalPlane.dist;
-		if (d > 64 || d < -64) {
-			continue;
-		}
+		const trRefEntity_t* e = &tr.refdef.entities[portal_ent];
 
 		// if the entity is just a mirror, don't use as a camera point
 		if (e->e.oldorigin[0] == e->e.origin[0] &&

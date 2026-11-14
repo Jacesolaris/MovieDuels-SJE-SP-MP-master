@@ -700,9 +700,31 @@ static void locateCamera(gentity_t* ent)
 	ent->s.eventParm = DirToByte(dir);
 }
 
-/*QUAKED misc_portal_surface (0 0 1) (-8 -8 -8) (8 8 8)
+// MD 9 (item 358): switchable misc_portal_surface. The renderer can only draw one portal view per frame, and
+// with several portal surfaces close together the wrong one could be picked. A switched-off portal surface is
+// not sent to clients (SVF_NOCLIENT), so the renderer never picks it and the server does not add its camera view.
+// Using one (trigger_once / trigger_multiple / script "use") switches it on and every other one off.
+static void misc_portal_use(gentity_t* self, gentity_t* other, gentity_t* activator)
+{
+	gentity_t* portal = NULL;
+
+	while ((portal = G_Find(portal, FOFS(classname), "misc_portal_surface")) != NULL)
+	{
+		if (portal != self)
+		{
+			portal->r.svFlags |= SVF_NOCLIENT;
+		}
+	}
+	self->r.svFlags &= ~SVF_NOCLIENT;
+}
+
+/*QUAKED misc_portal_surface (0 0 1) (-8 -8 -8) (8 8 8) START_OFF
 The portal surface nearest this entity will show a view from the targeted misc_portal_camera, or a mirror view if untargeted.
 This must be within 64 world units of the surface!
+
+targetname - When used, switches this portal surface on and every other misc_portal_surface off (MD 9).
+START_OFF (spawnflag 1) - starts switched off; a trigger or script "use" switches it on (MD 9).
+With several portal surfaces on one plane the one closest to the player is drawn (MD 9).
 */
 void SP_misc_portal_surface(gentity_t* ent)
 {
@@ -712,6 +734,13 @@ void SP_misc_portal_surface(gentity_t* ent)
 
 	ent->r.svFlags = SVF_PORTAL;
 	ent->s.eType = ET_PORTAL;
+
+	// MD 9 (item 358): START_OFF; any use switches this one on and the other portal surfaces off
+	if (ent->spawnflags & 1)
+	{
+		ent->r.svFlags |= SVF_NOCLIENT;
+	}
+	ent->use = misc_portal_use;
 
 	if (!ent->target)
 	{

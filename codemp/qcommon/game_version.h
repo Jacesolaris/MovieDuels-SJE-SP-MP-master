@@ -40,10 +40,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #define VERSION_MAJOR_RELEASE		26  // Build year
 #define VERSION_MINOR_RELEASE		11  // Build month
-#define VERSION_INTERNAL_BUILD		09  // Build number
+#define VERSION_INTERNAL_BUILD		10  // Build number
 
-#define VERSION_STRING				"Day-11,Month-11,Year-26,BuildNum-09" // build date
-#define VERSION_STRING_DOTTED		"Day-11.Month-11.Year-26.BuildNum-09" // build date
+#define VERSION_STRING				"Day-14,Month-11,Year-26,BuildNum-10" // build date
+#define VERSION_STRING_DOTTED		"Day-14.Month-11.Year-26.BuildNum-10" // build date
 #if defined(_DEBUG)
 #define	JK_VERSION		"(debug)MovieDuels-MP-Update-9: " VERSION_STRING_DOTTED
 #define JK_VERSION_OLD	"(debug)MovieDuels-MP-Update-9: " VERSION_STRING_DOTTED

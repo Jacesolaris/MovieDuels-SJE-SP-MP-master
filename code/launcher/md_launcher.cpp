@@ -2680,7 +2680,7 @@ namespace
 						if (px >= 0 && py >= 0 && px < rect.Width && py < rect.Height)
 						{
 							l.bar_mask[static_cast<size_t>(y) * l.bar_rect.Width + x] =
-								static_cast<const BYTE*>(data.Scan0)[static_cast<ptrdiff_t>(py) * data.Stride + px * 4 + 3];
+								static_cast<const BYTE*>(data.Scan0)[static_cast<ptrdiff_t>(py) * data.Stride + static_cast<long long>(px) * 4 + 3];
 						}
 					}
 				}
@@ -5608,7 +5608,7 @@ namespace
 			}
 			if (roles)
 			{
-				y += ((group.people.size() + 2) / 3) * (18.0f + 16.0f + 9.0f) + 12.0f;
+				y += ((group.people.size() + static_cast<float>(2)) / 3) * (18.0f + 16.0f + 9.0f) + 12.0f;
 			}
 			else
 			{
@@ -5637,7 +5637,7 @@ namespace
 			{
 				for (size_t i = 0; i < group.people.size(); i++)
 				{
-					const float cx = x + (i % 3) * col, cy = gy + (i / 3) * (18.0f + 16.0f + 9.0f);
+					const float cx = x + (i % 3) * col, cy = gy + (i / static_cast<float>(3)) * (18.0f + 16.0f + 9.0f);
 					DrawLine(g, group.people[i].first, kFontUISemi, 13.5f, kWhiteText, RectF(cx, cy, col - 12.0f, 19.0f));
 					DrawLine(g, group.people[i].second, kFontUI, 11.5f, kDimText, RectF(cx, cy + 18.0f, col - 12.0f, 16.0f));
 				}

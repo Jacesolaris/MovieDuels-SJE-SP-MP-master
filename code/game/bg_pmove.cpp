@@ -70,6 +70,13 @@ extern void G_AddVoiceEvent(const gentity_t* self, int event, int speak_debounce
 extern qboolean Q3_TaskIDPending(const gentity_t* ent, taskID_t taskType);
 extern qboolean WP_SaberLose(gentity_t* self, vec3_t throw_dir);
 extern qboolean PM_HasAnimation(const gentity_t* ent, int animation);
+
+// A run with a weapon in hand: the animation set's own run for that weapon (BOTH_RUN_<weapon>) where it has one,
+// else the jog
+static int PM_WeaponRunAnim(const gentity_t* ent, const int jog_anim, const int run_anim)
+{
+	return ent && PM_HasAnimation(ent, run_anim) ? run_anim : jog_anim;
+}
 extern saberMoveName_t PM_SaberAnimTransitionMove(saberMoveName_t curmove, saberMoveName_t newmove);
 extern saberMoveName_t PM_AttackMoveForQuad(int quad);
 extern qboolean PM_SaberInTransition(int move);
@@ -9922,6 +9929,11 @@ qboolean PM_WeponRestAnim(const int anim)
 	case BOTH_JOG_MINIGUN_GALEN:
 	case BOTH_JOG_PISTOL:
 	case BOTH_JOG_PISTOL_GALEN:
+	case BOTH_RUN_BLASTER:
+	case BOTH_RUN_DOUBLE_PISTOL:
+	case BOTH_RUN_HEAVY:
+	case BOTH_RUN_MINIGUN:
+	case BOTH_RUN_PISTOL:
 		//
 	case BOTH_SPRINT_BAZOOKA:
 	case BOTH_SPRINT_BAZOOKA_BDROID:
@@ -10662,6 +10674,11 @@ qboolean PM_RunningAnim(const int anim)
 	case BOTH_JOG_MINIGUN_GALEN:
 	case BOTH_JOG_PISTOL:
 	case BOTH_JOG_PISTOL_GALEN:
+	case BOTH_RUN_BLASTER:
+	case BOTH_RUN_DOUBLE_PISTOL:
+	case BOTH_RUN_HEAVY:
+	case BOTH_RUN_MINIGUN:
+	case BOTH_RUN_PISTOL:
 		// ANAKIN
 	case BOTH_RUN1_ANI:
 	case BOTH_RUN2_ANI:
@@ -10796,6 +10813,11 @@ static qboolean PM_NotWalkingAnim(const int anim)
 	case BOTH_JOG_MINIGUN_GALEN:
 	case BOTH_JOG_PISTOL:
 	case BOTH_JOG_PISTOL_GALEN:
+	case BOTH_RUN_BLASTER:
+	case BOTH_RUN_DOUBLE_PISTOL:
+	case BOTH_RUN_HEAVY:
+	case BOTH_RUN_MINIGUN:
+	case BOTH_RUN_PISTOL:
 		//
 	case BOTH_HOP_F:
 	case BOTH_HOP_R:
@@ -15841,12 +15863,12 @@ static void PM_Footsteps()
 									}
 									else
 									{
-										PM_SetAnim(pm, SETANIM_LEGS, BOTH_JOG_DOUBLE_PISTOL, set_anim_flags);
+										PM_SetAnim(pm, SETANIM_LEGS, PM_WeaponRunAnim(pm->gent, BOTH_JOG_DOUBLE_PISTOL, BOTH_RUN_DOUBLE_PISTOL), set_anim_flags);
 									}
 								}
 								else
 								{
-									PM_SetAnim(pm, SETANIM_LEGS, BOTH_JOG_DOUBLE_PISTOL, set_anim_flags);
+									PM_SetAnim(pm, SETANIM_LEGS, PM_WeaponRunAnim(pm->gent, BOTH_JOG_DOUBLE_PISTOL, BOTH_RUN_DOUBLE_PISTOL), set_anim_flags);
 								}
 
 								PM_RemoveSprintFlag(qtrue);
@@ -15884,12 +15906,12 @@ static void PM_Footsteps()
 									}
 									else
 									{
-										PM_SetAnim(pm, SETANIM_LEGS, BOTH_JOG_PISTOL, set_anim_flags);
+										PM_SetAnim(pm, SETANIM_LEGS, PM_WeaponRunAnim(pm->gent, BOTH_JOG_PISTOL, BOTH_RUN_PISTOL), set_anim_flags);
 									}
 								}
 								else
 								{
-									PM_SetAnim(pm, SETANIM_LEGS, BOTH_JOG_PISTOL, set_anim_flags);
+									PM_SetAnim(pm, SETANIM_LEGS, PM_WeaponRunAnim(pm->gent, BOTH_JOG_PISTOL, BOTH_RUN_PISTOL), set_anim_flags);
 								}
 
 								PM_RemoveSprintFlag(qtrue);
@@ -15943,12 +15965,12 @@ static void PM_Footsteps()
 									}
 									else
 									{
-										PM_SetAnim(pm, SETANIM_LEGS, BOTH_JOG_BLASTER, set_anim_flags);
+										PM_SetAnim(pm, SETANIM_LEGS, PM_WeaponRunAnim(pm->gent, BOTH_JOG_BLASTER, BOTH_RUN_BLASTER), set_anim_flags);
 									}
 								}
 								else
 								{
-									PM_SetAnim(pm, SETANIM_LEGS, BOTH_JOG_BLASTER, set_anim_flags);
+									PM_SetAnim(pm, SETANIM_LEGS, PM_WeaponRunAnim(pm->gent, BOTH_JOG_BLASTER, BOTH_RUN_BLASTER), set_anim_flags);
 								}
 							}
 
@@ -15998,12 +16020,12 @@ static void PM_Footsteps()
 									}
 									else
 									{
-										PM_SetAnim(pm, SETANIM_LEGS, BOTH_JOG_HEAVY, set_anim_flags);
+										PM_SetAnim(pm, SETANIM_LEGS, PM_WeaponRunAnim(pm->gent, BOTH_JOG_HEAVY, BOTH_RUN_HEAVY), set_anim_flags);
 									}
 								}
 								else
 								{
-									PM_SetAnim(pm, SETANIM_LEGS, BOTH_JOG_HEAVY, set_anim_flags);
+									PM_SetAnim(pm, SETANIM_LEGS, PM_WeaponRunAnim(pm->gent, BOTH_JOG_HEAVY, BOTH_RUN_HEAVY), set_anim_flags);
 								}
 							}
 

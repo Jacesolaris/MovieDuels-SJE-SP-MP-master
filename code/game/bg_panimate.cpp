@@ -7700,6 +7700,11 @@ static const TorsoMapEntry g_torsoMap[] = {
 	{ BOTH_JOG_MINIGUN_GALEN,                    BOTH_JOG_HEAVY_GALEN,                     qtrue, qfalse, qfalse, qtrue, 0 }, // fallback
 	{ BOTH_JOG_PISTOL,                     BOTH_JOG_PISTOL,                    qtrue, qfalse, qfalse, qtrue, 0 },
 	{ BOTH_JOG_PISTOL_GALEN,                     BOTH_JOG_PISTOL_GALEN,                    qtrue, qfalse, qfalse, qtrue, 0 },
+	{ BOTH_RUN_BLASTER,                    BOTH_RUN_BLASTER,                   qtrue, qfalse, qfalse, qtrue, 0 },
+	{ BOTH_RUN_DOUBLE_PISTOL,              BOTH_RUN_DOUBLE_PISTOL,             qtrue, qfalse, qfalse, qtrue, 0 },
+	{ BOTH_RUN_HEAVY,                      BOTH_RUN_HEAVY,                     qtrue, qfalse, qfalse, qtrue, 0 },
+	{ BOTH_RUN_MINIGUN,                    BOTH_RUN_MINIGUN,                   qtrue, qfalse, qfalse, qtrue, 0 },
+	{ BOTH_RUN_PISTOL,                     BOTH_RUN_PISTOL,                    qtrue, qfalse, qfalse, qtrue, 0 },
 
 	{ BOTH_WALK1,                          BOTH_WALK1,                         qtrue, qfalse, qfalse, qtrue, 0 },
 	{ BOTH_WALK1_ANI,                      BOTH_WALK1_ANI,                     qtrue, qfalse, qfalse, qtrue, 0 },
@@ -8002,6 +8007,11 @@ static const TorsoMapEntry g_torsoMap[] = {
 	{ BOTH_JOG_MINIGUN_GALEN,                    BOTH_JOG_HEAVY_GALEN,                     qfalse, qfalse, qtrue, qfalse, 0 },
 	{ BOTH_JOG_PISTOL,                     BOTH_JOG_PISTOL,                    qfalse, qfalse, qtrue, qfalse, 0 },
 	{ BOTH_JOG_PISTOL_GALEN,                     BOTH_JOG_PISTOL_GALEN,                    qfalse, qfalse, qtrue, qfalse, 0 },
+	{ BOTH_RUN_BLASTER,                    BOTH_RUN_BLASTER,                   qfalse, qfalse, qtrue, qfalse, 0 },
+	{ BOTH_RUN_DOUBLE_PISTOL,              BOTH_RUN_DOUBLE_PISTOL,             qfalse, qfalse, qtrue, qfalse, 0 },
+	{ BOTH_RUN_HEAVY,                      BOTH_RUN_HEAVY,                     qfalse, qfalse, qtrue, qfalse, 0 },
+	{ BOTH_RUN_MINIGUN,                    BOTH_RUN_MINIGUN,                   qfalse, qfalse, qtrue, qfalse, 0 },
+	{ BOTH_RUN_PISTOL,                     BOTH_RUN_PISTOL,                    qfalse, qfalse, qtrue, qfalse, 0 },
 
 	{ BOTH_WALK1,                          BOTH_WALK1,                         qfalse, qfalse, qtrue, qfalse, 0 },
 	{ BOTH_WALK1_ANI,                      BOTH_WALK1_ANI,                     qfalse, qfalse, qtrue, qfalse, 0 },

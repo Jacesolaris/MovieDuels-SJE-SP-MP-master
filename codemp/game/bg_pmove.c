@@ -12820,6 +12820,21 @@ qboolean PM_InSlopeAnim(const int anim)
 }
 
 #define	SLOPE_RECALC_INT 100
+// (MD team, 2026-11-26, as SP 78cc405) At a ledge the slope stance flickered every frame: one foot on the ground and
+// one over the drop takes a slope stance; that pose draws the other foot in - over the drop as well, or back on to
+// level ground -, the difference reads 0 and the stand comes back; and so on (the whole body trembled). The pose
+// changes what is measured, so at such a spot the two answers chase each other. When a slope stance is ended by a
+// level reading twice within SLOPE_FLIP_TIME at the same place, the plain stance is kept until he moves or turns.
+// (Each module - game, cgame prediction - keeps its own table; both see the same moves, so they agree.)
+#define SLOPE_FLIP_TIME 1000
+typedef struct
+{
+	vec3_t org;
+	float yaw;
+	int leaves, firstLeave;
+	qboolean locked;
+} slopeGuard_t;
+static slopeGuard_t slopeGuard[MAX_GENTITIES];
 
 static qboolean PM_AdjustStandAnimForSlope(void)
 {
@@ -12838,6 +12853,20 @@ static qboolean PM_AdjustStandAnimForSlope(void)
 	if (pm->g2Bolts_LFoot == -1 || pm->g2Bolts_RFoot == -1)
 	{
 		//need these bolts!
+		return qfalse;
+	}
+	// (MD team) the flip guard: the plain stance while it is locked at this place (see SLOPE_FLIP_TIME)
+	slopeGuard_t* guard = &slopeGuard[pm->ps->clientNum & (MAX_GENTITIES - 1)];
+	const float guardYaw = pm->ps->viewangles[YAW];
+	const qboolean guardHere = guard->leaves > 0 && DistanceSquared(pm->ps->origin, guard->org) < 4.0f
+		&& fabs(AngleSubtract(guardYaw, guard->yaw)) < 5.0f ? qtrue : qfalse;
+	if (!guardHere)
+	{
+		guard->leaves = 0;
+		guard->locked = qfalse;
+	}
+	else if (guard->locked)
+	{
 		return qfalse;
 	}
 
@@ -12887,6 +12916,24 @@ static qboolean PM_AdjustStandAnimForSlope(void)
 	}
 	else
 	{
+		if (PM_InSlopeAnim(pm->ps->legsAnim))
+		{
+			// (MD team) a slope stance ends on a level reading: the second time in a row at this place locks the plain stance
+			if (guardHere && pm->cmd.serverTime - guard->firstLeave >= 0 && pm->cmd.serverTime - guard->firstLeave < SLOPE_FLIP_TIME)
+			{
+				if (++guard->leaves >= 2)
+				{
+					guard->locked = qtrue;
+				}
+			}
+			else
+			{
+				VectorCopy(pm->ps->origin, guard->org);
+				guard->yaw = guardYaw;
+				guard->leaves = 1;
+				guard->firstLeave = pm->cmd.serverTime;
+			}
+		}
 		return qfalse;
 	}
 
